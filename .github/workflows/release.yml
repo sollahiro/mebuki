@@ -22,13 +22,25 @@ jobs:
         with:
           node-version: 20
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Python Dependencies
+        run: |
+          python -m venv venv
+          ./venv/bin/pip install -r requirements.txt
+          ./venv/bin/pip install pyinstaller
+
       - name: Install Dependencies
         run: npm install
 
       - name: Build and Package
         run: |
           if [ "${{ matrix.os }}" = "macos-latest" ]; then
-            npm run package:mac
+            # macOS ではユニバーサルまたは特定のアーキテクチャを指定
+            npm run package:mac -- --arm64
           else
             npm run package:win
           fi
