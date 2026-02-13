@@ -1,0 +1,17 @@
+[project]
+name = "mebuki"
+version = "0.1.0"
+description = "mebuki: 投資回避に特化した投資分析ツール"
+authors = [
+    {name = "shu", email = "shu.sorahiro@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["requests (>=2.32.5,<3.0.0)", "python-dotenv (>=1.2.1,<2.0.0)", "pandas (>=3.0.0,<4.0.0)", "numpy (>=2.4.1,<3.0.0)", "plotly (>=6.5.2,<7.0.0)", "python-dateutil (>=2.9.0.post0,<3.0.0)", "jinja2 (>=3.1.6,<4.0.0)", "fastapi (>=0.128.0,<0.129.0)", "uvicorn (>=0.40.0,<0.41.0)", "sse-starlette (>=3.2.0,<4.0.0)", "google-genai (>=1.60.0,<2.0.0)", "pydantic (>=2.12.5,<3.0.0)", "tqdm (>=4.67.1,<5.0.0)", "beautifulsoup4 (>=4.14.3,<5.0.0)"]
+
+[tool.poetry]
+packages = [{include = "mebuki", from = "src_py"}]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

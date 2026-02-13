@@ -1,0 +1,105 @@
+{
+  "name": "mebuki",
+  "private": false,
+  "version": "1.0.0",
+  "description": "Stock analysis tool with MCP integration",
+  "author": "shutosorahiro",
+  "main": "packages/main/src/main.js",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "start": "electron .",
+    "dev": "./start.sh dev",
+    "build:renderer": "npm run build -w renderer",
+    "build:mcp": "esbuild packages/mcp/src/index.ts --bundle --platform=node --outfile=packages/mcp/dist/index.js",
+    "build:backend": "./scripts/build_backend.sh",
+    "package": "npm run build:renderer && npm run build:mcp && npm run build:backend && electron-builder",
+    "package:mac": "npm run build:renderer && npm run build:mcp && npm run build:backend && electron-builder --mac",
+    "package:win": "npm run build:renderer && npm run build:mcp && npm run build:backend && electron-builder --win"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "electron": "^35.7.5",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  },
+  "build": {
+    "appId": "com.shutosorahiro.mebuki",
+    "productName": "mebuki",
+    "copyright": "Copyright © 2026 sollahiro",
+    "directories": {
+      "output": "release",
+      "buildResources": "pkg-resources"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "sollahiro",
+        "repo": "mebuki"
+      }
+    ],
+    "files": [
+      "packages/main/src/**/*",
+      "packages/renderer/dist/**/*",
+      "packages/preload/src/**/*",
+      "packages/mcp/dist/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "packages/mcp/dist/**/*",
+      "assets/data_j.csv"
+    ],
+    "extraResources": [
+      {
+        "from": "dist_backend/mebuki-backend",
+        "to": "backend/mebuki-backend",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.finance",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "pkg-resources/entitlements.mac.plist",
+      "entitlementsInherit": "pkg-resources/entitlements.mac.plist"
+    },
+    "dmg": {
+      "iconSize": 128,
+      "format": "UDZO",
+      "window": {
+        "width": 600,
+        "height": 400
+      },
+      "contents": [
+        {
+          "x": 150,
+          "y": 200
+        },
+        {
+          "x": 450,
+          "y": 200,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.png"
+    }
+  },
+  "dependencies": {
+    "electron-log": "^5.4.3",
+    "electron-store": "^7.0.3",
+    "electron-updater": "^6.7.3",
+    "js-yaml": "^4.1.1"
+  }
+}

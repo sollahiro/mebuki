@@ -1,0 +1,30 @@
+# mebuki 投資判断分析ツール 依存パッケージ
+
+# HTTP リクエスト
+requests>=2.32.5
+
+# 環境変数管理
+python-dotenv>=1.2.1
+
+# データ処理
+pandas>=3.0.0
+numpy>=2.4.1
+
+# グラフ作成
+plotly>=6.5.2
+
+# 日付処理
+python-dateutil>=2.9.0
+
+# テンプレートエンジン
+jinja2>=3.1.6
+
+# FastAPI Webフレームワーク
+fastapi>=0.128.0
+uvicorn[standard]>=0.40.0
+sse-starlette>=3.2.0
+pydantic>=2.12.5
+
+# XBRL解析・スクレイピング
+beautifulsoup4>=4.14.3
+lxml>=5.1.0  # 解析高速化のため

@@ -1,0 +1,10 @@
+{
+  "name": "main",
+  "version": "1.0.0",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron . > ../../mebuki_crash.log 2>&1"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
