@@ -15,7 +15,7 @@ develop-eggs/
 downloads/
 eggs/
 .eggs/
-lib/
+# lib/ (削除: フロントエンドの src/lib を巻き込んでしまうため)
 lib64/
 parts/
 sdist/
