@@ -1,8 +1,8 @@
 import { useState, KeyboardEvent, useEffect, useRef } from 'react'
 import { Search, X, Loader2, Building2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '../lib/utils'
 import { Button } from '@/components/ui/Button'
-import { searchCompanies } from '@/lib/api'
+import { searchCompanies } from '../lib/api'
 
 // 全角英数字を半角に変換し、大文字化
 const toHalfWidthUpper = (str: string): string => {

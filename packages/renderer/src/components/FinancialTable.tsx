@@ -1,7 +1,7 @@
 import React from 'react'
-import { cn, formatMillions, formatPercent } from '@/lib/utils'
+import { cn, formatMillions, formatPercent } from '../lib/utils'
 import { Download } from 'lucide-react'
-import { getApiUrl } from '@/lib/api'
+import { getApiUrl } from '../lib/api'
 import type { YearData, EdinetData } from '@/types'
 
 interface FinancialTableProps {

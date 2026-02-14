@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/Card'
 import { FinancialTable } from '@/components/FinancialTable'
 import { FinancialCharts, CHART_TABS, type ChartTab } from '@/components/FinancialCharts'
 import { FinancialMetricTable } from '@/components/FinancialMetricTable'
-import { formatDate, cn } from '@/lib/utils'
+import { formatDate, cn } from '../lib/utils'
 import type { AnalysisResult } from '@/types'
 import { Button } from '@/components/ui/Button'
 

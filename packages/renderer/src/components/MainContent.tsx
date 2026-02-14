@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ChevronRight, AlertCircle } from 'lucide-react'
 import { AnalysisResults } from '@/components/AnalysisResults'
-import { cn } from '@/lib/utils'
+import { cn } from '../lib/utils'
 import type { AnalysisResult } from '@/types'
 
 interface MainContentProps {

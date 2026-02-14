@@ -4,8 +4,8 @@ import { TitleBar } from '@/components/TitleBar'
 import { MainContent } from '@/components/MainContent'
 import { SettingsPage } from '@/components/SettingsPage'
 import { useTheme } from '@/hooks/useTheme'
-import * as api from '@/lib/api'
-import { getApiUrl } from '@/lib/api'
+import * as api from './lib/api'
+import { getApiUrl } from './lib/api'
 import type { AnalysisResult, HistoryItem } from '@/types'
 
 // 共通ライブラリからインポートするため、ここでの定義は削除

@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { X, Key, Eye, EyeOff, AlertCircle, CheckCircle, ExternalLink } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '../lib/utils'
 import { Button } from '@/components/ui/Button'
 import * as Dialog from '@radix-ui/react-dialog'
-import { getApiUrl } from '@/lib/api'
+import { getApiUrl } from '../lib/api'
 
 interface SettingsDialogProps {
   isOpen: boolean

@@ -1,4 +1,4 @@
-import { cn, formatMillions, formatPercent } from '@/lib/utils'
+import { cn, formatMillions, formatPercent } from '../lib/utils'
 import type { YearData } from '@/types'
 
 interface FinancialMetricTableProps {

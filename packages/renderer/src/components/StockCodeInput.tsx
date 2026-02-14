@@ -1,6 +1,6 @@
 import { useState, useRef, KeyboardEvent, ClipboardEvent, ChangeEvent } from 'react'
 import { Search, Loader2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '../lib/utils'
 import { Button } from '@/components/ui/Button'
 
 // 全角英数字を半角に変換し、大文字化
