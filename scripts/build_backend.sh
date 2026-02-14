@@ -5,8 +5,18 @@
 set -e
 
 PROJECT_ROOT=$(pwd)
-VENV_BIN="${PROJECT_ROOT}/venv/bin"
-PYINSTALLER="${VENV_BIN}/pyinstaller"
+
+# OS判定と仮想環境のバイナリパス設定
+if [ -d "${PROJECT_ROOT}/venv/Scripts" ]; then
+    # Windows
+    VENV_BIN="${PROJECT_ROOT}/venv/Scripts"
+    PYINSTALLER="${VENV_BIN}/pyinstaller.exe"
+else
+    # macOS / Linux
+    VENV_BIN="${PROJECT_ROOT}/venv/bin"
+    PYINSTALLER="${VENV_BIN}/pyinstaller"
+fi
+
 MAIN_PY="backend/main.py"
 DIST_DIR="dist_backend"
 

@@ -50,13 +50,13 @@ jobs:
             # macOS: 各ビルドステップを明示的に実行
             npm run build:renderer
             npm run build:mcp
-            npm run build:backend
+            bash ./scripts/build_backend.sh
             npx electron-builder --mac --arm64
           else
             # Windows:
             npm run build:renderer
             npm run build:mcp
-            npm run build:backend
+            bash ./scripts/build_backend.sh
             npx electron-builder --win --x64
           fi
         env:
