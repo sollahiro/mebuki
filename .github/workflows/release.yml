@@ -33,6 +33,11 @@ jobs:
           ./venv/bin/pip install -r requirements.txt
           ./venv/bin/pip install pyinstaller
 
+      - name: Debug - List Files
+        run: |
+          ls -R packages/renderer/src/lib || echo "lib directory not found"
+          git ls-files packages/renderer/src/lib
+
       - name: Install Dependencies
         run: npm install
 
