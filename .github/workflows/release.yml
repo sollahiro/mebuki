@@ -8,6 +8,8 @@ on:
 jobs:
   release:
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
 
     strategy:
       matrix:
@@ -51,13 +53,13 @@ jobs:
             npm run build:renderer
             npm run build:mcp
             bash ./scripts/build_backend.sh
-            npx electron-builder --mac --arm64
+            npx electron-builder --mac --arm64 -p never
           else
             # Windows:
             npm run build:renderer
             npm run build:mcp
             bash ./scripts/build_backend.sh
-            npx electron-builder --win --x64
+            npx electron-builder --win --x64 -p never
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
