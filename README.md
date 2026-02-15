@@ -66,7 +66,6 @@ mebukiは、J-QUANTS API、EDINET API を活用し、投資判断における「
 1. **インストール**
    - [GitHub Releases](https://github.com/sollahiro/mebuki/releases)から最新版をダウンロード
    - **macOS**: `.dmg`ファイルをダウンロードして開き、アプリをアプリケーションフォルダにドラッグ
-   - **Windows**: `.exe`ファイルをダウンロードして実行
 
 2. **API キーの設定**
    アプリ起動後、設定画面(右上のギアアイコン)から以下のキーを設定します。

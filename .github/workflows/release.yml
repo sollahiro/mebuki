@@ -13,7 +13,7 @@ jobs:
 
     strategy:
       matrix:
-        os: [macos-latest, windows-latest]
+        os: [macos-latest]
 
     steps:
       - name: Check out Git repository
@@ -32,15 +32,9 @@ jobs:
       - name: Install Python Dependencies
         run: |
           python -m venv venv
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            ./venv/Scripts/python -m pip install --upgrade pip
-            ./venv/Scripts/pip install -r requirements.txt
-            ./venv/Scripts/pip install pyinstaller
-          else
-            ./venv/bin/python -m pip install --upgrade pip
-            ./venv/bin/pip install -r requirements.txt
-            ./venv/bin/pip install pyinstaller
-          fi
+          ./venv/bin/python -m pip install --upgrade pip
+          ./venv/bin/pip install -r requirements.txt
+          ./venv/bin/pip install pyinstaller
         shell: bash
 
       - name: Install Dependencies
@@ -48,19 +42,11 @@ jobs:
 
       - name: Build and Package
         run: |
-          if [ "${{ matrix.os }}" = "macos-latest" ]; then
-            # macOS: 各ビルドステップを明示的に実行
-            npm run build:renderer
-            npm run build:mcp
-            bash ./scripts/build_backend.sh
-            npx electron-builder --mac --arm64 -p never
-          else
-            # Windows:
-            npm run build:renderer
-            npm run build:mcp
-            bash ./scripts/build_backend.sh
-            npx electron-builder --win --x64 -p never
-          fi
+          # macOS: 各ビルドステップを明示的に実行
+          npm run build:renderer
+          npm run build:mcp
+          bash ./scripts/build_backend.sh
+          npx electron-builder --mac --arm64 -p never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
