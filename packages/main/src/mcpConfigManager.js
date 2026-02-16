@@ -110,7 +110,16 @@ class McpConfigManager {
                     config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
                 }
                 config.mcpServers = config.mcpServers || {};
-                config.mcpServers.mebuki = mebukiConfig;
+
+                // For future .mcpb compatibility, we add metadata including icon information
+                const iconPath = path.join(this.projectRoot, 'packages', 'mcp', 'icon.png');
+                config.mcpServers.mebuki = {
+                    ...mebukiConfig,
+                    metadata: {
+                        icon: iconPath,
+                        description: 'Expert investment analyst tool for Japanese stocks.'
+                    }
+                };
                 fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
             } else if (type === 'goose') {
                 let config = { extensions: {} };

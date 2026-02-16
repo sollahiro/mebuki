@@ -18,6 +18,14 @@ const server = new Server(
     {
         name: "mebuki-mcp-server",
         version: "1.1.0",
+        // Standard MCP 'icons' property
+        icons: [
+            {
+                src: "icon.png",
+                mimeType: "image/png",
+                sizes: ["256x256"]
+            }
+        ],
     },
     {
         capabilities: {

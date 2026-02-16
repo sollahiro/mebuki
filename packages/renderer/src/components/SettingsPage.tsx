@@ -4,6 +4,7 @@ import { cn } from '../lib/utils'
 import { getApiUrl } from '../lib/api'
 import claudeIcon from '@/assets/claude-color.svg'
 import gooseIcon from '@/assets/goose.svg'
+import mebukiMcpIcon from '@/assets/mcp_icon.svg'
 // import lmstudioIcon from '@/assets/lmstudio-white.svg'
 
 interface SettingsPageProps {
@@ -488,6 +489,17 @@ export function SettingsPage({ }: SettingsPageProps) {
 
                                 {showAdvancedMcp && (
                                     <div className="mt-4 p-6 bg-foreground-muted/5 border border-dashed border-border rounded-xl space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                                        {/* mebuki MCP Server Icon & Identity */}
+                                        <div className="flex items-center gap-4 pb-4 border-b border-border/50">
+                                            <div className="w-16 h-16 rounded-xl bg-white border border-border flex items-center justify-center shadow-md overflow-hidden p-2">
+                                                <img src={mebukiMcpIcon} className="w-full h-full object-contain" alt="mebuki MCP" />
+                                            </div>
+                                            <div>
+                                                <h4 className="font-bold text-foreground">mebuki MCP Server</h4>
+                                                <p className="text-[11px] text-foreground-muted">Built-in Expert Analysis Tool</p>
+                                            </div>
+                                        </div>
+
                                         <div className="space-y-4">
                                             <div className="flex items-center justify-between">
                                                 <label className="text-sm font-medium text-foreground flex items-center gap-2">
@@ -519,7 +531,11 @@ export function SettingsPage({ }: SettingsPageProps) {
                                                             "mebuki": {
                                                                 "command": "node",
                                                                 "args": [`${projectRoot || '/Users/shutosorahiro/mebuki'}/packages/mcp/dist/index.js`],
-                                                                "env": { "MEBUKI_BACKEND_URL": "http://localhost:8765" }
+                                                                "env": { "MEBUKI_BACKEND_URL": "http://localhost:8765" },
+                                                                "metadata": {
+                                                                    "icon": `${projectRoot || '/Users/shutosorahiro/mebuki'}/packages/mcp/icon.png`,
+                                                                    "description": "Expert investment analyst tool for Japanese stocks."
+                                                                }
                                                             }
                                                         }
                                                     }, null, 2)}
