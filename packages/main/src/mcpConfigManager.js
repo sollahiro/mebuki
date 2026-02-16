@@ -124,7 +124,7 @@ class McpConfigManager {
                 config.extensions.mebuki = {
                     enabled: true,
                     name: 'mebuki',
-                    description: 'Stock analysis tools for mebuki',
+                    description: 'Expert investment analyst tool for Japanese stocks. Provides high-precision financial data from J-QUANTS and EDINET.',
                     type: 'stdio',
                     cmd: mebukiConfig.command,
                     args: mebukiConfig.args,
