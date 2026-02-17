@@ -12,7 +12,7 @@
     "start": "electron .",
     "dev": "./start.sh dev",
     "build:renderer": "npm run build -w renderer",
-    "build:mcp": "esbuild packages/mcp/src/index.ts --bundle --platform=node --outfile=packages/mcp/dist/index.js && sips -s format png assets/mcp_icon.svg --out packages/mcp/icon.png --resampleHeightWidth 256 256",
+    "build:mcp": "esbuild packages/mcp/src/index.ts --bundle --platform=node --format=esm --outfile=packages/mcp/dist/index.js && sips -s format png assets/mcp_icon.svg --out packages/mcp/icon.png --resampleHeightWidth 256 256",
     "build:backend": "./scripts/build_backend.sh",
     "package": "npm run build:renderer && npm run build:mcp && npm run build:backend && electron-builder",
     "package:mac": "npm run build:renderer && npm run build:mcp && npm run build:backend && electron-builder --mac"

@@ -1,10 +1,11 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { viteSingleFile } from 'vite-plugin-singlefile'
 import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), viteSingleFile()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -16,12 +17,13 @@ export default defineConfig({
     emptyOutDir: true,
     // CSSの最適化設定
     cssCodeSplit: false,
-    // アセットのインライン化を無効化（フォントや画像が正しく読み込まれるように）
-    assetsInlineLimit: 0,
-    // ソースマップを生成（デバッグ用）
+    // アセットのインライン化
+    assetsInlineLimit: 100000000,
+    // ソースマップを非表示
     sourcemap: false,
-    // チャンクサイズの警告を無効化
-    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      input: path.resolve(__dirname, 'mcp.html'),
+    },
   },
   server: {
     port: 5173,

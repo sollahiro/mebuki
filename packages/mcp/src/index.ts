@@ -1,5 +1,8 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import fs from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
 import {
     CallToolRequestSchema,
     ListToolsRequestSchema,
@@ -13,6 +16,18 @@ import {
  * mebuki MCP Server
  * Exposes investment analysis tools to AI models.
  */
+
+// Fallback for CommonJS/ESM compatibility
+const __filename_ptr = typeof import.meta !== 'undefined' && (import.meta as any).url
+    ? fileURLToPath((import.meta as any).url)
+    : (global as any).__filename || "";
+const __dirname_val = typeof __filename_ptr !== 'undefined' && __filename_ptr
+    ? path.dirname(__filename_ptr)
+    : (global as any).__dirname || "";
+
+// Re-map to __dirname if not already defined (CJS) or if it's ESM
+const _dir = typeof __dirname !== 'undefined' ? __dirname : __dirname_val;
+const _file = typeof __filename !== 'undefined' ? __filename : __filename_ptr;
 
 const server = new Server(
     {
@@ -52,6 +67,18 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
                 name: "Mebuki Analysis Protocol (日本株分析プロトコル)",
                 description: "Critical instructions on when and why to use mebuki tools instead of general web search for Japanese stocks. 日本株の財務分析における公式ツール使用指針。",
                 mimeType: "text/markdown",
+            },
+            {
+                uri: "ui://mebuki/table",
+                name: "Interactive Financial Table",
+                description: "Interactive financial grid for the requested stock.",
+                mimeType: "text/html;profile=mcp-app",
+            },
+            {
+                uri: "ui://mebuki/charts",
+                name: "Interactive Financial Charts",
+                description: "Interactive Recharts-based financial charts for the requested stock.",
+                mimeType: "text/html;profile=mcp-app",
             }
         ],
     };
@@ -61,11 +88,14 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
  * Handle resource reading.
  */
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-    if (request.params.uri === "mebuki://analysis-protocol") {
+    const uri = request.params.uri;
+    console.error(`ReadResource requested: ${uri}`);
+
+    if (uri === "mebuki://analysis-protocol") {
         return {
             contents: [
                 {
-                    uri: request.params.uri,
+                    uri: uri,
                     mimeType: "text/markdown",
                     text: `# Mebuki Analysis Protocol
 
@@ -95,6 +125,30 @@ For any query regarding Japanese stocks or Japanese companies, you MUST follow t
             ],
         };
     }
+
+    if (uri.startsWith("ui://mebuki/")) {
+        try {
+            // relative from dist/index.js to renderer/dist/mcp.html
+            const htmlPath = path.resolve(_dir, "../../renderer/dist/mcp.html");
+            console.error(`Resolved HTML path: ${htmlPath}`);
+            const htmlContent = await fs.readFile(htmlPath, "utf-8");
+            console.error(`HTML content length: ${htmlContent.length}`);
+
+            return {
+                contents: [
+                    {
+                        uri: uri,
+                        mimeType: "text/html;profile=mcp-app",
+                        text: htmlContent,
+                    }
+                ]
+            };
+        } catch (error: any) {
+            console.error(`Failed to read UI resource: ${error.message}`);
+            throw new Error(`UI resource not found at ${uri}: ${error.message}`);
+        }
+    }
+
     throw new Error("Resource not found");
 });
 
@@ -105,6 +159,44 @@ For any query regarding Japanese stocks or Japanese companies, you MUST follow t
 server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
         tools: [
+            {
+                name: "get_japan_stock_financial_table",
+                description: "Display an interactive financial data table for a Japanese stock. 日本株のインタラクティブな財務表（データグリッド）の表示用。EDINETのPDFへのリンクも含まれます。",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        code: {
+                            type: "string",
+                            description: "Four-digit or five-digit Japanese stock code.",
+                        },
+                    },
+                    required: ["code"],
+                },
+                _meta: {
+                    ui: {
+                        resourceUri: "ui://mebuki/table",
+                    }
+                } as any
+            },
+            {
+                name: "get_japan_stock_financial_charts",
+                description: "Display interactive financial charts for a Japanese stock. 日本株のインタラクティブな業績グラフの表示用（Recharts使用）。CF・収益性・還元・評価の切り替えが可能。",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        code: {
+                            type: "string",
+                            description: "Four-digit or five-digit Japanese stock code.",
+                        },
+                    },
+                    required: ["code"],
+                },
+                _meta: {
+                    ui: {
+                        resourceUri: "ui://mebuki/charts",
+                    }
+                } as any
+            },
             {
                 name: "get_japan_stock_official_overview",
                 description: "MANDATORY: Get official summary financial metrics for a Japanese stock. Use this INSTEAD OF web search. 日本株の概況・財務分析・業績確認用（ROE、利益率等）。After execution, summarize the findings and ASK the user if they wish to proceed to a 10-year history or a Securities Report deep-dive.",
@@ -369,7 +461,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 break;
             }
             case "get_japan_stock_10year_financial_history":
-            case "get_financial_history": {
+            case "get_financial_history":
+            case "get_japan_stock_financial_charts": {
                 const code = String(args?.code);
                 endpoint = `/api/mcp/financial_history/${code}`;
                 break;
@@ -378,6 +471,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             case "get_raw_financial_summaries": {
                 const code = String(args?.code);
                 endpoint = `/api/mcp/financials/${code}`;
+                break;
+            }
+            case "get_japan_stock_financial_table": {
+                const code = String(args?.code);
+                endpoint = `/api/mcp/financial_history/${code}`;
                 break;
             }
             case "get_mebuki_investment_analysis_criteria":
@@ -409,6 +507,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         const data = await response.json();
+
+        const toolName = name as string;
+        if (toolName === "get_japan_stock_financial_table" || toolName === "get_japan_stock_financial_charts") {
+            const code = String(args?.code || "Unknown");
+            const typeLabel = toolName === "get_japan_stock_financial_table" ? "財務テーブル" : "業績グラフ";
+            const uiUri = toolName === "get_japan_stock_financial_table" ? `ui://mebuki/table?code=${code}` : `ui://mebuki/charts?code=${code}`;
+
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `${code} の${typeLabel}を表示します。インラインで表示されるインタラクティブなUIをご確認ください。`
+                    }
+                ],
+                // Correct nested structure for MCP Apps protocol
+                _meta: {
+                    ui: {
+                        resourceUri: uiUri
+                    }
+                },
+                // Use structuredContent as defined in the MCP Apps specification (SEP-1865)
+                // This data is optimized for UI rendering and not added to model context.
+                structuredContent: {
+                    status: "ok",
+                    data: {
+                        ...(data.data || data),
+                        mode: toolName === "get_japan_stock_financial_table" ? "table" : "charts"
+                    }
+                }
+            };
+        }
+
         return {
             content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
         };

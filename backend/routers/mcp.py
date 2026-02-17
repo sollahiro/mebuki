@@ -112,37 +112,15 @@ async def get_financial_history(code: str):
         prices = await asyncio.to_thread(analyzer._fetch_prices, code, annual_data, analysis_years)
         metrics = await asyncio.to_thread(analyzer._calculate_metrics, code, annual_data, prices, analysis_years)
         
-        # GUIのFinancialTable.tsxに準拠した項目を抽出してリスト化
-        history = []
-        for year in metrics.get("years", []):
-            calc = year.get("CalculatedData", {})
-            entry = {
-                "period": calc.get("FinancialPeriod") or year.get("financial_period"),
-                "fy_end": year.get("fy_end"),
-                # 損益計算書
-                "Sales": calc.get("Sales"),
-                "OperatingProfit": calc.get("OP"),
-                "NetProfit": calc.get("NP"),
-                # キャッシュフロー
-                "CFO": calc.get("CFO"),
-                "CFI": calc.get("CFI"),
-                "FCF": calc.get("CFC"), # Back-end notation is CFC for FCF sometimes
-                # 財務指標
-                "ROE": calc.get("ROE"),
-                "AdjustedEPS": calc.get("AdjustedEPS") or year.get("eps"),
-                "AdjustedBPS": calc.get("AdjustedBPS") or year.get("bps"),
-                # 株価・時価総額
-                "Price": calc.get("Price") or year.get("price"),
-                "MarketCap": calc.get("MarketCap"),
-            }
-            # Noneの項目は念の為除去
-            history.append({k: v for k, v in entry.items() if v is not None})
+        # GUIのFinancialTable.tsxに準拠した項目をリスト化
+        # Backendの内部データ構造（YearData）をそのまま活用することでフロントエンドとの整合性を高める
+        history = metrics.get("years", [])
             
         return {
             "status": "ok", 
             "data": {
                 "code": code,
-                "name": data_service.fetch_stock_basic_info(code).get("name"),
+                **data_service.fetch_stock_basic_info(code),
                 "history": history
             }
         }
