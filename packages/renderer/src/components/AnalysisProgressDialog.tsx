@@ -88,7 +88,7 @@ export function AnalysisProgressDialog({
               {/* プログレスバー */}
               <div className="h-2.5 bg-border rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-brand-start bg-gradient-to-r from-[#35C85F] to-[#1BBED0] transition-all duration-500 ease-out shadow-[0_0_12px_rgba(var(--brand-start),0.5)]"
+                  className="h-full bg-mebuki-brand transition-all duration-500 ease-out shadow-[0_0_12px_rgba(53,200,95,0.5)]"
                   style={{ width: `${progress.progress}%` }}
                 />
               </div>

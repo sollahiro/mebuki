@@ -87,8 +87,11 @@ async def get_financials(code: str):
             cleaned_data.append(cleaned_record)
             
         return {"status": "ok", "data": cleaned_data}
+    except ValueError as e:
+        logger.warning(f"財務データ取得のバリデーションエラー: {code} - {e}")
+        return {"status": "error", "message": str(e)}
     except Exception as e:
-        logger.error(f"MCP財務データエラー: {code} - {e}", exc_info=True)
+        logger.error(f"財務データ取得エラー: {code} - {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -115,15 +118,22 @@ async def get_financial_history(code: str):
         # GUIのFinancialTable.tsxに準拠した項目をリスト化
         # Backendの内部データ構造（YearData）をそのまま活用することでフロントエンドとの整合性を高める
         history = metrics.get("years", [])
+        
+        # EDINET書類の取得 (分析対象年数に合わせて多めに取得)
+        edinet_data = await asyncio.to_thread(analyzer._fetch_edinet_data, code, financial_data, max_documents=15)
             
         return {
             "status": "ok", 
             "data": {
                 "code": code,
                 **data_service.fetch_stock_basic_info(code),
-                "history": history
+                "history": history,
+                "edinet_data": edinet_data
             }
         }
+    except ValueError as e:
+        logger.warning(f"財務データ履歴取得のバリデーションエラー: {code} - {e}")
+        return {"status": "error", "message": str(e)}
     except Exception as e:
         logger.error(f"MCP財務履歴エラー: {code} - {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

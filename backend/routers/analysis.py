@@ -90,8 +90,9 @@ async def analyze_stock(code: str, force_refresh: bool = False):
             raise HTTPException(status_code=404, detail=f"銘柄コード {code} の分析に失敗しました。")
         
         return {"status": "ok", "data": result}
-    except HTTPException:
-        raise
+    except ValueError as e:
+        logger.warning(f"分析バリデーションエラー: {code} - {e}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"分析エラー: {code} - {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"分析中にエラーが発生しました: {str(e)}")

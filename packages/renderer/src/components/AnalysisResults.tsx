@@ -32,7 +32,8 @@ export function AnalysisResults({
             <div className="space-y-1 min-w-0">
               <div className="flex items-center gap-3">
                 <h2 className="text-xl font-bold text-foreground">
-                  {result.code.slice(0, 4)} {result.name}
+                  <span className="text-mebuki-brand font-mono mr-2">{result.code.slice(0, 4)}</span>
+                  {result.name}
                 </h2>
               </div>
 
@@ -71,7 +72,7 @@ export function AnalysisResults({
                     <div className="flex flex-col items-center">
                       <div className="flex items-baseline gap-2">
                         <span className="text-xl font-bold text-foreground-muted">株価</span>
-                        <span className="text-2xl font-bold text-brand-start tabular-nums">
+                        <span className="text-2xl font-bold text-mebuki-brand tabular-nums">
                           ¥{price.toLocaleString()}
                         </span>
                       </div>
@@ -83,7 +84,7 @@ export function AnalysisResults({
                 } else if (isAnalyzing) {
                   return (
                     <div className="flex items-center gap-2 text-foreground-muted">
-                      <div className="w-1.5 h-1.5 bg-brand-start/60 rounded-full animate-pulse" />
+                      <div className="w-1.5 h-1.5 bg-mebuki-brand rounded-full animate-pulse" />
                       <span className="text-xs font-medium">株価を取得中...</span>
                     </div>
                   );
@@ -120,14 +121,12 @@ export function AnalysisResults({
         {activeTab === 'data' && (
           <Card className="p-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
             <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-              <Table className="w-5 h-5 text-primary" />
+              <Table className="w-5 h-5 text-mebuki-brand" />
               年度別財務データ
             </h3>
             {result.metrics?.years && result.metrics.years.length > 0 ? (
               <FinancialTable
                 years={result.metrics.years}
-                edinetData={result.edinet_data}
-                isLoading={isAnalyzing}
               />
             ) : isAnalyzing ? (
               <LoadingState message="財務データを取得中..." />
@@ -176,7 +175,7 @@ export function AnalysisResults({
                 <div className="lg:col-span-3 border-l border-border/50 pl-6 overflow-hidden">
                   <div className="h-full flex flex-col">
                     <h4 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                      <Table className="w-4 h-4 text-brand-start" />
+                      <Table className="w-4 h-4 text-mebuki-brand" />
                       主要指標推移
                     </h4>
                     {result.metrics?.years && result.metrics.years.length > 0 ? (
@@ -215,7 +214,7 @@ function TabButton({ active, onClick, icon, label }: { active: boolean, onClick:
       onClick={onClick}
       className={cn(
         "flex items-center gap-1.5 px-4 h-8 transition-all",
-        active ? "bg-[#35C85F] bg-gradient-to-br from-[#35C85F] to-[#1BBED0] text-white shadow-sm" : "text-foreground-muted hover:text-foreground"
+        active ? "bg-mebuki-brand text-white shadow-sm" : "text-foreground-muted hover:text-foreground"
       )}
     >
       {icon}
@@ -227,7 +226,7 @@ function TabButton({ active, onClick, icon, label }: { active: boolean, onClick:
 function LoadingState({ message }: { message: string }) {
   return (
     <div className="flex items-center justify-center py-20 border border-dashed border-border rounded-lg">
-      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-brand-start mr-3"></div>
+      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-mebuki-brand mr-3"></div>
       <p className="text-sm text-foreground-muted">{message}</p>
     </div>
   )

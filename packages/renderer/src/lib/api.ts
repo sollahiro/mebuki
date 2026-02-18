@@ -6,7 +6,9 @@
  * Electron環境（file://）とWeb環境の両方に対応したAPIのベースURLを取得
  */
 export const getApiUrl = (path: string): string =>
-  window.location.protocol === 'file:' ? `http://127.0.0.1:8765${path}` : path;
+  (window.location.protocol === 'file:' || window.location.protocol === 'ui:')
+    ? `http://127.0.0.1:8765${path}`
+    : path;
 
 export interface ApiError {
   message: string

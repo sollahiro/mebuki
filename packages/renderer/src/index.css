@@ -55,6 +55,21 @@
   }
 }
 
+/* ブランドコンポーネント */
+@layer components {
+  .bg-mebuki-brand {
+    background: #35C85F;
+    background: linear-gradient(135deg, #35C85F 0%, #1BBED0 100%);
+  }
+
+  .text-mebuki-brand {
+    background: linear-gradient(135deg, #35C85F 0%, #1BBED0 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
 /* カスタムスクロールバー (非表示設定) */
 @layer utilities {
   .scrollbar-hide {

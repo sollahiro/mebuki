@@ -8,7 +8,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          'bg-[#35C85F] bg-gradient-to-br from-[#35C85F] to-[#1BBED0] text-white hover:opacity-90 shadow-lg shadow-primary/20',
+          'bg-mebuki-brand text-white hover:opacity-90 shadow-lg shadow-primary/20',
         destructive:
           'bg-error text-white hover:bg-error/90',
         outline:

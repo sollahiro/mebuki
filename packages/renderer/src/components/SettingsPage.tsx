@@ -370,7 +370,7 @@ export function SettingsPage({ }: SettingsPageProps) {
                                                 ? "bg-[#4b5563] text-white cursor-not-allowed border-transparent shadow-sm"
                                                 : mcpStatus.claude.registered
                                                     ? "bg-foreground-muted/5 hover:bg-foreground-muted/10 text-foreground border border-border"
-                                                    : "bg-[#35C85F] bg-gradient-to-br from-[#35C85F] to-[#1BBED0] hover:opacity-90 text-white shadow-lg shadow-primary/20"
+                                                    : "bg-mebuki-brand hover:opacity-90 text-white shadow-lg shadow-primary/20"
                                         )}
                                     >
                                         {isRegistering === 'claude' ? (
@@ -412,7 +412,7 @@ export function SettingsPage({ }: SettingsPageProps) {
                                                 ? "bg-[#4b5563] text-white cursor-not-allowed border-transparent shadow-sm"
                                                 : mcpStatus.goose.registered
                                                     ? "bg-foreground-muted/5 hover:bg-foreground-muted/10 text-foreground border border-border"
-                                                    : "bg-[#35C85F] bg-gradient-to-br from-[#35C85F] to-[#1BBED0] hover:opacity-90 text-white shadow-lg shadow-primary/20"
+                                                    : "bg-mebuki-brand hover:opacity-90 text-white shadow-lg shadow-primary/20"
                                         )}
                                     >
                                         {isRegistering === 'goose' ? (
@@ -459,7 +459,7 @@ export function SettingsPage({ }: SettingsPageProps) {
                                                  ? "bg-[#4b5563] text-white cursor-not-allowed border-transparent shadow-sm"
                                                  : mcpStatus.lmstudio.registered
                                                      ? "bg-foreground-muted/5 hover:bg-foreground-muted/10 text-foreground border border-border"
-                                                     : "bg-[#35C85F] bg-gradient-to-br from-[#35C85F] to-[#1BBED0] hover:opacity-90 text-white shadow-lg shadow-primary/20"
+                                                     : "bg-mebuki-brand hover:opacity-90 text-white shadow-lg shadow-primary/20"
                                          )}
                                      >
                                          {isRegistering === 'lmstudio' ? (

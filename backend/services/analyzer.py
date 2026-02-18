@@ -176,7 +176,7 @@ class IndividualAnalyzer:
         code: str,
         financial_data: List[Dict[str, Any]],
         progress_callback: Optional[Callable] = None,
-        max_documents: int = 2
+        max_documents: int = 10
     ) -> Dict[int, Any]:
         """EDINETデータを取得"""
         if not self.edinet_client:

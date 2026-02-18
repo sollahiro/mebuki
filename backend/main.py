@@ -19,12 +19,27 @@ from backend.routers import analysis, mcp, companies
 from backend.settings import settings_store
 
 
+import logging
+
+# ロギングの設定
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """アプリケーションのライフサイクル管理"""
-    print("🚀 FastAPI Server starting...")
+    logger.info("🚀 FastAPI Server starting...")
+    # 起動時に銘柄マスタを強制ロード
+    from backend.services.master_data import master_data_manager
+    master_data_manager.reload()
     yield
-    print("👋 FastAPI Server shutting down...")
+    logger.info("👋 FastAPI Server shutting down...")
 
 
 app = FastAPI(
@@ -37,11 +52,7 @@ app = FastAPI(
 # CORS設定（Electronからのリクエストを許可）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:*",
-        "http://127.0.0.1:*",
-        "file://*",
-    ],
+    allow_origins=["*"],
     allow_origin_regex=r"http://localhost:\d+",
     allow_credentials=True,
     allow_methods=["*"],

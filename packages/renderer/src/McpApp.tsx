@@ -3,7 +3,7 @@ import { useApp } from '@modelcontextprotocol/ext-apps/react'
 import { Building2, Globe } from 'lucide-react'
 import { FinancialTable } from './components/FinancialTable'
 import { FinancialCharts, ChartTab, CHART_TABS } from './components/FinancialCharts'
-import './index.css'
+import { getApiUrl } from './lib/api'
 
 /**
  * MCP App Component
@@ -16,6 +16,7 @@ const McpApp: React.FC = () => {
     const [mode, setMode] = useState<'table' | 'charts'>('charts')
     const [activeTab, setActiveTab] = useState<ChartTab>('cashflow')
     const [loading, setLoading] = useState(true)
+    const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
     // useApp handles the specialized handshake with the host (e.g. Claude)
     const { error } = useApp({
@@ -32,9 +33,15 @@ const McpApp: React.FC = () => {
                 // Prioritize structuredContent (SEP-1865 standard)
                 // Result can be nested depending on how the server returns it
                 const source = result.structuredContent || result.data || result
+
+                if (source.status === 'error') {
+                    setErrorMessage(source.message || 'データ取得中にエラーが発生しました')
+                    return
+                }
+
                 const receivedData = source.status === 'ok' ? source.data : (source.data || source)
 
-                console.log('McpApp: Processed data', receivedData)
+                console.log('McpApp: Processed data object:', JSON.stringify(receivedData, null, 2))
                 setData(receivedData)
 
                 if (receivedData.mode === 'table' || receivedData.mode === 'charts') {
@@ -48,10 +55,10 @@ const McpApp: React.FC = () => {
 
     // Manual Fallback: In case the host's data push (ontoolresult) fails or is slow
     useEffect(() => {
-        if (data) return;
+        if (data || errorMessage) return;
 
         const timer = setTimeout(async () => {
-            if (data) return;
+            if (data || errorMessage) return;
 
             const params = new URLSearchParams(window.location.search)
             const code = params.get('code')
@@ -59,9 +66,11 @@ const McpApp: React.FC = () => {
             if (code) {
                 console.log(`McpApp: Triggering manual fallback for code ${code}`)
                 try {
-                    const response = await fetch(`http://localhost:8765/api/mcp/financial_history/${code}`)
+                    const apiUrl = getApiUrl(`/api/mcp/financial_history/${code}`)
+                    const response = await fetch(apiUrl)
                     const result = await response.json()
                     if (result.status === 'ok') {
+                        console.log('McpApp: Fallback Success', result.data)
                         setData(result.data)
                         setLoading(false)
 
@@ -69,28 +78,49 @@ const McpApp: React.FC = () => {
                         const isTable = window.location.pathname.includes('table') || params.get('mode') === 'table'
                         if (isTable) setMode('table')
                         else setMode('charts')
+                    } else if (result.status === 'error') {
+                        setErrorMessage(result.message)
+                        setLoading(false)
                     }
                 } catch (err) {
-                    console.error('McpApp: Manual fallback fetch failed', err)
+                    console.error('McpApp: Fallback fetch failed', err)
+                    // If even fallback fails, we wait for SDK or show nothing
                 }
             }
         }, 2000)
 
         return () => clearTimeout(timer)
-    }, [data])
+    }, [data, errorMessage])
 
     if (error) {
         return (
-            <div className="flex items-center justify-center h-screen bg-background text-red-500 p-4">
+            <div className="flex items-center justify-center min-h-screen p-4 text-destructive bg-background">
                 <div className="text-center">
-                    <h2 className="text-lg font-bold mb-2">Connection Error</h2>
-                    <p className="text-sm">{error.message}</p>
+                    <h1 className="text-xl font-bold mb-2">MCP Connection Error</h1>
+                    <p>{error.message}</p>
                 </div>
             </div>
         )
     }
 
-    if (!data && loading) {
+    if (errorMessage) {
+        return (
+            <div className="flex items-center justify-center min-h-screen p-4 bg-background">
+                <div className="max-w-m w-full bg-destructive/10 border border-destructive/20 rounded-xl p-6 text-center">
+                    <h1 className="text-xl font-bold text-destructive mb-2">エラーが発生しました</h1>
+                    <p className="text-muted-foreground">{errorMessage}</p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="mt-4 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:bg-destructive/90 transition-colors"
+                    >
+                        再読み込み
+                    </button>
+                </div>
+            </div>
+        )
+    }
+
+    if (loading && !data) {
         return (
             <div className="flex items-center justify-center h-screen bg-background text-foreground">
                 <div className="flex flex-col items-center gap-4">
@@ -102,6 +132,7 @@ const McpApp: React.FC = () => {
     }
 
     // Default to some basic info if data is missing (should not happen if loading finishes)
+    // Try both lowerCase and CamelCase mapping
     const stockInfo = {
         code: data?.code || data?.Code || "Unknown",
         name: data?.name || data?.CompanyName || data?.CoName || "",
@@ -115,7 +146,7 @@ const McpApp: React.FC = () => {
                 <div className="flex items-center justify-between">
                     <div className="flex flex-col gap-1.5 focus:outline-none" tabIndex={0}>
                         <h1 className="text-2xl font-extrabold flex items-center gap-3">
-                            <span className="text-primary font-mono tracking-tighter">{stockInfo.code}</span>
+                            <span className="text-mebuki-brand font-mono tracking-tighter">{stockInfo.code}</span>
                             <span className="text-foreground tracking-tight">{stockInfo.name}</span>
                         </h1>
                         <div className="flex items-center gap-4 text-xs font-medium text-foreground-muted">
@@ -133,7 +164,7 @@ const McpApp: React.FC = () => {
                         <button
                             onClick={() => setMode('table')}
                             className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${mode === 'table'
-                                ? 'bg-[#35C85F] bg-gradient-to-br from-[#35C85F] to-[#1BBED0] text-white shadow-md'
+                                ? 'bg-mebuki-brand text-white shadow-md'
                                 : 'text-foreground-muted hover:text-foreground'
                                 }`}
                         >
@@ -142,7 +173,7 @@ const McpApp: React.FC = () => {
                         <button
                             onClick={() => setMode('charts')}
                             className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${mode === 'charts'
-                                ? 'bg-[#35C85F] bg-gradient-to-br from-[#35C85F] to-[#1BBED0] text-white shadow-md'
+                                ? 'bg-mebuki-brand text-white shadow-md'
                                 : 'text-foreground-muted hover:text-foreground'
                                 }`}
                         >
@@ -155,7 +186,9 @@ const McpApp: React.FC = () => {
             <main className="flex-1 overflow-hidden">
                 {mode === 'table' ? (
                     <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
-                        <FinancialTable years={data?.metrics?.years || data?.history || []} />
+                        <FinancialTable
+                            years={data?.metrics?.years || data?.history || []}
+                        />
                     </div>
                 ) : (
                     <div className="flex flex-col gap-4">
@@ -165,7 +198,7 @@ const McpApp: React.FC = () => {
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id)}
                                     className={`px-5 py-2 rounded-full text-xs font-bold transition-all ${activeTab === tab.id
-                                        ? 'bg-[#35C85F] bg-gradient-to-br from-[#35C85F] to-[#1BBED0] text-white shadow-lg shadow-primary/20'
+                                        ? 'bg-mebuki-brand text-white shadow-lg shadow-primary/20'
                                         : 'bg-surface text-foreground-muted hover:bg-surface/70 hover:text-foreground'}`}
                                 >
                                     {tab.label}
