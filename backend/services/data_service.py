@@ -79,17 +79,25 @@ class DataService:
         # API への問い合わせを廃止し、MasterDataManager (CSV) から取得
         stock_info = master_data_manager.get_by_code(code)
         if not stock_info:
-            return {}
+            logger.warning(f"銘柄情報が見つかりません: {code}")
+            return {
+                "name": "",
+                "industry": "",
+                "market": "",
+                "code": code
+            }
         
         return {
             "name": stock_info.get("CoName"),
-            "name_en": stock_info.get("CoNameEn", ""), # CSVにない場合は空
+            "name_en": stock_info.get("CoNameEn", ""),
+            "industry": stock_info.get("S33Nm"),
             "sector_33": stock_info.get("S33"),
             "sector_33_name": stock_info.get("S33Nm"),
             "sector_17": stock_info.get("S17"),
             "sector_17_name": stock_info.get("S17Nm"),
-            "market": stock_info.get("MktNm", "").split("（")[0].split("(")[0],
-            "market_name": stock_info.get("MktNm", "").split("（")[0].split("(")[0],
+            "market": stock_info.get("MktNm", ""),
+            "market_name": stock_info.get("MktNm", ""),
+            "code": code
         }
 
     async def get_raw_analysis_data(self, code: str, use_cache: bool = True, max_documents: int = 2) -> Dict[str, Any]:

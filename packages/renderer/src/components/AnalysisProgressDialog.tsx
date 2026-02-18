@@ -54,8 +54,8 @@ export function AnalysisProgressDialog({
         <Dialog.Content className="fixed top-10 left-1/2 -translate-x-1/2 w-full max-w-md bg-card/95 backdrop-blur-md rounded-xl shadow-2xl z-[70] p-6 outline-none animate-in fade-in slide-in-from-top-4 duration-300">
           <div className="flex flex-col items-center text-center">
             <div className="flex items-center gap-4 w-full mb-4">
-              <div className="bg-primary/10 p-2 rounded-full">
-                <Loader2 className="w-6 h-6 text-primary animate-spin" />
+              <div className="bg-brand-start/10 p-2 rounded-full">
+                <Loader2 className="w-6 h-6 text-brand-start animate-spin" />
               </div>
               <Dialog.Title className="text-lg font-bold text-foreground">
                 分析を実行中...
@@ -84,11 +84,11 @@ export function AnalysisProgressDialog({
                 <span className="text-primary font-medium">{progress.step || '準備中'}</span>
                 <span className="text-foreground-muted font-mono">{progress.progress}%</span>
               </div>
-              
+
               {/* プログレスバー */}
               <div className="h-2.5 bg-border rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-primary transition-all duration-500 ease-out shadow-[0_0_12px_rgba(var(--primary),0.5)]"
+                  className="h-full bg-brand-start bg-gradient-to-r from-[#35C85F] to-[#1BBED0] transition-all duration-500 ease-out shadow-[0_0_12px_rgba(var(--brand-start),0.5)]"
                   style={{ width: `${progress.progress}%` }}
                 />
               </div>

@@ -5,27 +5,42 @@
 /* ベーススタイル */
 @layer base {
   :root {
-    --primary: 16 185 129; /* Emerald 500 */
-    --primary-hover: 5 150 105; /* Emerald 600 */
+    --brand-start: #35C85F;
+    --brand-end: #1BBED0;
+    --primary: 53 200 95;
+    /* #35C85F in RGB for Tailwind opacity */
+    --primary-hover: 44 180 84;
+    /* Slightly darker green for hover */
     --background: 255 255 255;
-    --surface: 249 250 251; /* Gray 50 */
-    --foreground: 17 24 39; /* Gray 900 */
-    --foreground-muted: 75 85 99; /* Gray 600 - 可読性向上 */
-    --border: 229 231 235; /* Gray 200 */
+    --surface: 249 250 251;
+    /* Gray 50 */
+    --foreground: 17 24 39;
+    /* Gray 900 */
+    --foreground-muted: 75 85 99;
+    /* Gray 600 - 可読性向上 */
+    --border: 229 231 235;
+    /* Gray 200 */
     --card: 255 255 255;
     --input: 255 255 255;
   }
 
   .dark {
-    --primary: 52 211 153; /* Emerald 400 */
-    --primary-hover: 16 185 129; /* Emerald 500 */
-    --background: 15 23 42; /* Slate 900 */
-    --surface: 30 41 59; /* Slate 800 */
-    --foreground: 241 245 249; /* Slate 100 */
-    --foreground-muted: 203 213 225; /* Slate 300 - 可読性向上 */
-    --border: 51 65 85; /* Slate 700 */
-    --card: 30 41 59; /* Slate 800 */
-    --input: 51 65 85; /* Slate 700 */
+    --primary: 53 200 95;
+    --primary-hover: 44 180 84;
+    --background: 15 23 42;
+    /* Slate 900 */
+    --surface: 30 41 59;
+    /* Slate 800 */
+    --foreground: 241 245 249;
+    /* Slate 100 */
+    --foreground-muted: 203 213 225;
+    /* Slate 300 - 可読性向上 */
+    --border: 51 65 85;
+    /* Slate 700 */
+    --card: 30 41 59;
+    /* Slate 800 */
+    --input: 51 65 85;
+    /* Slate 700 */
   }
 
   * {
@@ -43,34 +58,41 @@
 /* カスタムスクロールバー (非表示設定) */
 @layer utilities {
   .scrollbar-hide {
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE and Edge */
   }
 
   .scrollbar-hide::-webkit-scrollbar {
-    display: none; /* Chrome, Safari, Opera */
+    display: none;
+    /* Chrome, Safari, Opera */
   }
 }
 
 /* グローバルにスクロールバーを非表示にする */
 * {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE and Edge */
 }
 
 *::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
+  display: none;
+  /* Chrome, Safari, Opera */
 }
 
 /* ダークモード自動検出 */
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
-    --primary: 52 211 153;
-    --primary-hover: 16 185 129;
+    --primary: 53 200 95;
+    --primary-hover: 44 180 84;
     --background: 15 23 42;
     --surface: 30 41 59;
     --foreground: 241 245 249;
-    --foreground-muted: 203 213 225; /* Slate 300 - 可読性向上 */
+    --foreground-muted: 203 213 225;
+    /* Slate 300 - 可読性向上 */
     --border: 51 65 85;
     --card: 30 41 59;
     --input: 51 65 85;

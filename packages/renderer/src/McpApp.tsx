@@ -94,7 +94,7 @@ const McpApp: React.FC = () => {
         return (
             <div className="flex items-center justify-center h-screen bg-background text-foreground">
                 <div className="flex flex-col items-center gap-4">
-                    <div className="w-8 h-8 rounded-full border-4 border-primary/30 border-t-primary animate-spin" />
+                    <div className="w-8 h-8 rounded-full border-4 border-brand-start/30 border-t-brand-start animate-spin" />
                     <p className="text-sm font-medium animate-pulse">データを読み込み中...</p>
                 </div>
             </div>
@@ -102,21 +102,21 @@ const McpApp: React.FC = () => {
     }
 
     // Default to some basic info if data is missing (should not happen if loading finishes)
-    const stockInfo = data?.company_info || {
-        code: data?.code || "Unknown",
-        name: data?.name || "",
-        industry: data?.industry || data?.sector_33_name || "",
-        market: data?.market || data?.market_name || ""
+    const stockInfo = {
+        code: data?.code || data?.Code || "Unknown",
+        name: data?.name || data?.CompanyName || data?.CoName || "",
+        industry: data?.industry || data?.sector_33_name || data?.Sector33CodeName || data?.S33Nm || "",
+        market: data?.market || data?.market_name || data?.MarketName || data?.MktNm || ""
     }
 
     return (
         <div className="min-h-screen bg-background text-foreground p-4 flex flex-col gap-6">
             <header className="flex flex-col gap-3 border-b border-border pb-4">
                 <div className="flex items-center justify-between">
-                    <div className="flex flex-col gap-1.5">
-                        <h1 className="text-2xl font-bold flex items-center gap-2">
-                            <span className="text-foreground-muted/50 font-medium tracking-tight">{stockInfo.code}</span>
-                            <span>{stockInfo.name}</span>
+                    <div className="flex flex-col gap-1.5 focus:outline-none" tabIndex={0}>
+                        <h1 className="text-2xl font-extrabold flex items-center gap-3">
+                            <span className="text-primary font-mono tracking-tighter">{stockInfo.code}</span>
+                            <span className="text-foreground tracking-tight">{stockInfo.name}</span>
                         </h1>
                         <div className="flex items-center gap-4 text-xs font-medium text-foreground-muted">
                             <span className="flex items-center gap-1.5">
@@ -133,7 +133,7 @@ const McpApp: React.FC = () => {
                         <button
                             onClick={() => setMode('table')}
                             className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${mode === 'table'
-                                ? 'bg-primary text-primary-foreground shadow-md'
+                                ? 'bg-[#35C85F] bg-gradient-to-br from-[#35C85F] to-[#1BBED0] text-white shadow-md'
                                 : 'text-foreground-muted hover:text-foreground'
                                 }`}
                         >
@@ -142,7 +142,7 @@ const McpApp: React.FC = () => {
                         <button
                             onClick={() => setMode('charts')}
                             className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${mode === 'charts'
-                                ? 'bg-primary text-primary-foreground shadow-md'
+                                ? 'bg-[#35C85F] bg-gradient-to-br from-[#35C85F] to-[#1BBED0] text-white shadow-md'
                                 : 'text-foreground-muted hover:text-foreground'
                                 }`}
                         >
@@ -165,7 +165,7 @@ const McpApp: React.FC = () => {
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id)}
                                     className={`px-5 py-2 rounded-full text-xs font-bold transition-all ${activeTab === tab.id
-                                        ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
+                                        ? 'bg-[#35C85F] bg-gradient-to-br from-[#35C85F] to-[#1BBED0] text-white shadow-lg shadow-primary/20'
                                         : 'bg-surface text-foreground-muted hover:bg-surface/70 hover:text-foreground'}`}
                                 >
                                     {tab.label}

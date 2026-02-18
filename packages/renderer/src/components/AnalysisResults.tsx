@@ -26,7 +26,7 @@ export function AnalysisResults({
     <div className="space-y-6">
       {/* 銘柄情報カード (Sticky Header) */}
       <div className="sticky top-0 z-20 pb-2 bg-background/80 backdrop-blur-sm -mx-2 px-2">
-        <Card className="p-4 shadow-md border-primary/20">
+        <Card className="p-4 shadow-md border-brand-start/20">
           <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-4">
             {/* 左: 銘柄情報 */}
             <div className="space-y-1 min-w-0">
@@ -71,7 +71,7 @@ export function AnalysisResults({
                     <div className="flex flex-col items-center">
                       <div className="flex items-baseline gap-2">
                         <span className="text-xl font-bold text-foreground-muted">株価</span>
-                        <span className="text-2xl font-bold text-primary tabular-nums">
+                        <span className="text-2xl font-bold text-brand-start tabular-nums">
                           ¥{price.toLocaleString()}
                         </span>
                       </div>
@@ -83,7 +83,7 @@ export function AnalysisResults({
                 } else if (isAnalyzing) {
                   return (
                     <div className="flex items-center gap-2 text-foreground-muted">
-                      <div className="w-1.5 h-1.5 bg-primary/60 rounded-full animate-pulse" />
+                      <div className="w-1.5 h-1.5 bg-brand-start/60 rounded-full animate-pulse" />
                       <span className="text-xs font-medium">株価を取得中...</span>
                     </div>
                   );
@@ -149,7 +149,7 @@ export function AnalysisResults({
                     className={cn(
                       'px-4 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap flex-shrink-0',
                       graphTab === tab.id
-                        ? 'bg-primary text-white shadow-sm'
+                        ? 'bg-mebuki-brand text-white shadow-sm'
                         : 'text-foreground-muted hover:bg-surface hover:text-foreground'
                     )}
                   >
@@ -176,7 +176,7 @@ export function AnalysisResults({
                 <div className="lg:col-span-3 border-l border-border/50 pl-6 overflow-hidden">
                   <div className="h-full flex flex-col">
                     <h4 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                      <Table className="w-4 h-4 text-primary" />
+                      <Table className="w-4 h-4 text-brand-start" />
                       主要指標推移
                     </h4>
                     {result.metrics?.years && result.metrics.years.length > 0 ? (
@@ -215,7 +215,7 @@ function TabButton({ active, onClick, icon, label }: { active: boolean, onClick:
       onClick={onClick}
       className={cn(
         "flex items-center gap-1.5 px-4 h-8 transition-all",
-        active ? "bg-primary text-white shadow-sm" : "text-foreground-muted hover:text-foreground"
+        active ? "bg-[#35C85F] bg-gradient-to-br from-[#35C85F] to-[#1BBED0] text-white shadow-sm" : "text-foreground-muted hover:text-foreground"
       )}
     >
       {icon}
@@ -227,7 +227,7 @@ function TabButton({ active, onClick, icon, label }: { active: boolean, onClick:
 function LoadingState({ message }: { message: string }) {
   return (
     <div className="flex items-center justify-center py-20 border border-dashed border-border rounded-lg">
-      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary mr-3"></div>
+      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-brand-start mr-3"></div>
       <p className="text-sm text-foreground-muted">{message}</p>
     </div>
   )

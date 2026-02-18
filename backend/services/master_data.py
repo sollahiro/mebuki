@@ -120,18 +120,31 @@ class MasterDataManager:
         """コード指定で銘柄情報を取得"""
         self.load_if_needed()
         
-        # 5桁（末尾0）と4桁の両方に対応するための正規化
-        target_code = code
-        if len(code) == 4:
-            # 4桁の場合は末尾0を補完して探す（CSVの形式に合わせる）
-            # ただしCSVが4桁のみの場合もあるので両方チェック
-            pass
-
+        if not code:
+            return None
+            
+        target_code = str(code).strip()
+        
+        # 1. 直接一致
         for item in self._master_data:
             c = item.get("Code", "")
-            if c == target_code or (len(target_code) == 4 and c == target_code + "0"):
+            if c == target_code:
                 return item
                 
+        # 2. 5桁（末尾0）から4桁への正規化一致を試す
+        if len(target_code) == 5 and target_code.endswith("0"):
+            normalized = target_code[:4]
+            for item in self._master_data:
+                if item.get("Code") == normalized:
+                    return item
+        
+        # 3. 4桁から5桁（CSV側が5桁の場合）
+        if len(target_code) == 4:
+            normalized = target_code + "0"
+            for item in self._master_data:
+                if item.get("Code") == normalized:
+                    return item
+                    
         return None
 
 # シングルトン

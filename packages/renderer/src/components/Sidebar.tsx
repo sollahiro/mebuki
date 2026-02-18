@@ -56,7 +56,7 @@ export function Sidebar({
                     className={cn(
                       'flex items-center gap-2 px-3 py-2 rounded-md text-sm',
                       'bg-surface',
-                      'hover:bg-primary/10',
+                      'hover:bg-brand-start/10',
                       'transition-colors',
                       isAnalyzing && 'opacity-50'
                     )}
@@ -77,7 +77,7 @@ export function Sidebar({
                       }}
                       disabled={isAnalyzing}
                       className={cn(
-                        'p-1 rounded hover:bg-primary/10 text-foreground-muted hover:text-primary',
+                        'p-1 rounded hover:bg-brand-start/10 text-foreground-muted hover:text-brand-start',
                         'transition-colors',
                         'disabled:opacity-50 disabled:cursor-not-allowed'
                       )}

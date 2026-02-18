@@ -132,7 +132,7 @@ export function TopSearchBar({ onSearch, isAnalyzing, analysisMessage, onCancel 
           className={cn(
             "w-full h-full rounded-md transition-all text-xs text-foreground",
             "bg-surface border border-border",
-            "focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary",
+            "focus:outline-none focus:ring-1 focus:ring-brand-start focus:border-brand-start",
             (showCenteredPlaceholder || isAnalyzing) ? "text-center" : "pl-9 pr-8",
             "disabled:opacity-80"
           )}
@@ -141,7 +141,7 @@ export function TopSearchBar({ onSearch, isAnalyzing, analysisMessage, onCancel 
         {/* 分析中の表示 */}
         {isAnalyzing && (
           <div className="absolute inset-y-0 inset-x-0 flex items-center justify-center pointer-events-none gap-2 px-3">
-            <Loader2 className="w-[14px] h-[14px] animate-spin text-primary" />
+            <Loader2 className="w-[14px] h-[14px] animate-spin text-brand-start" />
             <span className="text-xs font-medium text-foreground truncate">
               {analysisMessage || "分析中..."}
             </span>
@@ -165,7 +165,7 @@ export function TopSearchBar({ onSearch, isAnalyzing, analysisMessage, onCancel 
 
         {/* ローディングアイコン (サジェスト取得中) */}
         {!isAnalyzing && isLoading && (
-          <div className="absolute right-2.5 inset-y-0 flex items-center text-primary pointer-events-none">
+          <div className="absolute right-2.5 inset-y-0 flex items-center text-brand-start pointer-events-none">
             <Loader2 className="w-[14px] h-[14px] animate-spin" />
           </div>
         )}
@@ -193,7 +193,7 @@ export function TopSearchBar({ onSearch, isAnalyzing, analysisMessage, onCancel 
                   key={s.code}
                   className={cn(
                     "px-3 py-2 cursor-pointer flex items-center gap-3 transition-colors",
-                    selectedIndex === i ? "bg-primary/20 text-primary" : "hover:bg-primary/10 text-foreground"
+                    selectedIndex === i ? "bg-brand-start/20 text-brand-start" : "hover:bg-brand-start/10 text-foreground"
                   )}
                   onClick={() => handleSelect(s.code)}
                   onMouseEnter={() => setSelectedIndex(i)}

@@ -62,6 +62,9 @@ export default {
           '100%': { opacity: '1' },
         },
       },
+      backgroundImage: {
+        'mebuki-brand': 'linear-gradient(135deg, #35C85F 0%, #1BBED0 100%)',
+      },
     },
   },
   plugins: [],

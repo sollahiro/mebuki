@@ -179,7 +179,7 @@ export function FinancialTable({ years, edinetData, isLoading }: FinancialTableP
                             console.error('PDF download error:', error)
                           }
                         }}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-xs font-medium"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-brand-start/10 text-brand-start hover:bg-brand-start/20 transition-colors text-xs font-medium"
                         title={`${semiAnnualReport.docType} (提出日: ${semiAnnualReport.submitDate})`}
                       >
                         <Download className="w-3.5 h-3.5" />
@@ -187,7 +187,7 @@ export function FinancialTable({ years, edinetData, isLoading }: FinancialTableP
                       </button>
                     ) : isLoading ? (
                       <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-surface border border-dashed border-border text-foreground-muted text-xs animate-pulse">
-                        <div className="w-3 h-3 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+                        <div className="w-3 h-3 rounded-full border-2 border-brand-start/30 border-t-brand-start animate-spin" />
                         検索中...
                       </div>
                     ) : null}
@@ -235,7 +235,7 @@ export function FinancialTable({ years, edinetData, isLoading }: FinancialTableP
                             console.error('PDF download error:', error)
                           }
                         }}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-xs font-medium"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-brand-start/10 text-brand-start hover:bg-brand-start/20 transition-colors text-xs font-medium"
                         title={`${annualReport.docType} (提出日: ${annualReport.submitDate})`}
                       >
                         <Download className="w-3.5 h-3.5" />
@@ -243,7 +243,7 @@ export function FinancialTable({ years, edinetData, isLoading }: FinancialTableP
                       </button>
                     ) : isLoading ? (
                       <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-surface border border-dashed border-border text-foreground-muted text-xs animate-pulse">
-                        <div className="w-3 h-3 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+                        <div className="w-3 h-3 rounded-full border-2 border-brand-start/30 border-t-brand-start animate-spin" />
                         検索中...
                       </div>
                     ) : null}
