@@ -53,10 +53,10 @@ mebukiは、J-QUANTS API、EDINET API を活用し、投資判断における「
 ### 🤖 AI アシスタント連携 (MCP)
 - **Claude / Goose との統合**: ワンクリックで連携設定が完了
 - **自然言語での財務分析**: 「トヨタの直近3年の業績推移をまとめて」といった会話形式で分析
-- **MCP ツール提供**: 
-  - `analyze_stock`: 基本情報と主要財務指標の取得
-  - `get_financial_history`: 最大10年分の時系列財務データ
-  - `analyze_securities_report`: 有価証券報告書からのMD&A抽出
+- **MCP ツール提供**:
+  - `get_japan_stock_official_overview`: 基本情報と主要財務指標の取得
+  - `get_japan_stock_10year_financial_history`: 最大10年間の時系列財務データ
+  - `analyze_japan_stock_securities_report`: 有価証券報告書からのMD&A抽出
   - その他、企業検索、株価履歴取得など
 
 ---

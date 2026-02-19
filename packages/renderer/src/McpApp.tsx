@@ -122,10 +122,23 @@ const McpApp: React.FC = () => {
 
     if (loading && !data) {
         return (
-            <div className="flex items-center justify-center h-screen bg-background text-foreground">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="w-8 h-8 rounded-full border-4 border-brand-start/30 border-t-brand-start animate-spin" />
-                    <p className="text-sm font-medium animate-pulse">データを読み込み中...</p>
+            <div className="flex items-center justify-center min-h-screen bg-background p-4">
+                <div className="flex flex-col items-center gap-12">
+                    <div className="relative w-16 h-16 flex items-center justify-center">
+                        {/* Ripple Circles */}
+                        <div className="absolute inset-0 rounded-full bg-mebuki-brand opacity-20 animate-ripple" style={{ animationDelay: '0s' }} />
+                        <div className="absolute inset-0 rounded-full bg-mebuki-brand opacity-20 animate-ripple" style={{ animationDelay: '1s' }} />
+                        <div className="absolute inset-0 rounded-full bg-mebuki-brand opacity-20 animate-ripple" style={{ animationDelay: '2s' }} />
+
+                        {/* Center Core */}
+                        <div className="w-10 h-10 rounded-full bg-mebuki-brand shadow-lg z-10 flex items-center justify-center">
+                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        </div>
+                    </div>
+                    <div className="space-y-2 text-center">
+                        <p className="text-lg font-bold tracking-tight text-mebuki-brand animate-pulse">データを分析中</p>
+                        <p className="text-sm text-foreground-muted">財務構造を解析しています...</p>
+                    </div>
                 </div>
             </div>
         )
@@ -141,74 +154,76 @@ const McpApp: React.FC = () => {
     }
 
     return (
-        <div className="min-h-screen bg-background text-foreground p-4 flex flex-col gap-6">
-            <header className="flex flex-col gap-3 border-b border-border pb-4">
-                <div className="flex items-center justify-between">
-                    <div className="flex flex-col gap-1.5 focus:outline-none" tabIndex={0}>
-                        <h1 className="text-2xl font-extrabold flex items-center gap-3">
-                            <span className="text-mebuki-brand font-mono tracking-tighter">{stockInfo.code}</span>
-                            <span className="text-foreground tracking-tight">{stockInfo.name}</span>
-                        </h1>
-                        <div className="flex items-center gap-4 text-xs font-medium text-foreground-muted">
-                            <span className="flex items-center gap-1.5">
-                                <Building2 className="w-3.5 h-3.5 opacity-60" />
-                                {stockInfo.industry}
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                                <Globe className="w-3.5 h-3.5 opacity-60" />
-                                {stockInfo.market}
-                            </span>
+        <div className="min-h-screen bg-background text-foreground flex flex-col items-center">
+            <div className="max-w-5xl w-full p-4 flex flex-col gap-6">
+                <header className="flex flex-col gap-3 border-b border-border pb-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-1.5 focus:outline-none" tabIndex={0}>
+                            <h1 className="text-2xl font-extrabold flex items-center gap-3">
+                                <span className="text-mebuki-brand font-mono tracking-tighter">{stockInfo.code}</span>
+                                <span className="text-foreground tracking-tight">{stockInfo.name}</span>
+                            </h1>
+                            <div className="flex items-center gap-4 text-xs font-medium text-foreground-muted">
+                                <span className="flex items-center gap-1.5">
+                                    <Building2 className="w-3.5 h-3.5 opacity-60" />
+                                    {stockInfo.industry}
+                                </span>
+                                <span className="flex items-center gap-1.5">
+                                    <Globe className="w-3.5 h-3.5 opacity-60" />
+                                    {stockInfo.market}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="flex bg-surface rounded-lg p-1 border border-border/50 shadow-sm">
+                            <button
+                                onClick={() => setMode('table')}
+                                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${mode === 'table'
+                                    ? 'bg-mebuki-brand text-white shadow-md'
+                                    : 'text-foreground-muted hover:text-foreground'
+                                    }`}
+                            >
+                                詳細テーブル
+                            </button>
+                            <button
+                                onClick={() => setMode('charts')}
+                                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${mode === 'charts'
+                                    ? 'bg-mebuki-brand text-white shadow-md'
+                                    : 'text-foreground-muted hover:text-foreground'
+                                    }`}
+                            >
+                                分析グラフ
+                            </button>
                         </div>
                     </div>
-                    <div className="flex bg-surface rounded-lg p-1 border border-border/50 shadow-sm">
-                        <button
-                            onClick={() => setMode('table')}
-                            className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${mode === 'table'
-                                ? 'bg-mebuki-brand text-white shadow-md'
-                                : 'text-foreground-muted hover:text-foreground'
-                                }`}
-                        >
-                            詳細テーブル
-                        </button>
-                        <button
-                            onClick={() => setMode('charts')}
-                            className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${mode === 'charts'
-                                ? 'bg-mebuki-brand text-white shadow-md'
-                                : 'text-foreground-muted hover:text-foreground'
-                                }`}
-                        >
-                            分析グラフ
-                        </button>
-                    </div>
-                </div>
-            </header>
+                </header>
 
-            <main className="flex-1 overflow-hidden">
-                {mode === 'table' ? (
-                    <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
-                        <FinancialTable
-                            years={data?.metrics?.years || data?.history || []}
-                        />
-                    </div>
-                ) : (
-                    <div className="flex flex-col gap-4">
-                        <div className="flex gap-2">
-                            {CHART_TABS.map((tab) => (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => setActiveTab(tab.id)}
-                                    className={`px-5 py-2 rounded-full text-xs font-bold transition-all ${activeTab === tab.id
-                                        ? 'bg-mebuki-brand text-white shadow-lg shadow-primary/20'
-                                        : 'bg-surface text-foreground-muted hover:bg-surface/70 hover:text-foreground'}`}
-                                >
-                                    {tab.label}
-                                </button>
-                            ))}
+                <main className="flex-1">
+                    {mode === 'table' ? (
+                        <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
+                            <FinancialTable
+                                years={data?.metrics?.years || data?.history || []}
+                            />
                         </div>
-                        <FinancialCharts years={data?.metrics?.years || data?.history || []} activeTab={activeTab} />
-                    </div>
-                )}
-            </main>
+                    ) : (
+                        <div className="bg-card rounded-xl border border-border p-6 shadow-sm flex flex-col gap-6">
+                            <div className="flex gap-2 mb-2">
+                                {CHART_TABS.map((tab) => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setActiveTab(tab.id)}
+                                        className={`px-5 py-2 rounded-full text-xs font-bold transition-all ${activeTab === tab.id
+                                            ? 'bg-mebuki-brand text-white shadow-lg shadow-primary/20'
+                                            : 'bg-surface text-foreground-muted hover:bg-surface/70 hover:text-foreground'}`}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <FinancialCharts years={data?.metrics?.years || data?.history || []} activeTab={activeTab} />
+                        </div>
+                    )}
+                </main>
+            </div>
         </div>
     )
 }

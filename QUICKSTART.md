@@ -156,13 +156,13 @@ AIアシスタントがmebukiのツールを使用して、自動的に以下の
 ### 利用可能なMCPツール
 
 連携により、以下のツールがAIアシスタントから利用可能になります:
-
-- `search_stock`: 企業名や銘柄コードから銘柄情報を検索
-- `analyze_stock`: 指定した銘柄の基本情報を取得
-- `get_financial_history`: 財務データの時系列推移を取得
-- `get_raw_financial_summaries`: 有価証券報告書から財務サマリーを取得
-- `get_edinet_documents`: EDINET文書の一覧を取得
-- `get_edinet_document_content`: EDINET文書の内容を取得
+- `find_japan_stock_code_by_name`: 企業名や銘柄コードから銘柄情報を検索
+- `get_japan_stock_official_overview`: 指定した銘柄の基本情報を取得
+- `get_japan_stock_10year_financial_history`: 財務データの時系列推移（最大10年間）を取得
+- `get_japan_stock_raw_jquants_data`: 有価証券報告書から財務サマリーを取得
+- `get_japan_stock_statutory_filings_list`: EDINET文書の一覧を取得
+- `extract_japan_stock_filings_content`: EDINET文書の内容を取得
+- `mebuki_japan_stock_expert_analysis`: 専門家基準による構造的な財務分析を実行
 
 ## トラブルシューティング
 

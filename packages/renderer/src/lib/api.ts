@@ -71,36 +71,6 @@ export async function getSettings(): Promise<{
 }
 
 /**
- * 分析を実行（非ストリーミング）
- */
-export async function analyzeStock(
-  code: string,
-  forceRefresh = false
-): Promise<{ status: string; data: unknown }> {
-  return request(`/api/analyze/${code}?force_refresh=${forceRefresh}`, {
-    method: 'POST',
-  })
-}
-
-/**
- * 分析履歴を取得
- */
-export async function getHistory(): Promise<{
-  status: string
-  data: { code: string; name: string; timestamp: string }[]
-}> {
-  return request('/api/history')
-}
-
-/**
- * キャッシュを削除
- */
-export async function clearCache(code: string): Promise<{ status: string; message: string }> {
-  return request(`/api/cache/${code}`, {
-    method: 'DELETE',
-  })
-}
-/**
  * 銘柄検索（サジェスト用）
  */
 export async function searchCompanies(query: string): Promise<{

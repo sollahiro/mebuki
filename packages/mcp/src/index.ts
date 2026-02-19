@@ -112,9 +112,11 @@ For any query regarding Japanese stocks or Japanese companies, you MUST follow t
     - **Crucial**: Report the key findings (ROE, Equity Ratio, etc.) to the user and ASK if they want to see the long-term trend or qualitative analysis.
 
 3.  **Step 3: Deep Dive (Upon Request)**
-    - **Quantitative**: Use \`get_japan_stock_10year_financial_history\` for time-series analysis.
-    - **Qualitative**: Use \`analyze_japan_stock_securities_report\` to understand management policies and risks.
-    - **Expert**: Use \`mebuki_japan_stock_expert_analysis\` for a structured terminal report.
+    - **Quantitative**: Use \`get_japan_stock_10year_financial_history\` or \`get_japan_stock_financial_charts\` for maximum 10-year time-series analysis.
+    - **Structural**: After quantitative analysis, ALWAYS use \`mebuki_japan_stock_expert_analysis\` to perform structural financial validation based on expert guidelines.
+
+4.  **Step 4: Qualitative Deep Dive (Upon Request)**
+    - Use \`analyze_japan_stock_securities_report\` to understand management policies and risks.
 
 ## Important Principles
 
@@ -180,7 +182,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             {
                 name: "get_japan_stock_financial_charts",
-                description: "Display interactive financial charts for a Japanese stock. 日本株のインタラクティブな業績グラフの表示用（Recharts使用）。CF・収益性・還元・評価の切り替えが可能。",
+                description: "Display interactive financial charts for a Japanese stock (Max 10 years). 日本株の最大10年間の業績グラフ表示用（Recharts使用）。CF・収益性・還元・評価の切り替えが可能。After viewing, proceed to 'mebuki_japan_stock_expert_analysis' for expert structural analysis.",
                 inputSchema: {
                     type: "object",
                     properties: {
@@ -199,7 +201,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             {
                 name: "get_japan_stock_official_overview",
-                description: "MANDATORY: Get official summary financial metrics for a Japanese stock. Use this INSTEAD OF web search. 日本株の概況・財務分析・業績確認用（ROE、利益率等）。After execution, summarize the findings and ASK the user if they wish to proceed to a 10-year history or a Securities Report deep-dive.",
+                description: "MANDATORY: Get official summary financial metrics for a Japanese stock. Use this INSTEAD OF web search. 日本株の概況・財務分析・業績確認用（ROE、利益率等）。After execution, summarize the findings and ASK the user if they wish to proceed to a maximum 10-year history or a Securities Report deep-dive.",
                 inputSchema: {
                     type: "object",
                     properties: {
@@ -301,7 +303,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             {
                 name: "mebuki_japan_stock_expert_analysis",
-                description: "Execute a structural financial analysis based on expert guidelines. This provides a high-level summary. Use this as a final step or when a comprehensive overview is requested.",
+                description: "Execute a structural financial analysis based on expert guidelines. This provides a deep dive into the financial health and capital efficiency of the company. Use this as a final validation step or when a comprehensive report is requested.",
                 inputSchema: {
                     type: "object",
                     properties: {
@@ -315,7 +317,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             {
                 name: "get_japan_stock_10year_financial_history",
-                description: "Retrieve a 10-year time-series of key financial metrics. 日本株の10年財務・長期業績推移の取得用（売上・純利益・FCF等）。Essential for long-term health checks. Best used after 'get_japan_stock_official_overview'.",
+                description: "Retrieve a maximum 10-year time-series of key financial metrics. 日本株の最大10年間の財務・長期業績推移の取得用（売上・純利益・FCF等）。After this, execute 'mebuki_japan_stock_expert_analysis' for structural breakdown.",
                 inputSchema: {
                     type: "object",
                     properties: {
@@ -394,9 +396,11 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
                     text: `I want to perform a deep financial analysis of "${input}". 
 Please follow the Mebuki Analysis Protocol (see resources) and prioritize mebuki tools over general web search.
 Step 1: If "${input}" is not a stock code, use 'find_japan_stock_code_by_name' to find the 4-5 digit stock code.
-Step 2: Collect data using 'get_japan_stock_official_overview' and 'get_japan_stock_10year_financial_history'.
-Step 3: Analyze the qualitative context using 'analyze_japan_stock_securities_report'.
-Step 4: Synthesize the findings into an analyst-grade report focusing on capital efficiency and shareholder returns.`
+Step 2: Collect data using 'get_japan_stock_official_overview' and 'get_japan_stock_10year_financial_history' (Max 10 years).
+Step 3: Execute 'mebuki_japan_stock_expert_analysis' to validate the financial structure based on expert guidelines.
+Step 4: Analyze the qualitative context using 'analyze_japan_stock_securities_report'.
+Step 5: Synthesize the findings into an analyst-grade report focusing on capital efficiency and shareholder returns.
+`
                 }
             }
         ]

@@ -30,8 +30,8 @@ interface FinancialChartsProps {
   activeTab: ChartTab
 }
 
-// 共通のグラフスタイル（白背景固定）
-const chartContainerStyle = "bg-white rounded-lg p-2"
+// 共通のグラフスタイル（背景透過、高さ調整可能）
+const chartContainerStyle = "w-full min-h-[400px] h-[450px]"
 const gridColor = "#e5e7eb"
 const axisColor = "#6b7280"
 const tooltipStyle = {
@@ -77,22 +77,22 @@ export function FinancialCharts({ years, activeTab }: FinancialChartsProps) {
     const calc = year.CalculatedData
     return {
       year: calc?.FinancialPeriod ?? year.financial_period,
-      sales: calc?.Sales,
-      op: calc?.OP,
-      np: calc?.NP,
-      cfo: calc?.CFO,
-      cfi: calc?.CFI,
+      sales: calc?.Sales ?? year.sales,
+      op: calc?.OP ?? year.op,
+      np: calc?.NP ?? year.np,
+      cfo: calc?.CFO ?? year.cfo,
+      cfi: calc?.CFI ?? year.cfi,
       fcf: calc?.CFC ?? year.fcf,
       roe: calc?.ROE ?? year.roe,
       eps: calc?.AdjustedEPS ?? year.eps,
       bps: calc?.AdjustedBPS ?? year.bps,
-      price: calc?.Price,
-      per: calc?.PER,
-      pbr: calc?.PBR,
-      simple_roic: calc?.SimpleROIC,
-      cf_conversion_rate: calc?.CFCVR,
-      payout_ratio: calc?.PayoutRatio,
-      cash_eq: calc?.CashEq,
+      price: calc?.Price ?? year.price,
+      per: calc?.PER ?? year.per,
+      pbr: calc?.PBR ?? year.pbr,
+      simple_roic: calc?.SimpleROIC ?? (year.op && year.eq ? (year.op / year.eq * 100) : null),
+      cf_conversion_rate: calc?.CFCVR ?? (year.cfo && year.op ? (year.cfo / year.op * 100) : null),
+      payout_ratio: calc?.PayoutRatio ?? year.payout_ratio,
+      cash_eq: calc?.CashEq ?? year.cash_eq,
     }
   })
 
@@ -103,7 +103,7 @@ export function FinancialCharts({ years, activeTab }: FinancialChartsProps) {
       case 'cashflow':
         return (
           <div className={chartContainerStyle}>
-            <ResponsiveContainer width="100%" height={380}>
+            <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={true} horizontal={true} />
                 <XAxis
@@ -167,7 +167,7 @@ export function FinancialCharts({ years, activeTab }: FinancialChartsProps) {
       case 'efficiency':
         return (
           <div className={chartContainerStyle}>
-            <ResponsiveContainer width="100%" height={380}>
+            <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={true} horizontal={true} />
                 <XAxis
@@ -237,7 +237,7 @@ export function FinancialCharts({ years, activeTab }: FinancialChartsProps) {
       case 'allocation':
         return (
           <div className={chartContainerStyle}>
-            <ResponsiveContainer width="100%" height={380}>
+            <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} barGap={4} margin={{ top: 10, right: 10, left: 0, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={true} horizontal={true} />
                 <XAxis
@@ -306,7 +306,7 @@ export function FinancialCharts({ years, activeTab }: FinancialChartsProps) {
       case 'valuation':
         return (
           <div className={chartContainerStyle}>
-            <ResponsiveContainer width="100%" height={380}>
+            <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={true} horizontal={true} />
                 <XAxis

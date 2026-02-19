@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from backend.routers import analysis, mcp, companies
+from backend.routers import mcp, companies
 from backend.settings import settings_store
 
 
@@ -60,7 +60,6 @@ app.add_middleware(
 )
 
 # ルーターを登録
-app.include_router(analysis.router, prefix="/api", tags=["analysis"])
 app.include_router(mcp.router, prefix="/api/mcp", tags=["mcp"])
 app.include_router(companies.router, prefix="/api/companies", tags=["companies"])
 

@@ -150,10 +150,6 @@ declare global {
       getSettings: () => Promise<any>
       saveSettings: (settings: any) => Promise<any>
       getAppInfo: () => Promise<{ projectRoot: string }>
-      analyzeStock: (code: string) => Promise<any>
-      onProgressUpdate: (callback: (data: any) => void) => void
-      onError: (callback: (error: any) => void) => void
-      onNavigate: (callback: (target: string) => void) => void
       getMcpStatus: () => Promise<any>
       registerMcpClient: (type: 'claude' | 'goose' | 'lmstudio') => Promise<{ success: boolean }>
     }
