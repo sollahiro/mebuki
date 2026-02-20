@@ -11,6 +11,7 @@ class SettingsStore:
     
     Electronアプリの起動時または設定変更時に、フロントエンドからAPIを通じて
     送られてくる設定値（APIキー等）を保持します。
+    また、起動時にファイル（config.json）から以前の設定を読み込みます。
     """
     
     def __init__(self):
@@ -49,7 +50,41 @@ class SettingsStore:
             "reportsDir": reports_dir,
             "mcpEnabled": True,
         }
+        
+        # ファイルから既存の設定をロード
+        self._load_from_file(user_data_path_obj / "config.json")
+        
         logger.info(f"Initialized SettingsStore with cache_dir: {cache_dir}")
+
+    def _load_from_file(self, config_path: Path) -> None:
+        """
+        electron-store が作成する config.json から設定を読み込みます。
+        """
+        if not config_path.exists():
+            logger.info(f"Config file not found at {config_path}. Using defaults.")
+            return
+
+        try:
+            import json
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+                
+            # 各設定値をマッピング（electron-storeのキー名に合わせる）
+            mapping = {
+                "jquantsApiKey": "jquantsApiKey",
+                "edinetApiKey": "edinetApiKey",
+                "analysisYears": "analysisYears",
+                "jquantsPlan": "jquantsPlan",
+                "cacheEnabled": "cacheEnabled",
+            }
+            
+            for store_key, settings_key in mapping.items():
+                if store_key in config_data:
+                    self._settings[settings_key] = config_data[store_key]
+            
+            logger.info(f"Loaded persistent settings from {config_path}")
+        except Exception as e:
+            logger.error(f"Failed to load settings from {config_path}: {e}")
     
     def update(self, settings: Dict[str, Any]) -> None:
         """

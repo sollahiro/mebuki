@@ -7,6 +7,8 @@ class McpConfigManager {
     constructor(appInfo) {
         this.projectRoot = appInfo.projectRoot;
         this.isDev = appInfo.isDev;
+        this.backendBin = appInfo.backendBin;
+        this.assetsPath = appInfo.assetsPath;
     }
 
     getPaths() {
@@ -28,12 +30,36 @@ class McpConfigManager {
         // 一般的にはビルド済みのパッケージ版のパスを渡すが、開発時はプロジェクト内のパスを渡す。
 
         const mcpPath = path.join(this.projectRoot, 'packages', 'mcp', 'dist', 'index.js');
+        const home = os.homedir();
+        const userDataPath = process.platform === 'darwin'
+            ? path.join(home, 'Library/Application Support/mebuki')
+            : path.join(process.env.APPDATA || '', 'mebuki');
+
+        const binName = process.platform === 'win32' ? 'mebuki-backend.exe' : 'mebuki-backend';
+        const backendBin = this.backendBin || (this.isDev
+            ? (process.platform === 'win32'
+                ? path.join(this.projectRoot, 'venv', 'Scripts', 'python.exe')
+                : path.join(this.projectRoot, 'venv', 'bin', 'python3'))
+            : (process.platform === 'darwin'
+                ? `/Applications/mebuki.app/Contents/Resources/backend/mebuki-backend/${binName}`
+                : path.join(process.cwd(), 'resources', 'backend', 'mebuki-backend', binName)));
+
+        const assetsPath = this.assetsPath || (this.isDev
+            ? path.join(this.projectRoot, 'assets')
+            : (process.platform === 'darwin'
+                ? `/Applications/mebuki.app/Contents/Resources/assets`
+                : path.join(process.cwd(), 'resources', 'assets')));
 
         return {
             command: 'node',
             args: [mcpPath],
             env: {
-                MEBUKI_BACKEND_URL: 'http://localhost:8765'
+                MEBUKI_BACKEND_URL: 'http://localhost:8765',
+                MEBUKI_BACKEND_BIN: backendBin,
+                MEBUKI_USER_DATA_PATH: userDataPath,
+                MEBUKI_ASSETS_PATH: assetsPath,
+                MEBUKI_PROJECT_ROOT: this.projectRoot,
+                MEBUKI_IS_DEV: this.isDev ? 'true' : 'false'
             }
         };
     }

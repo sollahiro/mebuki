@@ -383,7 +383,9 @@ function setupIpcHandlers() {
       projectRoot = app.getAppPath().endsWith('.asar') ? `${app.getAppPath()}.unpacked` : app.getAppPath();
     }
 
-    const manager = new McpConfigManager({ projectRoot, isDev });
+    const backendBin = getBackendExecutablePath();
+    const assetsPath = getAssetPath('');
+    const manager = new McpConfigManager({ projectRoot, isDev, backendBin, assetsPath });
     return await manager.getStatus();
   });
 
@@ -396,7 +398,9 @@ function setupIpcHandlers() {
       projectRoot = app.getAppPath().endsWith('.asar') ? `${app.getAppPath()}.unpacked` : app.getAppPath();
     }
 
-    const manager = new McpConfigManager({ projectRoot, isDev });
+    const backendBin = getBackendExecutablePath();
+    const assetsPath = getAssetPath('');
+    const manager = new McpConfigManager({ projectRoot, isDev, backendBin, assetsPath });
     return await manager.register(type);
   });
 

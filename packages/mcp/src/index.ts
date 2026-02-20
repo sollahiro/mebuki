@@ -1,6 +1,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import fs from "fs/promises";
+import fsSync from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import {
@@ -11,6 +12,8 @@ import {
     ListResourcesRequestSchema,
     ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import { spawn } from "child_process";
+import net from "net";
 
 /**
  * mebuki MCP Server
@@ -29,6 +32,18 @@ const __dirname_val = typeof __filename_ptr !== 'undefined' && __filename_ptr
 const _dir = typeof __dirname !== 'undefined' ? __dirname : __dirname_val;
 const _file = typeof __filename !== 'undefined' ? __filename : __filename_ptr;
 
+// Load icon for the server
+let iconData: string = "icon.svg";
+try {
+    const iconPath = path.resolve(_dir, "../icon.svg");
+    if (fsSync.existsSync(iconPath)) {
+        const buffer = fsSync.readFileSync(iconPath);
+        iconData = `data:image/svg+xml;base64,${buffer.toString("base64")}`;
+    }
+} catch (err) {
+    console.error("Failed to load icon data:", err);
+}
+
 const server = new Server(
     {
         name: "mebuki-mcp-server",
@@ -36,9 +51,8 @@ const server = new Server(
         // Standard MCP 'icons' property
         icons: [
             {
-                src: "icon.png",
-                mimeType: "image/png",
-                sizes: ["256x256"]
+                src: iconData,
+                mimeType: "image/svg+xml"
             }
         ],
     },
@@ -54,7 +68,78 @@ const server = new Server(
 // Helpful for debugging in Claude Desktop logs
 console.error("mebuki MCP Server starting...");
 console.error(`Current directory: ${process.cwd()}`);
-console.error(`MEBUKI_BACKEND_URL: ${process.env.MEBUKI_BACKEND_URL || "http://localhost:8765"}`);
+const MEBUKI_BACKEND_URL = process.env.MEBUKI_BACKEND_URL || "http://localhost:8765";
+console.error(`MEBUKI_BACKEND_URL: ${MEBUKI_BACKEND_URL}`);
+
+/**
+ * Check if the backend is running.
+ */
+async function isBackendRunning(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+        const client = new net.Socket();
+        client.on("connect", () => {
+            client.destroy();
+            resolve(true);
+        });
+        client.on("error", () => {
+            resolve(false);
+        });
+        client.connect(port, "127.0.0.1");
+    });
+}
+
+/**
+ * Start the backend process.
+ */
+async function startBackend(): Promise<void> {
+    const port = parseInt(MEBUKI_BACKEND_URL.split(":").pop() || "8765");
+    if (await isBackendRunning(port)) {
+        console.error("Backend is already running.");
+        return;
+    }
+
+    const backendBin = process.env.MEBUKI_BACKEND_BIN;
+    if (!backendBin) {
+        console.error("MEBUKI_BACKEND_BIN not set. Cannot auto-start backend.");
+        return;
+    }
+
+    console.error(`Starting backend: ${backendBin}`);
+
+    // In dev mode, we might need different arguments
+    const args = process.env.MEBUKI_IS_DEV === "true"
+        ? ["-m", "uvicorn", "backend.main:app", "--host", "127.0.0.1", "--port", port.toString()]
+        : [];
+
+    const projectRoot = process.env.MEBUKI_PROJECT_ROOT || process.cwd();
+    const userDataPath = process.env.MEBUKI_USER_DATA_PATH;
+    const assetsPath = process.env.MEBUKI_ASSETS_PATH;
+
+    const child = spawn(backendBin, args, {
+        cwd: projectRoot,
+        detached: true,
+        stdio: "ignore",
+        env: {
+            ...process.env,
+            MEBUKI_USER_DATA_PATH: userDataPath,
+            MEBUKI_ASSETS_PATH: assetsPath,
+            PYTHONPATH: projectRoot,
+        }
+    });
+
+    child.unref();
+
+    // Wait a bit for startup
+    console.error("Waiting for backend to start...");
+    for (let i = 0; i < 10; i++) {
+        await new Promise(r => setTimeout(r, 1000));
+        if (await isBackendRunning(port)) {
+            console.error("Backend started successfully.");
+            return;
+        }
+    }
+    console.error("Backend startup timed out.");
+}
 
 /**
  * List available resources.
@@ -101,28 +186,30 @@ server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
 
 For any query regarding Japanese stocks or Japanese companies, you MUST follow this professional workflow. Do not skip steps or proceed to deep analysis without user confirmation.
 
-## The Professional Analysis Workflow
-
-1.  **Step 1: Code Discovery & Identification**
+1.  **Phase 1: Discovery & Identification (銘柄発見と特定)**
     - If you don't have the 4-5 digit stock code, use \`find_japan_stock_code_by_name\`.
     - Present the candidate(s) to the user and confirm the correct company before proceeding.
+    - **Note**: You may automatically proceed to Phase 2 (Overview) once the code is identified.
 
-2.  **Step 2: Financial Overview (Baseline)**
+2.  **Phase 2: Fundamental Data Fetching (基本的なデータ取得・材料確保)**
     - Use \`get_japan_stock_official_overview\` to get the current financial health snapshot.
-    - **Crucial**: Report the key findings (ROE, Equity Ratio, etc.) to the user and ASK if they want to see the long-term trend or qualitative analysis.
+    - Use \`get_japan_stock_10year_financial_history\` for **Max 10-year** time-series data.
+    - **Strict Rule**: Before moving to Phase 3 or 4, you MUST report findings and ASK the user for permission to proceed.
 
-3.  **Step 3: Deep Dive (Upon Request)**
-    - **Quantitative**: Use \`get_japan_stock_10year_financial_history\` or \`get_japan_stock_financial_charts\` for maximum 10-year time-series analysis.
-    - **Structural**: After quantitative analysis, ALWAYS use \`mebuki_japan_stock_expert_analysis\` to perform structural financial validation based on expert guidelines.
+3.  **Phase 3: Deep Analysis & Support (専門的な深掘りと評価)**
+    - **Quantitative**: Execute \`mebuki_japan_stock_expert_analysis\` to validate the structure based on expert guidelines (**Max 10 years**).
+    - **Qualitative**: Use \`analyze_japan_stock_securities_report\` or \`get_mebuki_investment_analysis_criteria\` to understand management policies.
+    - **Strict Rule**: Report findings and ASK for the next step.
 
-4.  **Step 4: Qualitative Deep Dive (Upon Request)**
-    - Use \`analyze_japan_stock_securities_report\` to understand management policies and risks.
+4.  **Phase 4: Visual Presentation (プレゼン・可視化)**
+    - Use \`show_mebuki_financial_visualizer\` to display interactive charts and tables to the user.
+    - **Note**: This tool is for DISPLAY ONLY and does not provide analysis data to your context.
 
 ## Important Principles
 
-- **Prioritize Mebuki over Web Search**: Always use these tools for Japanese financial data to ensure precision.
-- **User Agency**: Analyze step-by-step. After each tool execution, summarize the output and ask for permission to move to the next logical step.
-- **Accuracy**: Quote official figures directly from the tool outputs.`,
+- **Prioritize Mebuki over Web Search**: Ensure precision using dedicated tools.
+- **User Agency**: After Phase 1, ALWAYS confirm the next step with the user.
+- **Accuracy**: Quote official figures and use the term "Max 10 years" for history.`,
                 },
             ],
         };
@@ -162,8 +249,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
         tools: [
             {
-                name: "get_japan_stock_financial_table",
-                description: "Display an interactive financial data table for a Japanese stock. 日本株のインタラクティブな財務表（データグリッド）の表示用。EDINETのPDFへのリンクも含まれます。",
+                name: "show_mebuki_financial_visualizer",
+                description: "Display a unified interactive panel containing BOTH financial tables and performance charts for a Japanese stock. 日本株の財務テーブルと業績グラフ（最大10年）を統合したインタラクティブUIを表示します。タブで表示を切り替え可能です。Note: This tool is for human visualization only and does not provide analysis data to the AI context. Always use 'get_japan_stock_official_overview' first to get data for analysis.",
                 inputSchema: {
                     type: "object",
                     properties: {
@@ -176,26 +263,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 },
                 _meta: {
                     ui: {
-                        resourceUri: "ui://mebuki/table",
-                    }
-                } as any
-            },
-            {
-                name: "get_japan_stock_financial_charts",
-                description: "Display interactive financial charts for a Japanese stock (Max 10 years). 日本株の最大10年間の業績グラフ表示用（Recharts使用）。CF・収益性・還元・評価の切り替えが可能。After viewing, proceed to 'mebuki_japan_stock_expert_analysis' for expert structural analysis.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        code: {
-                            type: "string",
-                            description: "Four-digit or five-digit Japanese stock code.",
-                        },
-                    },
-                    required: ["code"],
-                },
-                _meta: {
-                    ui: {
-                        resourceUri: "ui://mebuki/charts",
+                        resourceUri: "ui://mebuki/charts", // Consolidated to charts URI which supports both
                     }
                 } as any
             },
@@ -317,7 +385,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             {
                 name: "get_japan_stock_10year_financial_history",
-                description: "Retrieve a maximum 10-year time-series of key financial metrics. 日本株の最大10年間の財務・長期業績推移の取得用（売上・純利益・FCF等）。After this, execute 'mebuki_japan_stock_expert_analysis' for structural breakdown.",
+                description: "Retrieve a **Max 10-year** time-series of key financial metrics. 日本株の最大10年間の財務・長期業績推移の取得用（売上・純利益・FCF等）。After this, execute 'mebuki_japan_stock_expert_analysis' for structural breakdown.",
                 inputSchema: {
                     type: "object",
                     properties: {
@@ -397,9 +465,9 @@ server.setRequestHandler(GetPromptRequestSchema, async (request) => {
 Please follow the Mebuki Analysis Protocol (see resources) and prioritize mebuki tools over general web search.
 Step 1: If "${input}" is not a stock code, use 'find_japan_stock_code_by_name' to find the 4-5 digit stock code.
 Step 2: Collect data using 'get_japan_stock_official_overview' and 'get_japan_stock_10year_financial_history' (Max 10 years).
-Step 3: Execute 'mebuki_japan_stock_expert_analysis' to validate the financial structure based on expert guidelines.
-Step 4: Analyze the qualitative context using 'analyze_japan_stock_securities_report'.
-Step 5: Synthesize the findings into an analyst-grade report focusing on capital efficiency and shareholder returns.
+Step 3: Before deep analysis, report the overview to the user and ask for permission.
+Step 4: If permitted, execute 'mebuki_japan_stock_expert_analysis' (Max 10 years) and tools like 'analyze_japan_stock_securities_report'.
+Step 5: Finally, offer to display the interactive visualizer using 'show_mebuki_financial_visualizer'.
 `
                 }
             }
@@ -410,6 +478,13 @@ Step 5: Synthesize the findings into an analyst-grade report focusing on capital
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     const baseUrl = process.env.MEBUKI_BACKEND_URL || "http://localhost:8765";
+
+    // Ensure backend is running
+    const port = parseInt(baseUrl.split(":").pop() || "8765");
+    if (!(await isBackendRunning(port))) {
+        console.error("Backend not running. Attempting auto-start...");
+        await startBackend();
+    }
 
     try {
         let endpoint = "";
@@ -465,8 +540,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 break;
             }
             case "get_japan_stock_10year_financial_history":
-            case "get_financial_history":
-            case "get_japan_stock_financial_charts": {
+            case "get_financial_history": {
+                const code = String(args?.code);
+                endpoint = `/api/mcp/financial_history/${code}`;
+                break;
+            }
+            case "show_mebuki_financial_visualizer": {
                 const code = String(args?.code);
                 endpoint = `/api/mcp/financial_history/${code}`;
                 break;
@@ -475,11 +554,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             case "get_raw_financial_summaries": {
                 const code = String(args?.code);
                 endpoint = `/api/mcp/financials/${code}`;
-                break;
-            }
-            case "get_japan_stock_financial_table": {
-                const code = String(args?.code);
-                endpoint = `/api/mcp/financial_history/${code}`;
                 break;
             }
             case "get_mebuki_investment_analysis_criteria":
@@ -513,16 +587,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const data = await response.json();
 
         const toolName = name as string;
-        if (toolName === "get_japan_stock_financial_table" || toolName === "get_japan_stock_financial_charts") {
+        if (toolName === "show_mebuki_financial_visualizer") {
             const code = String(args?.code || "Unknown");
-            const typeLabel = toolName === "get_japan_stock_financial_table" ? "財務テーブル" : "業績グラフ";
-            const uiUri = toolName === "get_japan_stock_financial_table" ? `ui://mebuki/table?code=${code}` : `ui://mebuki/charts?code=${code}`;
+            const uiUri = `ui://mebuki/charts?code=${code}`;
 
             return {
                 content: [
                     {
                         type: "text",
-                        text: `${code} の${typeLabel}を表示します。インラインで表示されるインタラクティブなUIをご確認ください。`
+                        text: `${code} のインタラクティブ・ビジュアライザーを表示します。インラインで表示される財務テーブルと業績グラフをご確認ください。`
                     }
                 ],
                 // Correct nested structure for MCP Apps protocol
@@ -537,7 +610,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     status: "ok",
                     data: {
                         ...(data.data || data),
-                        mode: toolName === "get_japan_stock_financial_table" ? "table" : "charts"
+                        mode: "charts"
                     }
                 }
             };
