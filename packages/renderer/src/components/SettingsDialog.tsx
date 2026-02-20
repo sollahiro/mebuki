@@ -217,6 +217,12 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                   href="https://jpx-jquants.com/ja"
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={(e) => {
+                    if (window.electronAPI?.openExternal) {
+                      e.preventDefault();
+                      window.electronAPI.openExternal('https://jpx-jquants.com/ja');
+                    }
+                  }}
                   className="text-[11px] text-primary hover:underline flex items-center gap-1"
                 >
                   登録・発行サイトへ
@@ -266,6 +272,12 @@ export function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
                   href="https://api.edinet-fsa.go.jp/api/auth/index.aspx?mode=1"
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={(e) => {
+                    if (window.electronAPI?.openExternal) {
+                      e.preventDefault();
+                      window.electronAPI.openExternal('https://api.edinet-fsa.go.jp/api/auth/index.aspx?mode=1');
+                    }
+                  }}
                   className="text-[11px] text-primary hover:underline flex items-center gap-1"
                 >
                   登録・発行サイトへ

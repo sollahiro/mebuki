@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Eye, EyeOff, AlertCircle, CheckCircle, Copy, ExternalLink, ChevronDown, ChevronUp, Loader2, Settings, MessageSquare, Sparkles, ArrowRight } from 'lucide-react'
+import { Eye, EyeOff, AlertCircle, CheckCircle, ExternalLink, Loader2, MessageSquare, Sparkles, ArrowRight } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { getApiUrl } from '../lib/api'
 import claudeIcon from '@/assets/claude-inverted.svg'
 import gooseIcon from '@/assets/goose.svg'
-import mebukiMcpIcon from '@/assets/mcp_icon.svg'
 import jquantsLogo from '@/assets/jquants_logo.svg'
 import edinetLogo from '@/assets/edinet_logo.svg'
 
@@ -29,7 +28,6 @@ export function SettingsPage() {
     const [isSaving, setIsSaving] = useState(false)
     const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle')
     const [errorMessage, setErrorMessage] = useState('')
-    const [projectRoot, setProjectRoot] = useState('')
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
     const [mcpStatus, setMcpStatus] = useState({
         claude: { registered: false, exists: false, path: '' },
@@ -37,7 +35,6 @@ export function SettingsPage() {
         lmstudio: { registered: false, exists: false, path: '' }
     })
     const [isRegistering, setIsRegistering] = useState<string | null>(null)
-    const [showAdvancedMcp, setShowAdvancedMcp] = useState(false)
     const [showSuccessToast, setShowSuccessToast] = useState(false)
     const [lastRegisteredClient, setLastRegisteredClient] = useState('')
 
@@ -46,7 +43,6 @@ export function SettingsPage() {
 
     useEffect(() => {
         loadSettings()
-        fetchAppInfo()
         fetchMcpStatus()
     }, [])
 
@@ -86,18 +82,6 @@ export function SettingsPage() {
         }
     }
 
-    const fetchAppInfo = async () => {
-        if (window.electronAPI?.getAppInfo) {
-            try {
-                const info = await window.electronAPI.getAppInfo()
-                if (info && info.projectRoot) {
-                    setProjectRoot(info.projectRoot)
-                }
-            } catch (err) {
-                console.error('AppInfoの取得に失敗しました:', err)
-            }
-        }
-    }
 
     const loadSettings = async () => {
         try {
@@ -233,7 +217,18 @@ export function SettingsPage() {
                                     <div className="h-6">
                                         <img src={jquantsLogo} className="h-full w-auto object-contain brightness-0 dark:invert opacity-80 group-hover:opacity-100 transition-opacity" alt="J-QUANTS" />
                                     </div>
-                                    <a href="https://jquants.com/jp/introduction" target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary hover:underline flex items-center gap-0.5">
+                                    <a
+                                        href="https://jpx-jquants.com/ja"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => {
+                                            if (window.electronAPI?.openExternal) {
+                                                e.preventDefault();
+                                                window.electronAPI.openExternal('https://jpx-jquants.com/ja');
+                                            }
+                                        }}
+                                        className="text-[10px] text-primary hover:underline flex items-center gap-0.5"
+                                    >
                                         発行 <ExternalLink className="w-2.5 h-2.5" />
                                     </a>
                                 </div>
@@ -257,7 +252,18 @@ export function SettingsPage() {
                                     <div className="h-6">
                                         <img src={edinetLogo} className="h-full w-auto object-contain brightness-0 dark:invert opacity-80 group-hover:opacity-100 transition-opacity" alt="EDINET" />
                                     </div>
-                                    <a href="https://api.edinet-fsa.go.jp/api/auth/index.aspx?mode=1" target="_blank" rel="noopener noreferrer" className="text-[10px] text-primary hover:underline flex items-center gap-0.5">
+                                    <a
+                                        href="https://api.edinet-fsa.go.jp/api/auth/index.aspx?mode=1"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => {
+                                            if (window.electronAPI?.openExternal) {
+                                                e.preventDefault();
+                                                window.electronAPI.openExternal('https://api.edinet-fsa.go.jp/api/auth/index.aspx?mode=1');
+                                            }
+                                        }}
+                                        className="text-[10px] text-primary hover:underline flex items-center gap-0.5"
+                                    >
                                         発行 <ExternalLink className="w-2.5 h-2.5" />
                                     </a>
                                 </div>
@@ -379,95 +385,6 @@ export function SettingsPage() {
                         </div>
                     </section>
 
-                    {/* Step 3: Advanced */}
-                    <section className="animate-in fade-in slide-in-from-bottom-4 duration-500 delay-300">
-                        <button
-                            onClick={() => setShowAdvancedMcp(!showAdvancedMcp)}
-                            className="w-full flex items-center justify-between p-6 rounded-2xl border border-border bg-card hover:bg-foreground-muted/5 transition-all group"
-                        >
-                            <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 rounded-2xl bg-foreground-muted/10 text-foreground-muted flex items-center justify-center">
-                                    <Settings className={cn("w-5 h-5 transition-transform duration-500", showAdvancedMcp && "rotate-90")} />
-                                </div>
-                                <div className="text-left">
-                                    <h3 className="text-sm font-bold text-foreground">その他の環境・手動連携</h3>
-                                    <p className="text-[11px] text-foreground-muted">Cursorやその他のMCPクライアントへの手動設定</p>
-                                </div>
-                            </div>
-                            {showAdvancedMcp ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                        </button>
-
-                        {showAdvancedMcp && (
-                            <div className="mt-4 p-8 bg-foreground-muted/5 border border-dashed border-border rounded-2xl space-y-8 animate-in fade-in slide-in-from-top-4 duration-500">
-                                <div className="flex items-center gap-6 pb-6 border-b border-border/50">
-                                    <div className="w-20 h-20 rounded-2xl bg-white border border-border flex items-center justify-center shadow-xl p-3">
-                                        <img src={mebukiMcpIcon} className="w-full h-full object-contain" alt="mebuki" />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <h4 className="text-lg font-black text-foreground">mebuki MCP Server</h4>
-                                        <div className="flex items-center gap-2">
-                                            <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-bold">Standard Stdio</span>
-                                            <span className="text-[10px] text-foreground-muted">Version 1.0.1</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <label className="text-xs font-bold text-foreground inline-flex items-center gap-2">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                                            構成設定 (config.json 用)
-                                        </label>
-                                        <button
-                                            onClick={() => {
-                                                const config = {
-                                                    "mcpServers": {
-                                                        "mebuki": {
-                                                            "command": "node",
-                                                            "args": [`${projectRoot || '/Users/shutosorahiro/mebuki'}/packages/mcp/dist/index.js`],
-                                                            "env": { "MEBUKI_BACKEND_URL": "http://localhost:8765" }
-                                                        }
-                                                    }
-                                                };
-                                                navigator.clipboard.writeText(JSON.stringify(config, null, 2));
-                                            }}
-                                            className="text-[10px] font-bold text-primary hover:text-primary-hover flex items-center gap-1 transition-colors bg-primary/5 px-2 py-1 rounded-lg"
-                                        >
-                                            <Copy className="w-3 h-3" />
-                                            コピーする
-                                        </button>
-                                    </div>
-                                    <div className="relative group">
-                                        <pre className="p-6 bg-background/50 border border-border rounded-xl text-[10px] font-mono overflow-x-auto text-foreground-muted leading-relaxed">
-                                            {JSON.stringify({
-                                                "mcpServers": {
-                                                    "mebuki": {
-                                                        "command": "node",
-                                                        "args": [`${projectRoot || '/Users/shutosorahiro/mebuki'}/packages/mcp/dist/index.js`],
-                                                        "env": { "MEBUKI_BACKEND_URL": "http://localhost:8765" },
-                                                        "metadata": {
-                                                            "icon": `${projectRoot || '/Users/shutosorahiro/mebuki'}/packages/mcp/icon.png`,
-                                                            "description": "Expert investment analyst tool for Japanese stocks."
-                                                        }
-                                                    }
-                                                }
-                                            }, null, 2)}
-                                        </pre>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-4 pt-4 border-t border-border/50">
-                                    <h4 className="text-xs font-bold text-foreground">手動設定の手順:</h4>
-                                    <ol className="text-xs text-foreground-muted list-decimal list-inside space-y-3 leading-relaxed">
-                                        <li>上記の構成設定をコピーします。</li>
-                                        <li>お使いのクライアント（CursorのMCP設定など）を開きます。</li>
-                                        <li>サーバー一覧に <code>mebuki</code> という名前で、コピーした内容を貼り付けます。</li>
-                                        <li>設定を保存し、クライアントを再起動してください。</li>
-                                    </ol>
-                                </div>
-                            </div>
-                        )}
-                    </section>
                 </div>
             </div>
 

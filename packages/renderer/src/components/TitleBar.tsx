@@ -15,7 +15,6 @@ export function TitleBar({ }: TitleBarProps) {
       {/* 中央：ロゴ */}
       <div
         className="flex-1 flex justify-center items-center h-full px-4"
-        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
         <img src={logo} alt="mebuki" className="h-6 w-auto opacity-90" />
       </div>

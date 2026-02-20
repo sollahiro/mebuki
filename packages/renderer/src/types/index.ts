@@ -152,6 +152,7 @@ declare global {
       getAppInfo: () => Promise<{ projectRoot: string }>
       getMcpStatus: () => Promise<any>
       registerMcpClient: (type: 'claude' | 'goose' | 'lmstudio') => Promise<{ success: boolean }>
+      openExternal: (url: string) => Promise<{ success: boolean; error?: string }>
     }
   }
 }

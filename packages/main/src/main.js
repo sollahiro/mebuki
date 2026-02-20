@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, nativeTheme, dialog, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeTheme, dialog, Menu, shell } = require('electron');
 const path = require('path');
 
 // 明示的にアプリ名を指定することで、保存先ディレクトリを固定する
@@ -239,6 +239,14 @@ function createWindow() {
     }
   }
 
+  // 外部リンクをシステムブラウザで開くように設定
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http:') || url.startsWith('https:')) {
+      shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -390,6 +398,15 @@ function setupIpcHandlers() {
 
     const manager = new McpConfigManager({ projectRoot, isDev });
     return await manager.register(type);
+  });
+
+  // 外部リンクをシステムブラウザで開く
+  ipcMain.handle('shell:open-external', async (event, url) => {
+    if (url.startsWith('http:') || url.startsWith('https:')) {
+      await shell.openExternal(url);
+      return { success: true };
+    }
+    return { success: false, error: 'Invalid URL' };
   });
 }
 

@@ -29,5 +29,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     // MCP設定関連
     getMcpStatus: () => ipcRenderer.invoke('mcp:get-status'),
-    registerMcpClient: (type) => ipcRenderer.invoke('mcp:register', type)
+    registerMcpClient: (type) => ipcRenderer.invoke('mcp:register', type),
+
+    // 外部リンク
+    openExternal: (url) => ipcRenderer.invoke('shell:open-external', url)
 });
