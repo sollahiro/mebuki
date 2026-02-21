@@ -171,24 +171,36 @@ class IndividualAnalyzer:
             return None
     
     
-    def _fetch_edinet_data(
+    async def _fetch_edinet_data_async(
         self,
         code: str,
         financial_data: List[Dict[str, Any]],
-        progress_callback: Optional[Callable] = None,
         max_documents: int = 10
-    ) -> Dict[int, Any]:
-        """EDINETデータを取得"""
+    ) -> Dict[str, Any]:
+        """EDINETデータを非同期で取得"""
         if not self.edinet_client:
             return {}
         try:
-            master_data = self.api_client.get_equity_master(code=code)
+            # API呼び出しを含む部分は ThreadPool で実行
+            master_data = await asyncio.to_thread(self.api_client.get_equity_master, code=code)
             edinet_code = master_data[0].get("EdinetCode") if master_data else None
-            # max_records=6はJ-QUANTSレコード数。見つかる書類数は max_documents で制限。
-            annual_data_idx, years_list = prepare_edinet_search_data(financial_data, max_records=max_documents * 2 + 2)
-            return self.fetch_edinet_reports(code, years_list, jquants_annual_data=annual_data_idx, progress_callback=progress_callback, edinet_code=edinet_code, max_documents=max_documents)
+            
+            # 検索データの準備
+            annual_data_idx, _ = prepare_edinet_search_data(financial_data, max_records=max_documents * 2 + 2)
+            
+            results = {}
+            # 非同期ストリームを直接回す
+            async for data in self.fetch_edinet_reports_stream(code, annual_data_idx, max_documents, edinet_code=edinet_code):
+                fy_key = data["fy_key"]
+                report = data["report"]
+                fy_key_str = str(fy_key)
+                if fy_key_str not in results:
+                    results[fy_key_str] = []
+                results[fy_key_str].append(report)
+                
+            return results
         except Exception as e:
-            logger.error(f"EDINETデータ取得エラー: {code} - {e}", exc_info=True)
+            logger.error(f"EDINET非同期データ取得エラー: {code} - {e}", exc_info=True)
             return {}
 
 
@@ -388,7 +400,7 @@ class IndividualAnalyzer:
                 "analyzed_at": datetime.now().isoformat(),
             }
             
-            edinet_data = await asyncio.to_thread(self._fetch_edinet_data, code, financial_data, progress_callback)
+            edinet_data = await self._fetch_edinet_data_async(code, financial_data)
             if edinet_data:
                 result["edinet_data"] = edinet_data
             

@@ -86,11 +86,16 @@ class CacheManager:
         
         # 日付チェックをスキップしない場合のみ、日付チェックを実行
         if not skip_date_check and cache_date:
-            cache_date_obj = datetime.fromisoformat(cache_date).date()
-            today = date.today()
-            
-            # 日付が変わったらキャッシュを無効化
-            if cache_date_obj < today:
+            try:
+                cache_datetime = datetime.fromisoformat(cache_date)
+                cache_date_obj = cache_datetime.date()
+                today = date.today()
+                
+                # 有効期限を7日間に緩和（以前は当日のみ有効だった）
+                # 日次で無効化されると、毎日最初のアクセスが非常に重くなるため。
+                if (today - cache_date_obj).days >= 7:
+                    return None
+            except (ValueError, TypeError):
                 return None
         
         # キャッシュファイルを読み込み

@@ -10,6 +10,7 @@ import {
   ComposedChart,
 } from 'recharts'
 import type { YearData } from '@/types'
+import { useTheme } from '@/hooks/useTheme'
 
 interface FinancialChartsProps {
   years: YearData[]
@@ -30,20 +31,8 @@ interface FinancialChartsProps {
   activeTab: ChartTab
 }
 
-// 共通のグラフスタイル（背景透過、高さ調整可能）
-const chartContainerStyle = "w-full min-h-[400px] h-[450px]"
-const gridColor = "#e5e7eb"
-const axisColor = "#6b7280"
-const tooltipStyle = {
-  backgroundColor: '#ffffff',
-  border: '1px solid #e5e7eb',
-  borderRadius: '8px',
-  color: '#374151',
-}
-const legendStyle = { color: '#374151' }
-
 // カスタムX軸ラベル（改行対応）
-const CustomXAxisTick = ({ x, y, payload }: any) => {
+const CustomXAxisTick = ({ x, y, payload, color }: any) => {
   if (!payload || !payload.value) return null
 
   // 「YYYY年MM月期」を「YYYY年」と「MM月期」に分割
@@ -58,7 +47,7 @@ const CustomXAxisTick = ({ x, y, payload }: any) => {
         y={0}
         dy={16}
         textAnchor="middle"
-        fill={axisColor}
+        fill={color}
         fontSize={12}
       >
         <tspan x={0} dy="1em">{year}</tspan>
@@ -69,6 +58,32 @@ const CustomXAxisTick = ({ x, y, payload }: any) => {
 }
 
 export function FinancialCharts({ years, activeTab }: FinancialChartsProps) {
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
+
+  // テーマに基づいたスタイル定義
+  const chartContainerStyle = "w-full min-h-[400px] h-[450px]"
+  const gridColor = isDark ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"
+  const axisColor = isDark ? "#94a3b8" : "#475569" // Slate 300 vs Slate 600
+  const tooltipStyle = {
+    backgroundColor: isDark ? '#1e293b' : '#ffffff',
+    border: `1px solid ${isDark ? '#334155' : '#e5e7eb'}`,
+    borderRadius: '8px',
+    color: isDark ? '#f1f5f9' : '#374151',
+  }
+  const legendStyle = { color: isDark ? '#f1f5f9' : '#374151' }
+
+  // グラフ用カラーパレット (Light vs Dark)
+  const colors = {
+    indigo: isDark ? "#818cf8" : "#4f46e5",
+    deepIndigo: isDark ? "#6366f1" : "#4338ca",
+    slate: isDark ? "#94a3b8" : "#64748b",
+    rose: isDark ? "#f43f5e" : "#e11d48",
+    emerald: isDark ? "#10b981" : "#059669",
+    amber: isDark ? "#f59e0b" : "#d97706",
+    lightSlate: isDark ? "#cbd5e1" : "#94a3b8",
+  }
+
   // 年度を古い順にソート
   const sortedYears = [...years].reverse()
 
@@ -110,7 +125,7 @@ export function FinancialCharts({ years, activeTab }: FinancialChartsProps) {
                   dataKey="year"
                   stroke={axisColor}
                   interval={0}
-                  tick={<CustomXAxisTick />}
+                  tick={<CustomXAxisTick color={axisColor} />}
                   height={60}
                 />
                 <YAxis
@@ -127,31 +142,31 @@ export function FinancialCharts({ years, activeTab }: FinancialChartsProps) {
                 <Bar
                   dataKey="cfo"
                   name="営業CF"
-                  fill="#818cf8"  // Soft Indigo
+                  fill={colors.indigo}
                   radius={[4, 4, 0, 0]}
                 />
                 <Bar
                   dataKey="cfi"
                   name="投資CF"
-                  fill="#94a3b8"  // Soft Slate
+                  fill={colors.slate}
                   radius={[4, 4, 0, 0]}
                 />
                 <Line
                   type="monotone"
                   dataKey="fcf"
                   name="FCF"
-                  stroke="#4f46e5" // Deep Indigo
+                  stroke={colors.deepIndigo}
                   strokeWidth={3}
-                  dot={{ fill: '#4f46e5', r: 4 }}
+                  dot={{ fill: colors.deepIndigo, r: 4 }}
                 />
                 <Line
                   type="monotone"
                   dataKey="cash_eq"
                   name="現預金等"
-                  stroke="#f43f5e" // Soft Rose
+                  stroke={colors.rose}
                   strokeWidth={2}
                   strokeDasharray="5 5"
-                  dot={{ fill: '#f43f5e', r: 3 }}
+                  dot={{ fill: colors.rose, r: 3 }}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -174,7 +189,7 @@ export function FinancialCharts({ years, activeTab }: FinancialChartsProps) {
                   dataKey="year"
                   stroke={axisColor}
                   interval={0}
-                  tick={<CustomXAxisTick />}
+                  tick={<CustomXAxisTick color={axisColor} />}
                   height={60}
                 />
                 <YAxis
@@ -201,27 +216,27 @@ export function FinancialCharts({ years, activeTab }: FinancialChartsProps) {
                   type="monotone"
                   dataKey="cf_conversion_rate"
                   name="CF変換率"
-                  stroke="#6366f1"
+                  stroke={colors.indigo}
                   strokeWidth={2}
-                  dot={{ fill: '#6366f1', r: 3 }}
+                  dot={{ fill: colors.indigo, r: 3 }}
                 />
                 <Line
                   yAxisId="right"
                   type="monotone"
                   dataKey="simple_roic"
                   name="簡易ROIC"
-                  stroke="#10b981"
+                  stroke={colors.emerald}
                   strokeWidth={4}
-                  dot={{ fill: '#10b981', r: 5 }}
+                  dot={{ fill: colors.emerald, r: 5 }}
                 />
                 <Line
                   yAxisId="right"
                   type="monotone"
                   dataKey="roe"
                   name="ROE"
-                  stroke="#f59e0b"
+                  stroke={colors.amber}
                   strokeWidth={3}
-                  dot={{ fill: '#f59e0b', r: 4 }}
+                  dot={{ fill: colors.amber, r: 4 }}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -244,7 +259,7 @@ export function FinancialCharts({ years, activeTab }: FinancialChartsProps) {
                   dataKey="year"
                   stroke={axisColor}
                   interval={0}
-                  tick={<CustomXAxisTick />}
+                  tick={<CustomXAxisTick color={axisColor} />}
                   height={60}
                 />
                 <YAxis
@@ -271,7 +286,7 @@ export function FinancialCharts({ years, activeTab }: FinancialChartsProps) {
                   yAxisId="left"
                   dataKey="bps"
                   name="BPS"
-                  fill="#cbd5e1"  // Light Slate
+                  fill={colors.lightSlate}
                   radius={[4, 4, 0, 0]}
                   barSize={32}
                 />
@@ -279,7 +294,7 @@ export function FinancialCharts({ years, activeTab }: FinancialChartsProps) {
                   yAxisId="left"
                   dataKey="eps"
                   name="EPS"
-                  fill="#6366f1"  // Indigo
+                  fill={colors.indigo}
                   radius={[4, 4, 0, 0]}
                   barSize={32}
                 />
@@ -288,9 +303,9 @@ export function FinancialCharts({ years, activeTab }: FinancialChartsProps) {
                   type="monotone"
                   dataKey="payout_ratio"
                   name="配当性向"
-                  stroke="#f59e0b" // Amber
+                  stroke={colors.amber}
                   strokeWidth={3}
-                  dot={{ fill: '#f59e0b', r: 4 }}
+                  dot={{ fill: colors.amber, r: 4 }}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -313,7 +328,7 @@ export function FinancialCharts({ years, activeTab }: FinancialChartsProps) {
                   dataKey="year"
                   stroke={axisColor}
                   interval={0}
-                  tick={<CustomXAxisTick />}
+                  tick={<CustomXAxisTick color={axisColor} />}
                   height={60}
                 />
                 <YAxis
@@ -341,27 +356,27 @@ export function FinancialCharts({ years, activeTab }: FinancialChartsProps) {
                   type="monotone"
                   dataKey="price"
                   name="株価"
-                  stroke="#10b981"
+                  stroke={colors.emerald}
                   strokeWidth={3}
-                  dot={{ fill: '#10b981', r: 4 }}
+                  dot={{ fill: colors.emerald, r: 4 }}
                 />
                 <Line
                   yAxisId="right"
                   type="monotone"
                   dataKey="pbr"
                   name="PBR"
-                  stroke="#6366f1"
+                  stroke={colors.indigo}
                   strokeWidth={2}
-                  dot={{ fill: '#6366f1', r: 3 }}
+                  dot={{ fill: colors.indigo, r: 3 }}
                 />
                 <Line
                   yAxisId="right"
                   type="monotone"
                   dataKey="per"
                   name="PER"
-                  stroke="#f59e0b"
+                  stroke={colors.amber}
                   strokeWidth={3}
-                  dot={{ fill: '#f59e0b', r: 4 }}
+                  dot={{ fill: colors.amber, r: 4 }}
                 />
               </ComposedChart>
             </ResponsiveContainer>

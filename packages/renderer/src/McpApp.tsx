@@ -123,7 +123,7 @@ const McpApp: React.FC = () => {
     if (loading && !data) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-background p-4">
-                <div className="flex flex-col items-center gap-12">
+                <div className="flex flex-col items-center gap-12 mt-20">
                     <div className="relative w-16 h-16 flex items-center justify-center">
                         {/* Ripple Circles */}
                         <div className="absolute inset-0 rounded-full bg-mebuki-brand opacity-20 animate-ripple" style={{ animationDelay: '0s' }} />
@@ -131,9 +131,7 @@ const McpApp: React.FC = () => {
                         <div className="absolute inset-0 rounded-full bg-mebuki-brand opacity-20 animate-ripple" style={{ animationDelay: '2s' }} />
 
                         {/* Center Core */}
-                        <div className="w-10 h-10 rounded-full bg-mebuki-brand shadow-lg z-10 flex items-center justify-center">
-                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        </div>
+                        <div className="w-10 h-10 rounded-full bg-mebuki-brand opacity-60 shadow-lg z-10 flex items-center justify-center" />
                     </div>
                     <div className="space-y-2 text-center">
                         <p className="text-lg font-bold tracking-tight text-mebuki-brand animate-pulse">データを分析中</p>
@@ -211,7 +209,7 @@ const McpApp: React.FC = () => {
                                     <button
                                         key={tab.id}
                                         onClick={() => setActiveTab(tab.id)}
-                                        className={`px-5 py-2 rounded-full text-xs font-bold transition-all ${activeTab === tab.id
+                                        className={`px-5 py-2 rounded-full text-sm font-bold transition-all ${activeTab === tab.id
                                             ? 'bg-mebuki-brand text-white shadow-lg shadow-primary/20'
                                             : 'bg-surface text-foreground-muted hover:bg-surface/70 hover:text-foreground'}`}
                                     >

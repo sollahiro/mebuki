@@ -17,37 +17,19 @@ router = APIRouter()
 @router.get("/analyze/{code}")
 async def analyze_stock_mcp(code: str, use_cache: bool = True):
     """
-    MCP用の軽量な分析取得。
-    有報等の取得（EDINETアクセス）を含まず、銘柄基本情報と財務指標のみを高速に返却します。
+    MCP用の分析取得。
+    有報等の取得（EDINETアクセス）を含めた完全な分析結果を返します。
+    キャッシュがある場合は即座に返却されます。
     """
     code = validate_stock_code(code)
     try:
-        # EDINETアクセスを含まない基本データのみを高速に取得
         analyzer = data_service.get_analyzer(use_cache=use_cache)
+        # analyze_stock を使用することで、キャッシュの読み込み・保存の両方が行われる
+        result = await analyzer.analyze_stock(code)
         
-        # 財務データの取得
-        import asyncio
-        stock_info, financial_data, annual_data = await asyncio.to_thread(analyzer._fetch_financial_data, code)
-        if not stock_info:
+        if not result:
             raise HTTPException(status_code=404, detail="Financial data not found")
             
-        # 指標計算
-        available_years = len(annual_data)
-        max_years = settings_store.get_max_analysis_years()
-        analysis_years = min(available_years, max_years)
-        
-        prices = await asyncio.to_thread(analyzer._fetch_prices, code, annual_data, analysis_years)
-        metrics = await asyncio.to_thread(analyzer._calculate_metrics, code, annual_data, prices, analysis_years)
-        
-        from datetime import datetime
-        result = {
-            "code": code,
-            **data_service.fetch_stock_basic_info(code),
-            "metrics": metrics,
-            "edinet_data": [], # 軽量版では空にする
-            "analyzed_at": datetime.now().isoformat()
-        }
-        
         return {"status": "ok", "data": result}
         
     except HTTPException:
@@ -96,39 +78,28 @@ async def get_financials(code: str):
 
 
 @router.get("/financial_history/{code}")
-async def get_financial_history(code: str):
+async def get_financial_history(code: str, use_cache: bool = True):
     """
-    GUIの「データ」タブ同様、主要な財務指標を時系列で取得。
-    LLMが傾向を把握しやすいように整形されています。
+    主要な財務指標を時系列で取得。
+    キャッシュを優先的に使用し、存在しない場合のみ再計算・検索を行います。
     """
     code = validate_stock_code(code)
     try:
-        analyzer = data_service.get_analyzer(use_cache=True)
-        import asyncio
-        stock_info, financial_data, annual_data = await asyncio.to_thread(analyzer._fetch_financial_data, code)
+        analyzer = data_service.get_analyzer(use_cache=use_cache)
         
-        if not annual_data:
+        # analyze_stock を使用することで、キャッシュの読み込み・保存の両方が行われる
+        result = await analyzer.analyze_stock(code)
+        
+        if not result:
             raise HTTPException(status_code=404, detail="Financial data not found")
             
-        # 指標計算
-        analysis_years = min(len(annual_data), settings_store.get_max_analysis_years())
-        prices = await asyncio.to_thread(analyzer._fetch_prices, code, annual_data, analysis_years)
-        metrics = await asyncio.to_thread(analyzer._calculate_metrics, code, annual_data, prices, analysis_years)
-        
-        # GUIのFinancialTable.tsxに準拠した項目をリスト化
-        # Backendの内部データ構造（YearData）をそのまま活用することでフロントエンドとの整合性を高める
-        history = metrics.get("years", [])
-        
-        # EDINET書類の取得 (分析対象年数に合わせて多めに取得)
-        edinet_data = await asyncio.to_thread(analyzer._fetch_edinet_data, code, financial_data, max_documents=15)
-            
+        # MCPレスポンス用にキー名を微調整（フロントエンド互換性）
+        # result には既に history (metrics.years) や edinet_data が含まれている
         return {
             "status": "ok", 
             "data": {
-                "code": code,
-                **data_service.fetch_stock_basic_info(code),
-                "history": history,
-                "edinet_data": edinet_data
+                **result,
+                "history": result.get("metrics", {}).get("years", [])
             }
         }
     except ValueError as e:
