@@ -113,6 +113,14 @@ class JQuantsAPIClient:
                         f"\n（無料プランには1日あたりのリクエスト数制限があります）"
                     )
             else:
+                # 400エラーの場合、サブスクリプション範囲外の可能性がある
+                if response.status_code == 400:
+                    error_data = response.json()
+                    msg = error_data.get("message", "")
+                    if "Your subscription covers" in msg:
+                        # サブスクリプションエラーとして識別可能な情報を付与して送出
+                        raise ValueError(f"SUBSCRIPTION_OUT_OF_RANGE: {msg}")
+                
                 raise requests.RequestException(
                     f"APIリクエストエラー: {response.status_code} - {response.text}"
                 )
@@ -373,6 +381,68 @@ class JQuantsAPIClient:
                 results[normalized_date] = price  # 正規化形式も保存
             
         except Exception as e:
+            error_str = str(e)
+            if "SUBSCRIPTION_OUT_OF_RANGE" in error_str:
+                import re
+                # メッセージ例: Your subscription covers the following dates: 2021-02-21 ~ .
+                match = re.search(r"(\d{4}-\d{2}-\d{2})", error_str)
+                if match:
+                    allowed_start = match.group(1)
+                    logger.info(f"サブスク下限を検知: {allowed_start}。範囲を調整して再試行します。")
+                    
+                    # 開始日をサブスク下限まで切り詰める
+                    new_start_dt = datetime.strptime(allowed_start, "%Y-%m-%d")
+                    # もし最大日付(max_date)すら下限より前の場合は、取得を諦める
+                    if max_date < new_start_dt:
+                        logger.warning(f"全リクエスト対象がサブスク範囲外です: {code}")
+                        return {d: None for d in dates}
+                        
+                    try:
+                        all_bars = self.get_daily_bars(
+                            code=code,
+                            from_date=allowed_start,
+                            to_date=end_date
+                        )
+                        # 以降の処理（bars_by_dateの作成等）を共通化するために、
+                        # 下記のロジックは本来共通メソッド化すべきですが、
+                        # ここではエラー回避を最優先に続行します。
+                        bars_by_date = {}
+                        for bar in all_bars:
+                            bar_date = bar.get("Date", "")
+                            if bar_date:
+                                if len(bar_date) == 8:
+                                    normalized_bar_date = f"{bar_date[:4]}-{bar_date[4:6]}-{bar_date[6:8]}"
+                                else:
+                                    normalized_bar_date = bar_date[:10] if len(bar_date) >= 10 else bar_date
+                                price = bar.get("AdjC") or bar.get("C")
+                                if price is not None:
+                                    bars_by_date[normalized_bar_date] = price
+                                    bars_by_date[bar_date] = price
+                        
+                        # 取得できた範囲で再構成
+                        for date_str, date_obj in date_objects:
+                            if "-" in date_str:
+                                normalized_date = date_str[:10]
+                            else:
+                                normalized_date = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
+                            
+                            price = bars_by_date.get(normalized_date) or bars_by_date.get(date_str)
+                            if price is None and use_nearest_trading_day:
+                                # 下限（new_start_dt）を超えない範囲で探す
+                                for i in range(1, 11):
+                                    check_date = date_obj - timedelta(days=i)
+                                    if check_date < new_start_dt:
+                                        break
+                                    check_date_str = check_date.strftime("%Y-%m-%d")
+                                    price = bars_by_date.get(check_date_str)
+                                    if price is not None:
+                                        break
+                            results[date_str] = price
+                            results[normalized_date] = price
+                        return results
+                    except Exception as retry_e:
+                        logger.error(f"範囲調整後のリトライに失敗: {retry_e}")
+            
             logger.warning(f"バッチ株価取得エラー: {e}")
             # エラー時は個別取得にフォールバック
             for date_str in dates:
