@@ -69,12 +69,9 @@ class IndividualAnalyzer:
                 logger.warning(f"EDINETクライアントの初期化に失敗しました: {e}")
                 self.edinet_client = None
         
-        # XBRLパーサーは常に初期化
-        try:
-            self.xbrl_parser = XBRLParser()
-        except Exception as e:
-            logger.warning(f"XBRLパーサーの初期化に失敗しました: {e}")
-            self.xbrl_parser = None
+        # XBRLパーサーは将来的な活用のために温存しますが、
+        # 現在のストリーミング分析フローでは使用しないため初期化はスキップします。
+        self.xbrl_parser = None
     
     def _fetch_financial_data(
         self,
@@ -463,14 +460,10 @@ class IndividualAnalyzer:
                 year = doc.get("fiscal_year")
                 fy_key = doc.get("jquants_fy_end") or str(year) # フォールバック
 
-                # PDFのみダウンロード（要約は廃止）
-                pdf_path = await asyncio.to_thread(self.edinet_client.download_document, doc_id, 2, reports_dir)
-
+                # レポート情報の準備（PDF/XBRLのローカルパスはレスポンスから除外）
                 report_info = {
                     "docID": doc_id,
                     "submitDate": doc.get("submitDateTime", "")[:10],
-                    "pdf_path": str(pdf_path) if pdf_path else None,
-                    "xbrl_path": None, # XBRLは不要になったため
                     "edinetCode": doc.get("edinetCode"),
                     "docType": label,
                     "docTypeCode": dt,
@@ -478,7 +471,7 @@ class IndividualAnalyzer:
                     "jquants_fy_end": fy_key
                 }
                 
-                # PDF情報の準備ができたものから即座に通知
+                # 準備ができた情報から即座に通知
                 yield {"year": year, "fy_key": fy_key, "report": report_info}
 
         except Exception as e:

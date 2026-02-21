@@ -272,80 +272,32 @@ class EdinetAPIClient:
             return []
 
     def download_document(self, doc_id: str, doc_type: int = 1, save_dir: Optional[Path] = None) -> Optional[Path]:
-        """書類をダウンロード（1=XBRL, 2=PDF）"""
+        """書類をダウンロード（1=XBRLのみ維持。旧2=PDFは廃止）"""
+        if doc_type != 1:
+            logger.warning(f"⚠️ [EDINET] ID={doc_id} の PDF ダウンロードは廃止されました。")
+            return None
+
         if save_dir is None: save_dir = self.cache_dir
         save_dir = Path(save_dir)
         save_dir.mkdir(parents=True, exist_ok=True)
         
-        if doc_type == 1:
-            dest = save_dir / f"{doc_id}_xbrl"
-            if dest.exists() and dest.is_dir(): return dest
-        else:
-            dest = save_dir / f"{doc_id}.pdf"
-            if dest.exists(): return dest
+        dest = save_dir / f"{doc_id}_xbrl"
+        if dest.exists() and dest.is_dir(): return dest
             
         if not self.api_key: return None
         
         try:
-            response = self._request(f"/documents/{doc_id}", {"type": doc_type})
-            if doc_type == 1:
-                zip_path = save_dir / f"{doc_id}.zip"
-                with open(zip_path, "wb") as f: f.write(response.content)
-                dest.mkdir(parents=True, exist_ok=True)
-                with zipfile.ZipFile(zip_path, "r") as z: z.extractall(dest)
-                zip_path.unlink()
-            else:
-                with open(dest, "wb") as f: f.write(response.content)
+            response = self._request(f"/documents/{doc_id}", {"type": 1})
+            zip_path = save_dir / f"{doc_id}.zip"
+            with open(zip_path, "wb") as f: f.write(response.content)
+            dest.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(zip_path, "r") as z: z.extractall(dest)
+            zip_path.unlink()
             return dest
         except Exception as e:
-            logger.error(f"❌ [EDINET] Download error {doc_id}: {e}")
+            logger.error(f"❌ [EDINET] XBRL Download error {doc_id}: {e}")
             return None
 
-    def fetch_reports(self, code: str, years: Optional[List[int]] = None, reports_dir: Optional[Path] = None, jquants_annual_data: Optional[List[Dict[str, Any]]] = None, edinet_code: Optional[str] = None, max_documents: int = 2) -> Dict[int, List[Dict[str, Any]]]:
-        """最新の有報(120)とその他(140/160)を取得"""
-        if not self.api_key or not jquants_annual_data: return {}
-        
-        docs = self.search_documents(code, years=years, jquants_data=jquants_annual_data, edinet_code=edinet_code, max_documents=max_documents)
-        if not docs:
-            logger.warning(f"🔍 [EDINET] No reports found for {code}")
-            return {}
-            
-        if reports_dir is None:
-            reports_dir = Path(__file__).parent.parent.parent / "reports" / f"{code}_edinet"
-        reports_dir.mkdir(parents=True, exist_ok=True)
-        
-        # 年度リストが提供されていない場合は、取得した書類から作成
-        if not years:
-            years = sorted(list(set(d.get("fiscal_year") for d in docs if d.get("fiscal_year"))), reverse=True)
-            
-        results = {}
-        for year in years:
-            year_results = []
-            # 同一年度の書類を全て処理（最新 N 件の制約は search_documents 側でかかっている）
-            year_docs = [d for d in docs if d.get("fiscal_year") == year]
-            year_docs.sort(key=lambda x: x.get("submitDateTime", ""), reverse=True)
-            
-            for doc in year_docs:
-                dt = doc.get("docTypeCode")
-                doc_id = doc["docID"]
-                xbrl_path = self.download_document(doc_id, 1, reports_dir)
-                pdf_path = self.download_document(doc_id, 2, reports_dir)
-                
-                if xbrl_path or pdf_path:
-                    label = "有価証券報告書" if dt == "120" else "半期報告書"
-                    year_results.append({
-                        "docID": doc_id,
-                        "submitDate": doc.get("submitDateTime", "")[:10],
-                        "pdf_path": str(pdf_path) if pdf_path else None,
-                        "xbrl_path": str(xbrl_path) if xbrl_path else None,
-                        "docType": label,
-                        "docTypeCode": dt,
-                        "filerName": doc.get("filerName", ""),
-                    })
-            
-            if year_results:
-                results[year] = year_results
-        return results
 
     def search_recent_reports(
         self,

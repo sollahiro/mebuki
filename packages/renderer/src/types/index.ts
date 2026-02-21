@@ -83,7 +83,6 @@ export interface Metrics {
 export interface EdinetData {
   docID: string
   submitDate: string
-  pdf_path?: string
   edinetCode?: string
   docType: string
   docTypeCode?: string
