@@ -10,13 +10,7 @@ mebukiは、J-QUANTS API、EDINET API を活用し、投資判断における「
 
 ---
 
-## 📸 スクリーンショット
-
-### 財務分析ダッシュボード
-![財務分析画面](assets/screenshots/app-ui.png)
-*最大10年分の財務データを直感的なグラフで可視化。営業CF、FCF、ROE、ROICなどの重要指標を一目で把握できます。*
-
-### AI アシスタント連携 (Claude / Goose)
+## AI アシスタント連携 (Claude / Goose)
 ![Claude Desktop連携](assets/screenshots/mcp-claude-usage.png)
 ![Goose Desktop連携](assets/screenshots/mcp-goose-usage.png)
 *Claude Desktop (Anthropic提供) や Goose Desktop (Block提供) と連携し、自然言語で財務分析を実行。「日産の業績を調べてください」といった会話形式で、詳細な財務データにアクセスできます。*
@@ -35,22 +29,6 @@ mebukiは、J-QUANTS API、EDINET API を活用し、投資判断における「
 ---
 
 ## ✨ 主要機能
-
-### 📊 財務データのマルチビュー可視化
-直感的なグラフで、企業のトレンドを4つの切り口で分析します。
-1. **稼ぐ・蓄える**: 営業CFの蓄積と現預金残高、FCFの推移
-2. **増やす**: 簡易ROIC、ROE、CF変換率による資本効率分析
-3. **返す・残す**: EPS、BPS、配当性向による株主価値の蓄積
-4. **評価**: PER、PBR、株価による市場評価のダイナミクス
-
----
-
-### 📄 EDINET 連携
-- 最新年度の有価証券報告書を自動取得・解析
-- 重要なセクション（MD&A、事業リスク等）の自動抽出
-- ワンクリックでの PDF ダウンロード機能
-
-### 🤖 AI アシスタント連携 (MCP)
 - **Claude / Goose との統合**: ワンクリックで連携設定が完了
 - **自然言語での財務分析**: 「トヨタの直近3年の業績推移をまとめて」といった会話形式で分析
 - **MCP ツール提供**:
@@ -83,9 +61,6 @@ mebukiは、J-QUANTS API、EDINET API を活用し、投資判断における「
 > - APIキーはお使いのPC内にローカル保存されます(`electron-store` 使用)
 > - APIキーが外部サーバーに送信されることはありません
 > - 各APIへの通信は、お使いのPCから直接行われます
-
-3. **MCP連携**
-   Claude Desktop等のAIアシスタントと連携する場合は、設定画面の「AIアシスタント連携」から設定できます。
 
 ### 🔧 その他の環境・手動連携 (Cursor 等)
 
@@ -145,7 +120,6 @@ mebuki/
 │   └── utils/        # ユーティリティ
 ├── assets/            # アプリアイコン等の静的リソース
 ├── scripts/           # ビルド・ユーティリティスクリプト
-└── start.sh           # 開発・実行用統合起動スクリプト
 ```
 
 ---
