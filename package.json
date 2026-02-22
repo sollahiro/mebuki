@@ -1,7 +1,7 @@
 {
   "name": "mebuki",
   "private": false,
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Stock analysis tool with MCP integration",
   "author": "shutosorahiro",
   "main": "packages/main/src/main.js",
@@ -51,6 +51,8 @@
     ],
     "asarUnpack": [
       "packages/mcp/dist/**/*",
+      "packages/mcp/icon.svg",
+      "packages/renderer/dist/mcp.html",
       "packages/mcp/icon.png",
       "assets/data_j.csv"
     ],

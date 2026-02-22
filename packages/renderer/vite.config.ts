@@ -3,9 +3,14 @@ import react from '@vitejs/plugin-react'
 import { viteSingleFile } from 'vite-plugin-singlefile'
 import path from 'path'
 
+const isMcp = process.env.BUILD_TARGET === 'mcp'
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), viteSingleFile()],
+  plugins: [
+    react(),
+    ...(isMcp ? [viteSingleFile()] : [])
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -14,15 +19,17 @@ export default defineConfig({
   base: './', // Electron用の相対パス
   build: {
     outDir: 'dist',
-    emptyOutDir: true,
+    emptyOutDir: !isMcp, // MCPビルド時は既存のファイルを消さない
     // CSSの最適化設定
-    cssCodeSplit: false,
-    // アセットのインライン化
-    assetsInlineLimit: 100000000,
+    cssCodeSplit: !isMcp,
+    // アセットのインライン化 (MCPのみ最大限行う)
+    assetsInlineLimit: isMcp ? 100000000 : 4096,
     // ソースマップを非表示
     sourcemap: false,
     rollupOptions: {
-      input: path.resolve(__dirname, 'mcp.html'),
+      input: isMcp
+        ? path.resolve(__dirname, 'mcp.html')
+        : path.resolve(__dirname, 'index.html'),
     },
   },
   server: {
