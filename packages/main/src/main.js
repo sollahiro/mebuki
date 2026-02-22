@@ -261,6 +261,12 @@ function createApplicationMenu() {
       label: app.name,
       submenu: [
         { role: 'about', label: `${app.name}について` },
+        {
+          label: 'アップデートを確認...',
+          click: () => {
+            autoUpdater.checkForUpdatesAndNotify();
+          }
+        },
         { type: 'separator' },
         {
           label: '設定...',
@@ -451,6 +457,12 @@ function initAutoUpdater() {
 
   autoUpdater.on('error', (err) => {
     console.error('❌ Update error:', err);
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    console.log('✅ App is up to date.');
+    // 手動でチェックした場合のみダイアログを表示したいが、checkForUpdatesAndNotify では区別が難しいため
+    // ログ出力に留めるか、簡易的な通知を行う
   });
 
   // 定期的にチェック（例: 起動時）
