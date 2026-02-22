@@ -132,7 +132,6 @@ export interface ProgressState {
 export interface Settings {
   jquantsApiKey: string
   edinetApiKey: string
-  geminiApiKey: string
   llmProvider: 'gemini' | 'ollama'
 }
 

@@ -9,6 +9,7 @@ const Store = require('electron-store');
 const { spawn, exec } = require('child_process');
 const fs = require('fs');
 const McpConfigManager = require('./mcpConfigManager');
+const keytar = require('keytar');
 
 const store = new Store();
 const isDev = !app.isPackaged;
@@ -329,13 +330,14 @@ function createApplicationMenu() {
 }
 
 function setupIpcHandlers() {
-  ipcMain.handle('get-settings', () => {
+  ipcMain.handle('get-settings', async () => {
+    const jquantsApiKey = await keytar.getPassword('mebuki', 'jquantsApiKey') || '';
+    const edinetApiKey = await keytar.getPassword('mebuki', 'edinetApiKey') || '';
+
     return {
-      jquantsApiKey: store.get('jquantsApiKey', ''),
-      edinetApiKey: store.get('edinetApiKey', ''),
-      geminiApiKey: store.get('geminiApiKey', ''),
+      jquantsApiKey,
+      edinetApiKey,
       llmProvider: store.get('llmProvider', 'gemini'),
-      geminiModel: store.get('geminiModel', ''),
       mcpEnabled: true
     };
   });
@@ -362,12 +364,17 @@ function setupIpcHandlers() {
     };
   });
 
-  ipcMain.handle('save-settings', (event, settings) => {
-    store.set('jquantsApiKey', settings.jquantsApiKey || '');
-    store.set('edinetApiKey', settings.edinetApiKey || '');
-    store.set('geminiApiKey', settings.geminiApiKey || '');
+  ipcMain.handle('save-settings', async (event, settings) => {
+    if (settings.jquantsApiKey !== undefined) {
+      await keytar.setPassword('mebuki', 'jquantsApiKey', settings.jquantsApiKey || '');
+      store.delete('jquantsApiKey'); // 平文保存を削除
+    }
+    if (settings.edinetApiKey !== undefined) {
+      await keytar.setPassword('mebuki', 'edinetApiKey', settings.edinetApiKey || '');
+      store.delete('edinetApiKey'); // 平文保存を削除
+    }
+
     store.set('llmProvider', settings.llmProvider || 'gemini');
-    store.set('geminiModel', settings.geminiModel || '');
     store.set('mcpEnabled', true);
 
     return { success: true };
@@ -455,9 +462,27 @@ function initAutoUpdater() {
 
 }
 
+// 既存の平文設定からキーチェーンへの移行
+async function migrateKeysToKeychain() {
+  const keys = ['jquantsApiKey', 'edinetApiKey', 'geminiApiKey'];
+  for (const key of keys) {
+    const value = store.get(key);
+    if (value) {
+      console.log(`🔐 Migrating ${key} to Keychain...`);
+      try {
+        await keytar.setPassword('mebuki', key, value);
+        store.delete(key);
+        console.log(`✅ Migrated ${key} and removed from plain-text store.`);
+      } catch (err) {
+        console.error(`❌ Failed to migrate ${key}:`, err);
+      }
+    }
+  }
+}
 
 app.whenReady().then(async () => {
   console.log('🏁 Electron App Ready');
+  await migrateKeysToKeychain();
   try {
     await startFastAPIServer();
   } catch (err) {

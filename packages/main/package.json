@@ -5,6 +5,7 @@
   "scripts": {
     "start": "electron . > ../../mebuki_crash.log 2>&1"
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "dependencies": {
+    "keytar": "^7.9.0"
+  }
 }

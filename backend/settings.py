@@ -1,4 +1,5 @@
 import logging
+import keyring
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -109,6 +110,13 @@ class SettingsStore:
         """
         if key == "mcpEnabled":
             return True
+            
+        # APIキーの場合はキーチェーンから取得を試みる
+        if key in ["jquantsApiKey", "edinetApiKey"]:
+            val = keyring.get_password("mebuki", key)
+            if val:
+                return val
+                
         return self._settings.get(key, default)
     
     def get_all(self) -> Dict[str, Any]:
@@ -120,6 +128,13 @@ class SettingsStore:
         """
         settings = self._settings.copy()
         settings["mcpEnabled"] = True
+        
+        # キーチェーンから値を上書き
+        for key in ["jquantsApiKey", "edinetApiKey"]:
+            val = keyring.get_password("mebuki", key)
+            if val:
+                settings[key] = val
+                
         return settings
     
     def get_masked(self) -> Dict[str, Any]:
@@ -130,8 +145,9 @@ class SettingsStore:
         Returns:
             マスク済みの設定辞書
         """
+        all_settings = self.get_all()
         masked = {}
-        for key, value in self._settings.items():
+        for key, value in all_settings.items():
             if 'key' in key.lower() or 'api' in key.lower():
                 if value and isinstance(value, str):
                     masked[key] = value[:4] + "****" + value[-4:] if len(value) > 8 else "****"
@@ -144,12 +160,12 @@ class SettingsStore:
     @property
     def jquants_api_key(self) -> Optional[str]:
         """J-QUANTS APIキーを取得"""
-        return self._settings.get("jquantsApiKey")
+        return keyring.get_password("mebuki", "jquantsApiKey") or self._settings.get("jquantsApiKey")
     
     @property
     def edinet_api_key(self) -> Optional[str]:
         """EDINET APIキーを取得"""
-        return self._settings.get("edinetApiKey")
+        return keyring.get_password("mebuki", "edinetApiKey") or self._settings.get("edinetApiKey")
     
     @property
     def analysis_years(self) -> Optional[int]:

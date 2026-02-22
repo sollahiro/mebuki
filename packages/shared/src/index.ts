@@ -5,9 +5,7 @@
 export interface SystemSettings {
     jquantsApiKey: string;
     edinetApiKey: string;
-    geminiApiKey: string;
     llmProvider: 'gemini' | 'openai';
-    geminiModel: string;
 }
 
 export const APP_CHANNELS = {
