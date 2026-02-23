@@ -452,8 +452,8 @@ function setupIpcHandlers() {
 
 // アップデート機能の初期化
 function initAutoUpdater() {
-  // 自動ダウンロードを無効化（ユーザーの許可を得てから開始する）
-  autoUpdater.autoDownload = false;
+  // 自動ダウンロードを有効化（GitHub Release更新時の挙動に合わせる）
+  autoUpdater.autoDownload = true;
 
   // 開発環境では詳細なログを出力
   if (isDev) {
@@ -463,18 +463,16 @@ function initAutoUpdater() {
 
 
   autoUpdater.on('update-available', (info) => {
-    console.log('📢 Update available.');
-    dialog.showMessageBox({
-      type: 'info',
-      title: 'アップデートが見つかりました',
-      message: `新しいバージョン（v${info.version}）が利用可能です。ダウンロードを開始しますか？`,
-      buttons: ['ダウンロード', '後で'],
-      defaultId: 0,
-    }).then((result) => {
-      if (result.response === 0) {
-        autoUpdater.downloadUpdate();
-      }
-    });
+    console.log('📢 Update available. Downloading...');
+    if (isManualUpdateCheck) {
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'アップデートが見つかりました',
+        message: `新しいバージョン（v${info.version}）が見つかりました。バックグラウンドでダウンロードを開始します。`,
+        buttons: ['OK']
+      });
+      isManualUpdateCheck = false;
+    }
   });
 
   autoUpdater.on('update-downloaded', (info) => {
