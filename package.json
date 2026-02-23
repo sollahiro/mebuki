@@ -1,7 +1,7 @@
 {
   "name": "mebuki",
   "private": false,
-  "version": "2.1.2",
+  "version": "2.1.3",
   "description": "Stock analysis tool with MCP integration",
   "author": "shutosorahiro",
   "main": "packages/main/src/main.js",

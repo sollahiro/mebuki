@@ -1,5 +1,7 @@
+import os
 import logging
 import keyring
+from pathlib import Path
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -18,8 +20,6 @@ class SettingsStore:
     def __init__(self):
         # 環境変数に依存せず、常にデフォルト値で初期化します。
         # 設定値はElectron側からAPIを通じてアップデートされることを前提とします。
-        import os
-        from pathlib import Path
         
         user_data_path = os.environ.get("MEBUKI_USER_DATA_PATH")
         if not user_data_path:
