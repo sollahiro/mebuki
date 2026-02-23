@@ -323,16 +323,6 @@ async def get_monetary_policy(start_date: str = None, end_date: str = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/macro/tankan")
-async def get_tankan(sector: str = "manufacturing", start_date: str = None, end_date: str = None):
-    """指定業種の短観業況判断DIを取得"""
-    try:
-        data = macro_analyzer.get_tankan_summary(sector, start_date, end_date)
-        return {"status": "ok", "data": data}
-    except Exception as e:
-        logger.error(f"MCP 短観データ取得エラー: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.get("/macro/fx")
 async def get_fx_environment(start_date: str = None, end_date: str = None):

@@ -9,11 +9,6 @@ MONETARY_POLICY_SERIES = {
     "money_stock_m3": {"db": "MD02", "code": "MAM1YAM3M3MO"},  # マネーストックM3（前年比）
 }
 
-# 景況感 (Business Sentiment / Tankan)
-TANKAN_SERIES = {
-    "manufacturing_large": {"db": "CO", "code": "TK99F1000601GCQ01000"},  # 業況判断DI（製造業・大企業）
-    "non_manufacturing_large": {"db": "CO", "code": "TK99F1010601GCQ01000"}, # 業況判断DI（非製造業・大企業）
-}
 
 # 為替 (FX)
 FX_SERIES = {

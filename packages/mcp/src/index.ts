@@ -208,7 +208,7 @@ For any query regarding Japanese stocks or Japanese companies, you MUST follow t
 5.  **Phase 5: Synthesis & Cross-Validation (統合と裏付け分析)**
     - **Macro-Micro Linkage**: Cross-reference the company's performance (e.g., export profits) with macro data (\`get_fx_environment\`).
     - **Evidence-Based Reasoning**: Use macro facts as hard evidence to support or challenge your investment hypothesis.
-    - **Risk Assessment**: Evaluate if industry-wide sentiment (\`get_tankan_summary\`) or liquidity changes (\`get_monetary_policy_status\`) pose hidden risks.
+    - **Risk Assessment**: Evaluate if industry-wide sentiment or liquidity changes (\`get_monetary_policy_status\`) pose hidden risks.
 
 ## Important Principles
 
@@ -436,18 +436,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 },
             },
             {
-                name: "get_tankan_summary",
-                description: "Retrieve BOJ Tankan Business Conditions DI. 短観の業況判断DI（製造業・大企業等）を取得します。Use this to gauge business sentiment in Japan.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        sector: { type: "string", enum: ["manufacturing", "non-manufacturing"], default: "manufacturing" },
-                        start_date: { type: "string", description: "Start date (Format: YYYYMM is highly recommended)" },
-                        end_date: { type: "string", description: "End date (Format: YYYYMM is highly recommended)" },
-                    },
-                },
-            },
-            {
                 name: "get_fx_environment",
                 description: "Get FX environment data (USD/JPY spot, Real Effective Exchange Rate). 為替環境（名目ドル円、実質実効レート）を取得します。Useful for assessing export/import impact.",
                 inputSchema: {
@@ -604,13 +592,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 const start = args?.start_date ? `?start_date=${args.start_date}` : "";
                 const end = args?.end_date ? (start ? `&end_date=${args.end_date}` : `?end_date=${args.end_date}`) : "";
                 endpoint = `/api/mcp/macro/monetary_policy${start}${end}`;
-                break;
-            }
-            case "get_tankan_summary": {
-                const sector = args?.sector || "manufacturing";
-                const start = args?.start_date ? `&start_date=${args.start_date}` : "";
-                const end = args?.end_date ? `&end_date=${args.end_date}` : "";
-                endpoint = `/api/mcp/macro/tankan?sector=${sector}${start}${end}`;
                 break;
             }
             case "get_fx_environment": {
