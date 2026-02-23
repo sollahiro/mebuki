@@ -333,3 +333,27 @@ async def get_fx_environment(start_date: str = None, end_date: str = None):
     except Exception as e:
         logger.error(f"MCP 為替データ取得エラー: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/macro/cost_environment")
+async def get_cost_environment(sector: str, start_date: str = None, end_date: str = None):
+    """
+    コスト分析: 業種別コストプッシュ圧力の多角的指標を取得。
+
+    販価・中間需要（財/サービス/エネルギー）・輸入物価・人件費Proxyの
+    統合テーブルを返す。スプレッド（販価 - コスト）付き。
+
+    Args:
+        sector: 業種コード（英語）。例: transportation_equipment, information_communication
+        start_date: 開始月 (YYYYMM)。未指定時は直近13ヶ月。
+        end_date: 終了月 (YYYYMM)。未指定時は最新月まで。
+    """
+    try:
+        data = macro_analyzer.get_cost_environment(sector, start_date, end_date)
+        return {"status": "ok", "data": data}
+    except ValueError as e:
+        # 不明なsectorはHTTP 422で返す
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        logger.error(f"MCP コスト分析エラー: sector={sector} - {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
