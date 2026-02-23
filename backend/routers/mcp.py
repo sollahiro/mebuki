@@ -9,6 +9,7 @@ from backend.services.data_service import data_service
 from backend.utils.helpers import validate_stock_code
 from backend.settings import settings_store
 from backend.prompts import LLM_PROMPTS
+from backend.services.macro_analyzer import macro_analyzer
 
 logger = logging.getLogger(__name__)
 
@@ -309,4 +310,50 @@ async def get_management_policy_guide():
         }
     except Exception as e:
         logger.error(f"MCP経営方針ガイド取得エラー: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/macro/monetary_policy")
+async def get_monetary_policy(start_date: str = None, end_date: str = None):
+    """金融政策（金利、MB、MS）の時系列データを取得"""
+    try:
+        data = macro_analyzer.get_monetary_policy_status(start_date, end_date)
+        return {"status": "ok", "data": data}
+    except Exception as e:
+        logger.error(f"MCP 金融政策データ取得エラー: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+@router.get("/macro/fx")
+async def get_fx_environment(start_date: str = None, end_date: str = None):
+    """為替（名目ドル円、実質実効）のデータ取得"""
+    try:
+        data = macro_analyzer.get_fx_environment(start_date, end_date)
+        return {"status": "ok", "data": data}
+    except Exception as e:
+        logger.error(f"MCP 為替データ取得エラー: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/macro/cost_environment")
+async def get_cost_environment(sector: str, start_date: str = None, end_date: str = None):
+    """
+    コスト分析: 業種別コストプッシュ圧力の多角的指標を取得。
+
+    販価・中間需要（財/サービス/エネルギー）・輸入物価・人件費Proxyの
+    統合テーブルを返す。スプレッド（販価 - コスト）付き。
+
+    Args:
+        sector: 業種コード（英語）。例: transportation_equipment, information_communication
+        start_date: 開始月 (YYYYMM)。未指定時は直近13ヶ月。
+        end_date: 終了月 (YYYYMM)。未指定時は最新月まで。
+    """
+    try:
+        data = macro_analyzer.get_cost_environment(sector, start_date, end_date)
+        return {"status": "ok", "data": data}
+    except ValueError as e:
+        # 不明なsectorはHTTP 422で返す
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        logger.error(f"MCP コスト分析エラー: sector={sector} - {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

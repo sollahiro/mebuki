@@ -31,11 +31,9 @@ mebukiは、J-QUANTS API、EDINET API を活用し、投資判断における「
 ## ✨ 主要機能
 - **Claude / Goose との統合**: ワンクリックで連携設定が完了
 - **自然言語での財務分析**: 「トヨタの直近3年の業績推移をまとめて」といった会話形式で分析
-- **MCP ツール提供**:
-  - `get_japan_stock_official_overview`: 基本情報と主要財務指標の取得
-  - `get_japan_stock_10year_financial_history`: 最大10年間の時系列財務データ
-  - `analyze_japan_stock_securities_report`: 有価証券報告書からのMD&A抽出
-  - その他、企業検索、株価履歴取得など
+- **MCP ツール提供** (全13ツール):
+  - 📈 **株式分析** (10): 銘柄検索・概況・財務履歴・有報・EDINET・エキスパート分析・可視化など
+  - 🌐 **マクロ分析** (3): 金融政策・為替・業種別コストプッシュ圧力（日銀API使用）
 
 ---
 
@@ -124,9 +122,221 @@ mebuki/
 
 ---
 
+## 🛠️ MCP ツール リファレンス
+
+### 📈 株式分析ツール
+
+#### `find_japan_stock_code_by_name` — 銘柄コード検索
+
+会社名や部分的な銘柄コードから4〜5桁の証券コードを特定します。分析の **最初のステップ** として使用してください。
+
+| 項目 | 内容 |
+|------|------|
+| 入力 | `query` — 会社名（例: `Toyota`）またはコードの一部 |
+| データソース | J-QUANTS API |
+| 次のステップ | コードを確認後に `get_japan_stock_official_overview` へ |
+
+---
+
+#### `get_japan_stock_official_overview` — 財務サマリー取得
+
+現在の財務健全性スナップショット（ROE・営業利益率・PBR 等）を取得します。**最初のデータ取得ステップ**です。
+
+| 項目 | 内容 |
+|------|------|
+| 入力 | `code` — 4〜5桁の証券コード |
+| データソース | J-QUANTS API |
+| 次のステップ | 概況提示後、ユーザーに確認して `get_japan_stock_10year_financial_history` へ |
+
+---
+
+#### `get_japan_stock_10year_financial_history` — 最大10年財務履歴
+
+売上・純利益・FCF・ROE などの主要財務指標を最大10年分の時系列で取得します。
+
+| 項目 | 内容 |
+|------|------|
+| 入力 | `code` — 4〜5桁の証券コード |
+| データソース | J-QUANTS API |
+| 次のステップ | `mebuki_japan_stock_expert_analysis` で構造分析へ |
+
+---
+
+#### `analyze_japan_stock_securities_report` — 有価証券報告書解析
+
+最新の有価証券報告書から MD&A・リスクなどの定性情報を抽出します。
+
+| 項目 | 内容 |
+|------|------|
+| 入力 | `code` — 4〜5桁の証券コード |
+| データソース | EDINET API (XBRL) |
+| 次のステップ | 概況取得後に実行。定性・定量の両面から評価 |
+
+---
+
+#### `get_japan_stock_financial_metrics` — 財務指標取得
+
+ROE など計算済み財務指標を公式データから取得します。`get_japan_stock_official_overview` で不足する指標がある場合に補完用途で使用します。
+
+| 項目 | 内容 |
+|------|------|
+| 入力 | `code` — 4〜5桁の証券コード |
+| データソース | J-QUANTS API |
+
+---
+
+#### `get_japan_stock_price_history` — 株価履歴
+
+指定日数分の日次株価データを取得します。財務分析と市場トレンドの相関確認に使用します。
+
+| 項目 | 内容 |
+|------|------|
+| 入力 | `code` — 証券コード, `days` — 取得日数（デフォルト: 365） |
+| データソース | J-QUANTS API |
+
+---
+
+#### `get_japan_stock_statutory_filings_list` — EDINET 書類一覧
+
+直近のEDINET提出書類の一覧を取得します。`extract_japan_stock_filings_content` で使う `doc_id` を得るために必要です。
+
+| 項目 | 内容 |
+|------|------|
+| 入力 | `code` — 4〜5桁の証券コード |
+| データソース | EDINET API |
+| 次のステップ | ユーザーに書類を確認後、`extract_japan_stock_filings_content` へ |
+
+---
+
+#### `extract_japan_stock_filings_content` — EDINET 書類内容抽出
+
+EDINET XBRL書類の特定セクションを抽出します。`doc_id` は `get_japan_stock_statutory_filings_list` から取得してください。
+
+| 項目 | 内容 |
+|------|------|
+| 入力 | `doc_id` — 書類ID |
+| データソース | EDINET API (XBRL) |
+
+---
+
+#### `mebuki_japan_stock_expert_analysis` — エキスパート財務分析
+
+mebukiのガイドラインに基づく構造的財務分析を実行します。財務健全性・資本効率を総合評価します。
+
+| 項目 | 内容 |
+|------|------|
+| 入力 | `code` — 4〜5桁の証券コード |
+| データソース | J-QUANTS API |
+| 推奨タイミング | `get_japan_stock_10year_financial_history` 取得後の深掘り分析時 |
+
+---
+
+#### `show_mebuki_financial_visualizer` — インタラクティブ可視化
+
+財務テーブルと業績グラフを統合したインタラクティブUIを表示します。**AI コンテキストへのデータ提供は行いません**（表示専用）。
+
+| 項目 | 内容 |
+|------|------|
+| 入力 | `code` — 4〜5桁の証券コード |
+| 出力 | MCP App UI（タブ切り替えで表・グラフをインライン表示） |
+
+---
+
+#### `get_japan_stock_raw_jquants_data` — J-QUANTS 生データ
+
+J-QUANTS APIから他ツールで取得できない特定の財務項目を直接取得します。
+
+| 項目 | 内容 |
+|------|------|
+| 入力 | `code` — 4〜5桁の証券コード |
+| データソース | J-QUANTS API |
+| 推奨 | まず `get_japan_stock_official_overview` を使用し、不足時のみ本ツールを使用 |
+
+---
+
+#### `get_mebuki_investment_analysis_criteria` — 分析基準取得
+
+mebuki の投資分析における専門家基準を取得します。最終レポートの構成策定に使用します。
+
+| 項目 | 内容 |
+|------|------|
+| 入力 | なし |
+| 出力 | 専門家評価基準（マークダウン） |
+
+---
+
+### 🌐 マクロ分析ツール（日本銀行 時系列統計データ検索サイト API）
+
+mebuki には、日本銀行が提供する**時系列統計データ検索サイト API** を活用した以下の3つのマクロ分析MCPツールが含まれています。
+
+#### `get_monetary_policy_status` — 金融政策モニター
+
+日銀の金融政策に関する時系列データを取得します。
+
+| 指標 | データベース | 系列コード | 内容 |
+|------|------------|-----------|------|
+| 政策金利（基準貸付利率） | IR01 | `MADR1Z@D` | 日銀の基準割引率・基準貸付利率（日次） |
+| マネタリーベース | MD01 | `MABS1AN11` | 日銀当座預金＋日本銀行券の平均残高 |
+| マネーストックM3 | MD02 | `MAM1YAM3M3MO` | M3の前年比（月次） |
+
+**用途**: マクロ流動性環境の把握、株式・債券の割引率評価などに活用。
+
+---
+
+#### `get_fx_environment` — 為替環境
+
+為替相場の時系列データを取得します。
+
+| 指標 | データベース | 系列コード | 内容 |
+|------|------------|-----------|------|
+| ドル円スポット（17時） | FM08 | `FXERD04` | 東京市場 ドル・円 スポット17時時点 |
+| 実質実効為替レート | FM09 | `FX180110002` | 通貨の国際競争力を示す実質実効為替レート指数 |
+
+**用途**: 輸出企業の為替感応度分析、ファンダメンタルズとの比較に活用。
+
+---
+
+#### `get_cost_environment` — 業種別コストプッシュ圧力分析
+
+指定した業種のコストプッシュ圧力を多角的に取得します。販価と中間コストのスプレッドを「統合テーブル」形式で返却します。
+
+#### 対応業種
+
+**製造業 (PR01: 国内企業物価指数)**
+`foods`, `textiles`, `lumber`, `pulp_paper`, `chemicals`, `petroleum_coal`, `plastics`, `ceramics`, `steel`, `nonferrous_metals`, `metal_products`, `general_machinery`, `production_machinery`, `business_machinery`, `electronic_components`, `electrical_machinery`, `ict_equipment`, `transportation_equipment`
+
+**非製造業 (PR02: 企業向けサービス価格指数)**
+`finance_insurance`, `real_estate`, `transportation_postal`, `information_communication`, `leasing_rental`, `advertising`, `other_services`
+
+#### 返却カラム
+
+| カラム | 内容 | データソース |
+|--------|------|--------------|
+| 販価 | 業種別の販売価格指数 | PR01 / PR02 |
+| 中間(財) | 中間需要：財（ステージ2） | PR04 `PRFI20_1I2G00000` |
+| 中間(ｻ) | 中間需要：サービス | PR04 `PRFI20_1I2SD0000` |
+| スプレッド | 販価 - 主要中間コスト | 算出値 |
+| エネルギー | 中間需要：エネルギー | PR04 `PRFI20_1I2G00200` |
+| 人件費 | 高人件費率サービス（人件費Proxy） | PR02 `PRCS20_42S0000002` |
+| 輸入(円) | 輸入物価指数（円ベース） | PR01 `PRCG20_2600000000` |
+| 輸入(契) | 輸入物価指数（契約通貨ベース） | PR01 `PRCG20_2500000000` |
+
+> [!NOTE]
+> 全指標は原指数（2020年＝100）で返却されます。スプレッドは製造業では「販価−中間(財)」、非製造業では「販価−中間(サービス)」を使用します。
+
+**用途**: 原材料費・人件費・輸入コストの複合的なコスト圧力分析に活用。
+
+---
+
 ## ⚖️ 免責事項
 
 本ソフトウェアおよび提供される情報は、投資判断の参考として提供されるものであり、投資の勧誘を目的としたものではありません。株価の変動や企業の倒産、財務状況の悪化等により、投資した資本を失う可能性があります。最終的な投資判断は、必ず利用者ご自身の責任において行ってください。
+
+---
+
+## 📝 クレジット
+
+このサービスは、日本銀行時系列統計データ検索サイトの API 機能を使用しています。サービスの内容は日本銀行によって保証されたものではありません。
 
 ---
 Developed with ❤️ by [sollahiro](https://github.com/sollahiro)
