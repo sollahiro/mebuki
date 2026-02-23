@@ -16,6 +16,7 @@ const isDev = !app.isPackaged;
 const isDevFrontend = process.env.ELECTRON_DEV === 'true';
 const FASTAPI_PORT = 8765;
 let fastApiProcess = null;
+let isManualUpdateCheck = false;
 
 let mainWindow;
 
@@ -264,6 +265,7 @@ function createApplicationMenu() {
         {
           label: 'アップデートを確認...',
           click: () => {
+            isManualUpdateCheck = true;
             autoUpdater.checkForUpdatesAndNotify();
           }
         },
@@ -337,8 +339,15 @@ function createApplicationMenu() {
 
 function setupIpcHandlers() {
   ipcMain.handle('get-settings', async () => {
-    const jquantsApiKey = await keytar.getPassword('mebuki', 'jquantsApiKey') || '';
-    const edinetApiKey = await keytar.getPassword('mebuki', 'edinetApiKey') || '';
+    let jquantsApiKey = '';
+    let edinetApiKey = '';
+
+    try {
+      jquantsApiKey = await keytar.getPassword('mebuki', 'jquantsApiKey') || '';
+      edinetApiKey = await keytar.getPassword('mebuki', 'edinetApiKey') || '';
+    } catch (err) {
+      console.error('❌ Failed to get passwords from Keychain:', err);
+    }
 
     return {
       jquantsApiKey,
@@ -371,13 +380,18 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle('save-settings', async (event, settings) => {
-    if (settings.jquantsApiKey !== undefined) {
-      await keytar.setPassword('mebuki', 'jquantsApiKey', settings.jquantsApiKey || '');
-      store.delete('jquantsApiKey'); // 平文保存を削除
-    }
-    if (settings.edinetApiKey !== undefined) {
-      await keytar.setPassword('mebuki', 'edinetApiKey', settings.edinetApiKey || '');
-      store.delete('edinetApiKey'); // 平文保存を削除
+    try {
+      if (settings.jquantsApiKey !== undefined) {
+        await keytar.setPassword('mebuki', 'jquantsApiKey', settings.jquantsApiKey || '');
+        store.delete('jquantsApiKey'); // 平文保存を削除
+      }
+      if (settings.edinetApiKey !== undefined) {
+        await keytar.setPassword('mebuki', 'edinetApiKey', settings.edinetApiKey || '');
+        store.delete('edinetApiKey'); // 平文保存を削除
+      }
+    } catch (err) {
+      console.error('❌ Failed to save passwords to Keychain:', err);
+      return { success: false, error: 'Keychain access failed' };
     }
 
     store.set('llmProvider', settings.llmProvider || 'gemini');
@@ -429,6 +443,9 @@ function setupIpcHandlers() {
 
 // アップデート機能の初期化
 function initAutoUpdater() {
+  // 自動ダウンロードを無効化（ユーザーの許可を得てから開始する）
+  autoUpdater.autoDownload = false;
+
   // 開発環境では詳細なログを出力
   if (isDev) {
     autoUpdater.logger = require('electron-log');
@@ -436,8 +453,19 @@ function initAutoUpdater() {
   }
 
 
-  autoUpdater.on('update-available', () => {
+  autoUpdater.on('update-available', (info) => {
     console.log('📢 Update available.');
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'アップデートが見つかりました',
+      message: `新しいバージョン（v${info.version}）が利用可能です。ダウンロードを開始しますか？`,
+      buttons: ['ダウンロード', '後で'],
+      defaultId: 0,
+    }).then((result) => {
+      if (result.response === 0) {
+        autoUpdater.downloadUpdate();
+      }
+    });
   });
 
   autoUpdater.on('update-downloaded', (info) => {
@@ -457,26 +485,37 @@ function initAutoUpdater() {
 
   autoUpdater.on('error', (err) => {
     console.error('❌ Update error:', err);
+    if (isManualUpdateCheck) {
+      dialog.showErrorBox('アップデートの確認に失敗しました', `エラーが発生しました: ${err.message || err}`);
+      isManualUpdateCheck = false;
+    }
   });
 
   autoUpdater.on('update-not-available', () => {
     console.log('✅ App is up to date.');
-    // 手動でチェックした場合のみダイアログを表示したいが、checkForUpdatesAndNotify では区別が難しいため
-    // ログ出力に留めるか、簡易的な通知を行う
+    if (isManualUpdateCheck) {
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'アップデート確認',
+        message: 'お使いのバージョンは最新です。',
+        buttons: ['OK']
+      });
+      isManualUpdateCheck = false;
+    }
   });
 
   // 定期的にチェック（例: 起動時）
   if (!isDev) {
+    isManualUpdateCheck = false; // 起動時は自動チェック扱い
     autoUpdater.checkForUpdatesAndNotify().catch(err => {
       console.error('⚠️ Failed to check for updates (this is expected if no releases exist or token is missing):', err);
     });
   }
-
 }
 
 // 既存の平文設定からキーチェーンへの移行
 async function migrateKeysToKeychain() {
-  const keys = ['jquantsApiKey', 'edinetApiKey', 'geminiApiKey'];
+  const keys = ['jquantsApiKey', 'edinetApiKey'];
   for (const key of keys) {
     const value = store.get(key);
     if (value) {

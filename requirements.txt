@@ -25,6 +25,9 @@ uvicorn[standard]>=0.40.0
 sse-starlette>=3.2.0
 pydantic>=2.12.5
 
+# キーチェーンアクセス
+keyring>=25.7.0
+
 # XBRL解析・スクレイピング
 beautifulsoup4>=4.14.3
 lxml>=5.1.0  # 解析高速化のため
