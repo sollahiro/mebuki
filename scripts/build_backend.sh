@@ -26,7 +26,8 @@ echo "🏗️  PyInstaller でバックエンドをビルド中..."
     --collect-all "fastapi" \
     --collect-all "uvicorn" \
     --collect-all "sse_starlette" \
-    --collect-all "google.genai" \
+    --collect-all "keyring" \
+    --collect-all "pydantic" \
     --add-data "mebuki:mebuki" \
     --paths "." \
     "$MAIN_PY"

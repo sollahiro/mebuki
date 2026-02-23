@@ -1,6 +1,6 @@
 [project]
 name = "mebuki"
-version = "2.1.0"
+version = "2.1.1"
 description = "mebuki: 投資回避に特化した投資分析ツール"
 authors = [
     {name = "shu", email = "shu.sorahiro@gmail.com"}
