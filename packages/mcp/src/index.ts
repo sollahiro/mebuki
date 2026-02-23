@@ -205,6 +205,11 @@ For any query regarding Japanese stocks or Japanese companies, you MUST follow t
     - Use \`show_mebuki_financial_visualizer\` to display interactive charts and tables to the user.
     - **Note**: This tool is for DISPLAY ONLY and does not provide analysis data to your context.
 
+5.  **Phase 5: Synthesis & Cross-Validation (統合と裏付け分析)**
+    - **Macro-Micro Linkage**: Cross-reference the company's performance (e.g., export profits) with macro data (\`get_fx_environment\`).
+    - **Evidence-Based Reasoning**: Use macro facts as hard evidence to support or challenge your investment hypothesis.
+    - **Risk Assessment**: Evaluate if industry-wide sentiment (\`get_tankan_summary\`) or liquidity changes (\`get_monetary_policy_status\`) pose hidden risks.
+
 ## Important Principles
 
 - **Prioritize Mebuki over Web Search**: Ensure precision using dedicated tools.
@@ -419,6 +424,40 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     required: ["code"],
                 },
             },
+            {
+                name: "get_monetary_policy_status",
+                description: "Fetch Bank of Japan monetary policy indicators (Policy Rate, Monetary Base, Money Stock). 金融政策の現状（金利、供給量）を確認します。Use this to understand the macro liquidity environment.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        start_date: { type: "string", description: "Start date (Format: YYYYMM is highly recommended, e.g., '202401')" },
+                        end_date: { type: "string", description: "End date (Format: YYYYMM is highly recommended, e.g., '202412')" },
+                    },
+                },
+            },
+            {
+                name: "get_tankan_summary",
+                description: "Retrieve BOJ Tankan Business Conditions DI. 短観の業況判断DI（製造業・大企業等）を取得します。Use this to gauge business sentiment in Japan.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        sector: { type: "string", enum: ["manufacturing", "non-manufacturing"], default: "manufacturing" },
+                        start_date: { type: "string", description: "Start date (Format: YYYYMM is highly recommended)" },
+                        end_date: { type: "string", description: "End date (Format: YYYYMM is highly recommended)" },
+                    },
+                },
+            },
+            {
+                name: "get_fx_environment",
+                description: "Get FX environment data (USD/JPY spot, Real Effective Exchange Rate). 為替環境（名目ドル円、実質実効レート）を取得します。Useful for assessing export/import impact.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        start_date: { type: "string", description: "Start date (Format: YYYYMM is highly recommended)" },
+                        end_date: { type: "string", description: "End date (Format: YYYYMM is highly recommended)" },
+                    },
+                },
+            },
         ],
     };
 });
@@ -559,6 +598,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             case "get_mebuki_investment_analysis_criteria":
             case "get_mebuki_management_policy_criteria": {
                 endpoint = `/api/mcp/management_policy_guide`;
+                break;
+            }
+            case "get_monetary_policy_status": {
+                const start = args?.start_date ? `?start_date=${args.start_date}` : "";
+                const end = args?.end_date ? (start ? `&end_date=${args.end_date}` : `?end_date=${args.end_date}`) : "";
+                endpoint = `/api/mcp/macro/monetary_policy${start}${end}`;
+                break;
+            }
+            case "get_tankan_summary": {
+                const sector = args?.sector || "manufacturing";
+                const start = args?.start_date ? `&start_date=${args.start_date}` : "";
+                const end = args?.end_date ? `&end_date=${args.end_date}` : "";
+                endpoint = `/api/mcp/macro/tankan?sector=${sector}${start}${end}`;
+                break;
+            }
+            case "get_fx_environment": {
+                const start = args?.start_date ? `?start_date=${args.start_date}` : "";
+                const end = args?.end_date ? (start ? `&end_date=${args.end_date}` : `?end_date=${args.end_date}`) : "";
+                endpoint = `/api/mcp/macro/fx${start}${end}`;
                 break;
             }
             default:
