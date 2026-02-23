@@ -3,6 +3,7 @@ const path = require('path');
 
 // 明示的にアプリ名を指定することで、保存先ディレクトリを固定する
 app.name = 'mebuki';
+const log = require('electron-log');
 const { autoUpdater } = require('electron-updater');
 
 const Store = require('electron-store');
@@ -99,6 +100,7 @@ async function startFastAPIServer() {
     const projectRoot = path.join(__dirname, '..', '..', '..');
 
     console.log('🚀 Starting FastAPI server...');
+    log.info('🚀 Starting FastAPI server...');
     await killProcessOnPort(FASTAPI_PORT);
 
     if (isDev) {
@@ -128,6 +130,8 @@ async function startFastAPIServer() {
     } else {
       // 本番モード: バイナリを直接実行
       console.log(`   Mode: Production (Binary)`);
+      log.info(`   Mode: Production (Binary)`);
+      log.info(`   Executable Path: ${executablePath}`);
       const backendRoot = path.dirname(executablePath);
 
       // 永続データ保存先のパスを取得
@@ -162,8 +166,10 @@ async function startFastAPIServer() {
     fastApiProcess.stdout.on('data', (data) => {
       const output = data.toString();
       process.stdout.write(`[FastAPI STDOUT] ${output}`);
+      log.info(`[FastAPI STDOUT] ${output}`);
       if (output.includes('Uvicorn running')) {
         console.log('✅ FastAPI server started successfully');
+        log.info('✅ FastAPI server started successfully');
         clearTimeout(startupTimeout);
         resolve();
       }
@@ -172,6 +178,7 @@ async function startFastAPIServer() {
     fastApiProcess.stderr.on('data', (data) => {
       const output = data.toString();
       process.stderr.write(`[FastAPI STDERR] ${output}`);
+      log.error(`[FastAPI STDERR] ${output}`);
       if (output.includes('Uvicorn running')) {
         clearTimeout(startupTimeout);
         resolve();
@@ -180,12 +187,14 @@ async function startFastAPIServer() {
 
     fastApiProcess.on('error', (err) => {
       console.error('❌ Failed to start FastAPI process:', err);
+      log.error('❌ Failed to start FastAPI process:', err);
       clearTimeout(startupTimeout);
       reject(err);
     });
 
     fastApiProcess.on('close', (code) => {
       console.log(`ℹ️ FastAPI process exited with code ${code}`);
+      log.info(`ℹ️ FastAPI process exited with code ${code}`);
       fastApiProcess = null;
     });
   });
