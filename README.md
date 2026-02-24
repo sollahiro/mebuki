@@ -77,12 +77,12 @@ Cursor やその他の MCP クライアントをご利用の場合は、以下�
   "mcpServers": {
     "mebuki": {
       "command": "node",
-      "args": ["/Users/shutosorahiro/mebuki/packages/mcp/dist/index.js"],
+      "args": ["/ABSOLUTE/PATH/TO/mebuki/packages/mcp/dist/index.js"],
       "env": {
         "MEBUKI_BACKEND_URL": "http://localhost:8765"
       },
       "metadata": {
-        "icon": "/Users/shutosorahiro/mebuki/packages/mcp/icon.png",
+        "icon": "/ABSOLUTE/PATH/TO/mebuki/packages/mcp/icon.png",
         "description": "Expert investment analyst tool for Japanese stocks."
       }
     }
@@ -91,7 +91,7 @@ Cursor やその他の MCP クライアントをご利用の場合は、以下�
 ```
 
 > [!NOTE]
-> `args` と `icon` のパスは、実際のインストール環境に合わせて適宜書き換えてください。
+> `/ABSOLUTE/PATH/TO/mebuki` は、実際のインストール環境の絶対パスに書き換えてください。
 
 #### 手順
 1. 上記の構成設定をコピーします。

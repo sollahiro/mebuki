@@ -52,10 +52,12 @@ class SettingsStore:
             "mcpEnabled": True,
         }
         
-        # ファイルから既存の設定をロード
-        self._load_from_file(user_data_path_obj / "config.json")
+        self.config_path = user_data_path_obj / "config.json"
         
-        logger.info(f"Initialized SettingsStore with cache_dir: {cache_dir}")
+        # ファイルから既存の設定をロード
+        self._load_from_file(self.config_path)
+        
+        logger.info(f"Initialized SettingsStore with cache_dir: {cache_dir}, config: {self.config_path}")
 
     def _load_from_file(self, config_path: Path) -> None:
         """
