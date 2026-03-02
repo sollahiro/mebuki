@@ -5,6 +5,7 @@
 import logging
 import os
 import pandas as pd
+import unicodedata
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 from backend.settings import settings_store
@@ -60,10 +61,14 @@ class MasterDataManager:
                 # 市場名のクリーンアップ（事前に行う）
                 clean_market = market.split("（")[0].split("(")[0]
                 
+                # 検索用正規化名称（全角英数を半角に、半角カナを全角に）
+                normalized_name = unicodedata.normalize('NFKC', row.get("銘柄名", "")).upper()
+                
                 processed_data.append({
                     "Code": row.get("コード", ""),
                     "CoName": row.get("銘柄名", ""),
                     "CoNameUpper": row.get("銘柄名", "").upper(), # 検索高速化用
+                    "CoNameNormalized": normalized_name, # 正規化済み名称
                     "S33Nm": row.get("33業種区分", ""),
                     "MktNm": clean_market,
                     "S33": row.get("33業種コード", ""),
@@ -89,19 +94,21 @@ class MasterDataManager:
         if not query:
             return []
             
-        query = query.strip().upper()
+        query_upper = query.strip().upper()
+        query_normalized = unicodedata.normalize('NFKC', query_upper)
         results = []
         
         for item in self._master_data:
             code = item.get("Code", "")
             name_upper = item.get("CoNameUpper", "")
+            name_normalized = item.get("CoNameNormalized", "")
             
             # マッチング
             # 1. コード完全一致 または 4桁コード前方一致
-            is_match = (query == code) or (code.startswith(query) and len(query) == 4)
-            # 2. 名称部分一致（大文字小文字無視）
+            is_match = (query_upper == code) or (code.startswith(query_upper) and len(query_upper) == 4)
+            # 2. 名称部分一致（大文字小文字無視・全角半角正規化）
             if not is_match:
-                is_match = query in name_upper
+                is_match = (query_upper in name_upper) or (query_normalized in name_normalized)
             
             if is_match:
                 results.append({
