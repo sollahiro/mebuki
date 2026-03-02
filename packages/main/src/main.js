@@ -6,13 +6,21 @@ app.name = 'mebuki';
 const log = require('electron-log');
 const { autoUpdater } = require('electron-updater');
 
+const os = require('os');
 const Store = require('electron-store');
 const { spawn, exec } = require('child_process');
 const fs = require('fs');
 const McpConfigManager = require('./mcpConfigManager');
 const keytar = require('keytar');
 
-const store = new Store();
+// .config/mebuki を基準パスにする
+const customUserDataPath = process.platform === 'win32'
+  ? path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'mebuki')
+  : path.join(os.homedir(), '.config', 'mebuki');
+
+const store = new Store({
+  cwd: customUserDataPath
+});
 const isDev = !app.isPackaged;
 const isDevFrontend = process.env.ELECTRON_DEV === 'true';
 const FASTAPI_PORT = 8765;
@@ -108,7 +116,7 @@ async function startFastAPIServer() {
       console.log(`   Mode: Development (Python)`);
 
       // 開発モードでもユーザーデータパスを渡す（テスト・検証用）
-      const userDataPath = app.getPath('userData');
+      const userDataPath = customUserDataPath;
       const assetsPath = getAssetPath('');
 
       fastApiProcess = spawn(executablePath, [
@@ -135,7 +143,7 @@ async function startFastAPIServer() {
       const backendRoot = path.dirname(executablePath);
 
       // 永続データ保存先のパスを取得
-      const userDataPath = app.getPath('userData');
+      const userDataPath = customUserDataPath;
       const cachePath = path.join(userDataPath, 'analysis_cache');
       const dataPath = path.join(userDataPath, 'data');
       const reportsPath = path.join(userDataPath, 'reports');

@@ -129,7 +129,7 @@ class DataService:
         metrics = analyzer._calculate_metrics(code, annual_data, prices, analysis_years)
         
         # EDINETデータの取得
-        edinet_data = analyzer._fetch_edinet_data(code, financial_data, max_documents=max_documents)
+        edinet_data = analyzer.fetch_edinet_reports(code, financial_data, max_documents=max_documents)
         
         from datetime import datetime
         result = {

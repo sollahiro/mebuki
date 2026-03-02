@@ -31,9 +31,9 @@ class McpConfigManager {
 
         const mcpPath = path.join(this.projectRoot, 'packages', 'mcp', 'dist', 'index.js');
         const home = os.homedir();
-        const userDataPath = process.platform === 'darwin'
-            ? path.join(home, 'Library/Application Support/mebuki')
-            : path.join(process.env.APPDATA || '', 'mebuki');
+        const userDataPath = process.platform === 'win32'
+            ? path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'mebuki')
+            : path.join(home, '.config', 'mebuki');
 
         const binName = process.platform === 'win32' ? 'mebuki-backend.exe' : 'mebuki-backend';
         const backendBin = this.backendBin || (this.isDev

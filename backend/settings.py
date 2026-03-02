@@ -1,4 +1,5 @@
 import os
+import sys
 import logging
 import keyring
 from pathlib import Path
@@ -17,51 +18,54 @@ class SettingsStore:
     また、起動時にファイル（config.json）から以前の設定を読み込みます。
     """
     
+    def _get_default_user_data_path(self) -> Path:
+        """プラットフォームに応じたデフォルトのユーザーデータパスを返します。"""
+        if os.environ.get("MEBUKI_USER_DATA_PATH"):
+            return Path(os.environ["MEBUKI_USER_DATA_PATH"])
+        
+        # XDG規格に近い ~/.config/mebuki をデフォルトにします（macOS/Linux共通）
+        if sys.platform == "win32":
+            return Path(os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))) / "mebuki"
+        else:
+            return Path.home() / ".config" / "mebuki"
+
     def __init__(self):
-        # 環境変数に依存せず、常にデフォルト値で初期化します。
-        # 設定値はElectron側からAPIを通じてアップデートされることを前提とします。
+        # ユーザーデータパスの決定
+        self.user_data_path = self._get_default_user_data_path()
         
-        user_data_path = os.environ.get("MEBUKI_USER_DATA_PATH")
-        if not user_data_path:
-            # macOS の標準的な Application Support パスを計算
-            app_support = Path.home() / "Library" / "Application Support" / "mebuki"
-            user_data_path = str(app_support)
-            logger.info(f"MEBUKI_USER_DATA_PATH not set. Defaulting to: {user_data_path}")
+        cache_dir = self.user_data_path / "analysis_cache"
+        data_dir = self.user_data_path / "data"
+        reports_dir = self.user_data_path / "reports"
         
-        user_data_path_obj = Path(user_data_path)
-        cache_dir = str(user_data_path_obj / "analysis_cache")
-        data_dir = str(user_data_path_obj / "data")
-        reports_dir = str(user_data_path_obj / "reports")
+        self.user_data_path.mkdir(parents=True, exist_ok=True)
+        cache_dir.mkdir(exist_ok=True)
+        data_dir.mkdir(exist_ok=True)
+        reports_dir.mkdir(exist_ok=True)
         
-        user_data_path_obj.mkdir(parents=True, exist_ok=True)
-        Path(cache_dir).mkdir(exist_ok=True)
-        Path(data_dir).mkdir(exist_ok=True)
-        Path(reports_dir).mkdir(exist_ok=True)
-        
-        logger.info(f"Using persistent storage at: {user_data_path}")
+        logger.info(f"Using persistent storage at: {self.user_data_path}")
 
         self._settings: Dict[str, Any] = {
             "jquantsApiKey": "",
             "edinetApiKey": "",
             "analysisYears": 5,
-            "jquantsPlan": "free",
-            "cacheDir": cache_dir,
+            "llmProvider": "none", # 初期値は none
+            "cacheDir": str(cache_dir),
             "cacheEnabled": True,
-            "dataDir": data_dir,
-            "reportsDir": reports_dir,
+            "dataDir": str(data_dir),
+            "reportsDir": str(reports_dir),
             "mcpEnabled": True,
         }
         
-        self.config_path = user_data_path_obj / "config.json"
+        self.config_path = self.user_data_path / "config.json"
         
         # ファイルから既存の設定をロード
         self._load_from_file(self.config_path)
         
-        logger.info(f"Initialized SettingsStore with cache_dir: {cache_dir}, config: {self.config_path}")
+        logger.info(f"Initialized SettingsStore with config: {self.config_path}")
 
     def _load_from_file(self, config_path: Path) -> None:
         """
-        electron-store が作成する config.json から設定を読み込みます。
+        electron-store または CLI が作成する config.json から設定を読み込みます。
         """
         if not config_path.exists():
             logger.info(f"Config file not found at {config_path}. Using defaults.")
@@ -77,8 +81,8 @@ class SettingsStore:
                 "jquantsApiKey": "jquantsApiKey",
                 "edinetApiKey": "edinetApiKey",
                 "analysisYears": "analysisYears",
-                "jquantsPlan": "jquantsPlan",
                 "cacheEnabled": "cacheEnabled",
+                "llmProvider": "llmProvider",
             }
             
             for store_key, settings_key in mapping.items():
@@ -89,15 +93,55 @@ class SettingsStore:
         except Exception as e:
             logger.error(f"Failed to load settings from {config_path}: {e}")
     
-    def update(self, settings: Dict[str, Any]) -> None:
+    def save(self) -> bool:
+        """
+        現在の設定を config.json に保存します（CLIモード用）。
+        APIキーはキーチェーンに保存されるため、ここには保存しません（またはマスクします）。
+        """
+        try:
+            import json
+            # 保存対象から機密情報を除外または整理
+            save_data = self._settings.copy()
+            
+            # electron-store との互換性のため、APIキーは空文字にしておく（キーチェーン優先のため）
+            save_data["jquantsApiKey"] = ""
+            save_data["edinetApiKey"] = ""
+            
+            # jquantsPlan は保存しない
+            if "jquantsPlan" in save_data:
+                del save_data["jquantsPlan"]
+            
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                json.dump(save_data, f, indent=2, ensure_ascii=False)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to save settings to {self.config_path}: {e}")
+            return False
+
+    def update(self, settings: Dict[str, Any], save: bool = False) -> None:
         """
         設定を一括更新します。
         
         Args:
             settings: 更新する設定の辞書
+            save: ファイルに即座に保存するか（CLI利用時など）
         """
-        self._settings.update(settings)
+        # APIキーが含まれている場合はキーチェーンに保存
+        for key in ["jquantsApiKey", "edinetApiKey"]:
+            if settings.get(key):
+                try:
+                    keyring.set_password("mebuki", key, settings[key])
+                    # メモリ上の値は空にして、取得時にキーチェーンを参照させる
+                    self._settings[key] = ""
+                except Exception as e:
+                    logger.error(f"Failed to save {key} to keychain: {e}")
+        
+        # その他の設定を更新
+        self._settings.update({k: v for k, v in settings.items() if k not in ["jquantsApiKey", "edinetApiKey"]})
         self._settings["mcpEnabled"] = True
+        
+        if save:
+            self.save()
     
     def get(self, key: str, default: Any = None) -> Any:
         """
@@ -115,9 +159,12 @@ class SettingsStore:
             
         # APIキーの場合はキーチェーンから取得を試みる
         if key in ["jquantsApiKey", "edinetApiKey"]:
-            val = keyring.get_password("mebuki", key)
-            if val:
-                return val
+            try:
+                val = keyring.get_password("mebuki", key)
+                if val:
+                    return val
+            except Exception as e:
+                logger.debug(f"Keychain access error for {key}: {e}")
                 
         return self._settings.get(key, default)
     
@@ -133,9 +180,12 @@ class SettingsStore:
         
         # キーチェーンから値を上書き
         for key in ["jquantsApiKey", "edinetApiKey"]:
-            val = keyring.get_password("mebuki", key)
-            if val:
-                settings[key] = val
+            try:
+                val = keyring.get_password("mebuki", key)
+                if val:
+                    settings[key] = val
+            except:
+                pass
                 
         return settings
     

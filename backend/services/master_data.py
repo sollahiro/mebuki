@@ -32,7 +32,21 @@ class MasterDataManager:
         if assets_dir:
             csv_path = Path(assets_dir) / "data_j.csv"
         else:
-            csv_path = Path("assets/data_j.csv")
+            # 探索候補
+            candidates = [
+                Path("assets/data_j.csv"),
+                Path(__file__).parent.parent.parent / "assets" / "data_j.csv",
+                # インストール環境を想定
+                Path(settings_store.user_data_path) / "assets" / "data_j.csv",
+            ]
+            csv_path = None
+            for p in candidates:
+                if p.exists():
+                    csv_path = p
+                    break
+            
+            if not csv_path:
+                csv_path = Path("assets/data_j.csv") # デフォルト
             
         logger.info(f"銘柄マスタを読み込んでいます: {csv_path}")
         
