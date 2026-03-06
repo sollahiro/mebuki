@@ -267,7 +267,7 @@ def cmd_interactive():
                 "MCP連携アクション:",
                 choices=[
                     {"name": "🚀 サーバー起動 (start)", "value": "start"},
-                    {"name": "📥 Claude Desktop への登録 (install)", "value": "install"},
+                    {"name": "📥 Claude Desktop への登録 (install-claude)", "value": "install-claude"},
                     {"name": "🦆 Goose への登録 (install-goose)", "value": "install-goose"},
                     {"name": "⬅️ 戻る", "value": "back"}
                 ]
@@ -304,7 +304,7 @@ def cmd_mcp(args, parser):
         except KeyboardInterrupt:
             pass
 
-    elif args.mcp_subcommand == "install":
+    elif args.mcp_subcommand == "install-claude":
         print("\nClaude Desktop への MCP サーバー登録を試みています...")
         
         import os
@@ -446,7 +446,7 @@ def main():
     # mcp
     mcp_parser = subparsers.add_parser("mcp", help="MCP連携管理")
     mcp_sub = mcp_parser.add_subparsers(dest="mcp_subcommand")
-    mcp_sub.add_parser("install", help="Claude Desktop に登録")
+    mcp_sub.add_parser("install-claude", help="Claude Desktop に登録")
     mcp_sub.add_parser("install-goose", help="Goose に登録")
     mcp_sub.add_parser("start", help="MCPサーバーを起動 (STDIO)")
 

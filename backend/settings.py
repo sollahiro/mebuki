@@ -13,8 +13,8 @@ class SettingsStore:
     """
     設定ストア（メモリ上で設定を保持）
     
-    Electronアプリの起動時または設定変更時に、フロントエンドからAPIを通じて
-    送られてくる設定値（APIキー等）を保持します。
+    CLI や MCP サーバーの起動時または設定変更時に、
+    設定値（APIキー等）を保持します。
     また、起動時にファイル（config.json）から以前の設定を読み込みます。
     """
     
@@ -65,7 +65,7 @@ class SettingsStore:
 
     def _load_from_file(self, config_path: Path) -> None:
         """
-        electron-store または CLI が作成する config.json から設定を読み込みます。
+        CLI や設定変更で作成される config.json から設定を読み込みます。
         """
         if not config_path.exists():
             logger.info(f"Config file not found at {config_path}. Using defaults.")
@@ -103,7 +103,7 @@ class SettingsStore:
             # 保存対象から機密情報を除外または整理
             save_data = self._settings.copy()
             
-            # electron-store との互換性のため、APIキーは空文字にしておく（キーチェーン優先のため）
+            # APIキーは空文字にしておく（キーチェーン優先のため）
             save_data["jquantsApiKey"] = ""
             save_data["edinetApiKey"] = ""
             
