@@ -10,7 +10,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
-
     strategy:
       matrix:
         os: [macos-latest]
@@ -19,55 +18,46 @@ jobs:
       - name: Check out Git repository
         uses: actions/checkout@v4
 
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Install Python Dependencies
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: latest
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Build CLI Binary (PyInstaller)
         run: |
-          python -m venv venv
-          ./venv/bin/python -m pip install --upgrade pip
-          ./venv/bin/pip install -r requirements.txt
-          ./venv/bin/pip install pyinstaller
+          # Use poetry run to ensure pyinstaller is available in the venv
+          poetry run pip install pyinstaller
+          poetry run pyinstaller --onefile --name mebuki mebuki/cli.py --add-data "assets/data_j.csv:assets" --add-data "backend/prompts.py:backend"
         shell: bash
 
-      - name: Install Dependencies
-        run: npm install
-
-      - name: Build and Package
+      - name: Package Binary
         run: |
-          # macOS: 各ビルドステップを明示的に実行
-          npm run build:renderer
-          npm run build:mcp
-          bash ./scripts/build_backend.sh
-          npx electron-builder --mac --arm64 -p never
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-          CSC_NAME: "43FA9FD3490135B9D5CC0B775D2887D107779E47"
+          mkdir -p release
+          cp dist/mebuki release/
+          cd release
+          tar -czvf mebuki-macos-arm64.tar.gz mebuki
         shell: bash
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}-build
-          path: release/*
+          path: release/mebuki-macos-arm64.tar.gz
 
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v1
         with:
-          files: release/*
+          files: release/mebuki-macos-arm64.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -76,7 +76,7 @@ class SettingsStore:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config_data = json.load(f)
                 
-            # 各設定値をマッピング（electron-storeのキー名に合わせる）
+            # 各設定値をマッピング
             mapping = {
                 "jquantsApiKey": "jquantsApiKey",
                 "edinetApiKey": "edinetApiKey",

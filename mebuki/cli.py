@@ -3,6 +3,7 @@ import sys
 import json
 import logging
 from typing import List, Dict, Any, Optional
+from mebuki import __version__
 from backend.settings import settings_store
 from backend.services.master_data import master_data_manager
 
@@ -365,14 +366,22 @@ def cmd_mcp(args, parser):
         if not config_path.parent.exists():
             print(f"Claude Desktop の設定ディレクトリが見つかりません: {config_path.parent}")
         else:
-            # 実行可能パスの取得（venv環境を優先）
-            executable = sys.executable
+            # 実行可能パスの取得
+            if getattr(sys, 'frozen', False):
+                # PyInstallerなどでパッケージ化されている場合
+                executable = sys.executable
+                args = ["mcp", "start"]
+            else:
+                # 通常のPython実行の場合
+                executable = sys.executable
+                args = ["-m", "mebuki.cli", "mcp", "start"]
+            
             project_root = str(Path(__file__).parent.parent.absolute())
             
             # 登録内容の作成
             mcp_config = {
                 "command": executable,
-                "args": ["-m", "mebuki.cli", "mcp", "start"],
+                "args": args,
                 "env": {
                     "PYTHONPATH": project_root,
                     "MEBUKI_USER_DATA_PATH": str(settings_store.user_data_path)
@@ -409,20 +418,18 @@ def cmd_mcp(args, parser):
             print(f"Goose の設定ディレクトリが見つかりません: {config_path.parent}")
             return
 
-        executable = sys.executable
-        project_root = str(Path(__file__).parent.parent.absolute())
-
-        # Goose用の設定 (YAML形式)
-        # 簡易的に追加するために既存のファイルを読み込んで解析するか、追記する
         try:
-            import yaml
-        except ImportError:
-            print("YAMLライブラリが見つからないため、インストールを試みます...")
-            import subprocess
-            subprocess.run([sys.executable, "-m", "pip", "install", "pyyaml"], check=True)
-            import yaml
+            # 実行可能パスの取得
+            if getattr(sys, 'frozen', False):
+                executable = sys.executable
+                cmd_args = ["mcp", "start"]
+            else:
+                executable = sys.executable
+                cmd_args = ["-m", "mebuki.cli", "mcp", "start"]
 
-        try:
+            project_root = str(Path(__file__).parent.parent.absolute())
+
+            # Goose用の設定 (YAML形式)
             config_data = {"extensions": {}}
             if config_path.exists():
                 with open(config_path, "r", encoding="utf-8") as f:
@@ -437,7 +444,7 @@ def cmd_mcp(args, parser):
                 "description": "Expert investment analyst tool for Japanese stocks. Provides high-precision financial data from J-QUANTS and EDINET.",
                 "type": "stdio",
                 "cmd": executable,
-                "args": ["-m", "mebuki.cli", "mcp", "start"],
+                "args": cmd_args,
                 "envs": {
                     "PYTHONPATH": project_root,
                     "MEBUKI_USER_DATA_PATH": str(settings_store.user_data_path)
@@ -464,6 +471,7 @@ def main():
 
     print_banner()
     parser = argparse.ArgumentParser(description="mebuki: 投資分析ツール CLI")
+    parser.add_argument("--version", action="version", version=f"mebuki {__version__}")
     subparsers = parser.add_subparsers(dest="command", help="サブコマンド")
     
     # search
