@@ -80,9 +80,19 @@ def extract_annual_data(
                 continue
             
             # 現在日付より未来の年度は除外
-            # 例: 2025/12/31時点で2026年3月のデータは除外
-            if year > current_year or (year == current_year and month > current_month):
-                continue
+            # 例: 2026/03/07時点で2026/03/31のデータは除外
+            try:
+                if len(fy_end) == 8:
+                    fy_end_dt = datetime.strptime(fy_end, "%Y%m%d")
+                else:
+                    fy_end_dt = datetime.strptime(fy_end[:10], "%Y-%m-%d")
+                
+                if fy_end_dt > today:
+                    continue
+            except (ValueError, TypeError):
+                # パース失敗時は念のため旧ロジックでフォールバック
+                if year > current_year or (year == current_year and month > current_month):
+                    continue
         
         # 主要財務データが全てN/Aの場合は除外（converters.pyの関数を使用）
         if not is_valid_financial_record(record):
