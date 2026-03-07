@@ -68,6 +68,9 @@ jobs:
           # Clone the tap repository
           git clone https://x-access-token:${{ secrets.HOMEBREW_TAP_TOKEN }}@github.com/sollahiro/homebrew-mebuki.git homebrew-tap
           
+          # Ensure Formula directory exists (handles empty repo)
+          mkdir -p homebrew-tap/Formula
+          
           # Update the formula file in the tap repo
           # We use the template from the main repo
           cat Formula/mebuki.rb | \
@@ -80,6 +83,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/mebuki.rb
           git commit -m "Update mebuki to v${VERSION}" || echo "No changes to commit"
+          git branch -M main
           git push origin main
         shell: bash
         env:
