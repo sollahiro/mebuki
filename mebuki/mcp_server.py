@@ -226,18 +226,18 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             )
             
             latest_report = next((d for d in docs if d.get("docTypeCode") in ["120", "140"]), None)
-            mda_text = None
+            sections = {}
             if latest_report:
                 doc_id = latest_report["docID"]
                 xbrl_dir = await asyncio.to_thread(data_service.edinet_client.download_document, doc_id, doc_type=1)
                 if xbrl_dir:
                     from mebuki.analysis.xbrl_parser import XBRLParser
                     parser = XBRLParser()
-                    mda_text = parser.extract_mda(xbrl_dir)
+                    sections = parser.extract_sections_by_type(xbrl_dir)
             
             res = {
                 "documents": docs,
-                "latest_report_mda": mda_text,
+                "sections": sections,
                 "latest_report_info": latest_report
             }
             return [TextContent(type="text", text=json.dumps(res, indent=2, ensure_ascii=False))]
@@ -287,8 +287,8 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                 raise ValueError("Document not found or download failed")
             from mebuki.analysis.xbrl_parser import XBRLParser
             parser = XBRLParser()
-            mda_text = parser.extract_mda(xbrl_dir)
-            return [TextContent(type="text", text=json.dumps({"mda": mda_text}, indent=2, ensure_ascii=False))]
+            sections = parser.extract_sections_by_type(xbrl_dir)
+            return [TextContent(type="text", text=json.dumps({"sections": sections}, indent=2, ensure_ascii=False))]
 
         elif name == "mebuki_japan_stock_expert_analysis":
             code = validate_stock_code(str(arguments["code"]))

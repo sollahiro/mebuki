@@ -199,7 +199,7 @@ class XBRLParser:
             MD&Aテキスト
         """
         sections = self.extract_sections_by_type(xbrl_dir)
-        return sections.get('D')
+        return sections.get('mda')
     
     
     def _detect_report_type(self, xbrl_dir: Path) -> str:
@@ -541,8 +541,8 @@ class XBRLParser:
         # 新しいメソッドを使用してセクションを抽出
         sections = self.extract_sections_by_type(xbrl_dir)
         
-        # セクションを順序付きで結合（A→B→C...の順）
-        section_order = sorted(sections.keys())
+        # セクションを定義順（XBRL_SECTIONS）で結合
+        section_order = list(sections.keys())
         combined_texts = []
         for section_id in section_order:
             text = sections[section_id]
