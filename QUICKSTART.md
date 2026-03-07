@@ -4,10 +4,17 @@
 
 ### インストール
 
-1. [GitHub Releases](https://github.com/sollahiro/mebuki/releases)から最新版をダウンロード
+1. macOS (Homebrew) - **推奨**
+   ```bash
+   brew tap sollahiro/mebuki
+   brew install mebuki
+   ```
+
+2. バイナリ直接ダウンロード
+   - [GitHub Releases](https://github.com/sollahiro/mebuki/releases)から最新版をダウンロード
    - **macOS**: `mebuki-macos-arm64.tar.gz` をダウンロード
 
-2. 展開と配置
+3. 展開と配置
    - ダウンロードしたファイルを解凍し、中にある `mebuki` バイナリを手元の適当なパスの通ったディレクトリ（例: `/usr/local/bin`）にコピーするか、そのまま実行してください。
 
 3. 初期設定

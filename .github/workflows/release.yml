@@ -54,6 +54,37 @@ jobs:
           name: ${{ matrix.os }}-build
           path: release/mebuki-macos-arm64.tar.gz
 
+      - name: Calculate SHA256
+        run: |
+          SHA256=$(shasum -a 256 release/mebuki-macos-arm64.tar.gz | awk '{ print $1 }')
+          echo "SHA256=$SHA256" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Update Homebrew Formula
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          SHA256=${{ env.SHA256 }}
+          
+          # Clone the tap repository
+          git clone https://x-access-token:${{ secrets.HOMEBREW_TAP_TOKEN }}@github.com/sollahiro/homebrew-mebuki.git homebrew-tap
+          
+          # Update the formula file in the tap repo
+          # We use the template from the main repo
+          cat Formula/mebuki.rb | \
+            sed "s|url \".*\"|url \"https://github.com/sollahiro/mebuki/releases/download/v${VERSION}/mebuki-macos-arm64.tar.gz\"|" | \
+            sed "s|sha256 \".*\"|sha256 \"${SHA256}\"|" | \
+            sed "s|version \".*\"|version \"${VERSION}\"|" > homebrew-tap/Formula/mebuki.rb
+          
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/mebuki.rb
+          git commit -m "Update mebuki to v${VERSION}" || echo "No changes to commit"
+          git push origin main
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v1
