@@ -16,9 +16,26 @@ class MasterDataManager:
     """銘柄マスタ（CSV）の読み込み、保持、検索を行うクラス"""
     
     def __init__(self):
-        self._master_data: List[Dict[str, Any]] = []
         self._is_loaded = False
         
+    def _normalize_name(self, name: str) -> str:
+        """
+        検索用の名称正規化
+        1. NFKC正規化（全角英数を半角に、半角カナを全角に）
+        2. 大文字化
+        3. 中点（・, ･）の除去
+        4. スペース（全角・半角）の除去
+        """
+        if not name:
+            return ""
+        # 1. NFKC + Upper
+        normalized = unicodedata.normalize('NFKC', name).upper()
+        # 2. 中点の除去
+        normalized = normalized.replace('・', '').replace('･', '')
+        # 3. スペースの除去
+        normalized = "".join(normalized.split())
+        return normalized
+
     def load_if_needed(self) -> bool:
         """必要に応じてマスタデータをロード"""
         if not self._is_loaded:
@@ -75,13 +92,13 @@ class MasterDataManager:
                 # 市場名のクリーンアップ（事前に行う）
                 clean_market = market.split("（")[0].split("(")[0]
                 
-                # 検索用正規化名称（全角英数を半角に、半角カナを全角に）
-                normalized_name = unicodedata.normalize('NFKC', row.get("銘柄名", "")).upper()
+                # 検索用正規化名称
+                normalized_name = self._normalize_name(row.get("銘柄名", ""))
                 
                 processed_data.append({
                     "Code": row.get("コード", ""),
                     "CoName": row.get("銘柄名", ""),
-                    "CoNameUpper": row.get("銘柄名", "").upper(), # 検索高速化用
+                    "CoNameUpper": row.get("銘柄名", "").upper(), # 互換性維持のため残すが、基本はNormalizedを使用
                     "CoNameNormalized": normalized_name, # 正規化済み名称
                     "S33Nm": row.get("33業種区分", ""),
                     "MktNm": clean_market,
@@ -108,8 +125,7 @@ class MasterDataManager:
         if not query:
             return []
             
-        query_upper = query.strip().upper()
-        query_normalized = unicodedata.normalize('NFKC', query_upper)
+        query_normalized = self._normalize_name(query)
         results = []
         
         for item in self._master_data:
@@ -119,10 +135,11 @@ class MasterDataManager:
             
             # マッチング
             # 1. コード完全一致 または 4桁コード前方一致
+            query_upper = query.strip().upper() # コード比較用には単純なUpperを使用
             is_match = (query_upper == code) or (code.startswith(query_upper) and len(query_upper) == 4)
-            # 2. 名称部分一致（大文字小文字無視・全角半角正規化）
+            # 2. 名称部分一致（正規化済み名称で比較）
             if not is_match:
-                is_match = (query_upper in name_upper) or (query_normalized in name_normalized)
+                is_match = (query_normalized in name_normalized)
             
             if is_match:
                 results.append({
