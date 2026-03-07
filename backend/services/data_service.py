@@ -100,7 +100,7 @@ class DataService:
             "code": code
         }
 
-    async def get_raw_analysis_data(self, code: str, use_cache: bool = True, max_documents: int = 2) -> Dict[str, Any]:
+    async def get_raw_analysis_data(self, code: str, use_cache: bool = True, max_documents: int = 2, analysis_years: Optional[int] = None) -> Dict[str, Any]:
         """
         AI分析抜きの純粋な分析データを取得（財務指標 + 有報テキスト）
         """
@@ -110,6 +110,7 @@ class DataService:
         if use_cache:
             cached = self.cache_manager.get(f"individual_analysis_{code}")
             if cached:
+                # 指定された年数とキャッシュの年数が異なる場合は再取得を検討（簡略化のため現状はそのまま返す）
                 # AI分析結果を除去して返す
                 if "llm_financial_analysis" in cached:
                     del cached["llm_financial_analysis"]
@@ -122,11 +123,11 @@ class DataService:
             
         # 指標計算
         available_years = len(annual_data)
-        max_years = settings_store.get_max_analysis_years()
-        analysis_years = min(available_years, max_years)
+        max_years = analysis_years or settings_store.get_max_analysis_years()
+        actual_analysis_years = min(available_years, max_years)
         
-        prices = analyzer._fetch_prices(code, annual_data, analysis_years)
-        metrics = analyzer._calculate_metrics(code, annual_data, prices, analysis_years)
+        prices = analyzer._fetch_prices(code, annual_data, actual_analysis_years)
+        metrics = analyzer._calculate_metrics(code, annual_data, prices, actual_analysis_years)
         
         # EDINETデータの取得
         edinet_data = analyzer.fetch_edinet_reports(code, financial_data, max_documents=max_documents)

@@ -79,12 +79,15 @@ async def cmd_analyze(args):
         print(f"エラー: 銘柄コード {code} が見つかりません。")
         return
     
+    # 分析年数の決定
+    years_to_analyze = args.years or settings_store.analysis_years or 5
+    
     print(f"\n分析中: {code} {info['name']} ({info['market_name']}) ...")
+    print(f"分析対象期間: 直近 {years_to_analyze} 年分")
     
     try:
         # data_service を使って生の財務データを取得
-        years = args.years or settings_store.analysis_years or 5
-        result = await data_service.get_raw_analysis_data(code, use_cache=not args.no_cache)
+        result = await data_service.get_raw_analysis_data(code, use_cache=not args.no_cache, analysis_years=years_to_analyze)
         
         if not result or not result.get("metrics"):
             print("エラー: 財務データの取得に失敗しました。APIキーが正しく設定されているか確認してください。")
@@ -94,42 +97,82 @@ async def cmd_analyze(args):
             print(json.dumps(result, indent=2, ensure_ascii=False))
             return
             
-        # 簡易的なテーブル表示
+        # 指標データの取得
         metrics = result.get("metrics", {})
         years_data = metrics.get("years", [])
         if not years_data:
             print("エラー: 指標データが見つかりませんでした。")
             return
             
-        latest_fy_data = years_data[0]
-        calc_data = latest_fy_data.get("CalculatedData", {})
-        
-        print(f"\n[主要財務指標 (直近年度: {latest_fy_data.get('fy_end', '不明')})]")
-        print("-" * 50)
-        
-        # 指標の計算と整理
-        sales = calc_data.get("Sales", 0)
-        op = calc_data.get("OP", 0)
-        eq = calc_data.get("Eq", 0)
-        assets = calc_data.get("TotalAssets", 0) or calc_data.get("Assets", 0)
-        
-        op_margin = (op / sales * 100) if sales else None
-        eq_ratio = (eq / assets * 100) if assets else None
-        
-        display_list = [
-            ("ROE", "ROE (%)", calc_data.get("ROE")),
-            ("ROIC", "ROIC (%)", calc_data.get("SimpleROIC")),
-            ("Margin", "営業利益率 (%)", op_margin if op_margin is not None else calc_data.get("OperatingMargin")),
-            ("Equity", "自己資本比率 (%)", eq_ratio if eq_ratio is not None else calc_data.get("EquityRatio")),
-            ("PER", "PER (倍)", calc_data.get("PER")),
-            ("PBR", "PBR (倍)", calc_data.get("PBR")),
-            ("Yield", "配当利回り (%)", calc_data.get("DividendYield")),
-        ]
-        
-        for key, label, val in display_list:
-            if val is not None:
-                print(f"{label:<22}: {val:>12.2f}")
-        print("-" * 50)
+        # 1年のみの場合は従来の表示に近い形式
+        if years_to_analyze == 1:
+            latest_fy_data = years_data[0]
+            calc_data = latest_fy_data.get("CalculatedData", {})
+            
+            print(f"\n[主要財務指標 (直近年度: {latest_fy_data.get('fy_end', '不明')})]")
+            print("-" * 50)
+            
+            display_list = [
+                ("ROE", "ROE (%)", calc_data.get("ROE")),
+                ("ROIC", "ROIC (%)", calc_data.get("SimpleROIC")),
+                ("Margin", "営業利益率 (%)", calc_data.get("OperatingMargin") or (calc_data.get("OP") / calc_data.get("Sales") * 100 if calc_data.get("Sales") else None)),
+                ("Equity", "自己資本比率 (%)", calc_data.get("EquityRatio") or (calc_data.get("Eq") / (calc_data.get("TotalAssets") or calc_data.get("Assets")) * 100 if (calc_data.get("TotalAssets") or calc_data.get("Assets")) else None)),
+                ("PER", "PER (倍)", calc_data.get("PER")),
+                ("PBR", "PBR (倍)", calc_data.get("PBR")),
+                ("Yield", "配当利回り (%)", calc_data.get("DividendYield")),
+            ]
+            
+            for key, label, val in display_list:
+                if val is not None:
+                    print(f"{label:<22}: {val:>12.2f}")
+            print("-" * 50)
+        else:
+            # 複数年度の場合は横並びのテーブル表示
+            print(f"\n[主要財務指標の推移]")
+            
+            # ヘッダー作成（年度）
+            headers = ["項目 \\ 年度"]
+            periods = []
+            for y_data in reversed(years_data): # 古い順に表示
+                fy_end = y_data.get("fy_end", "不明")
+                if len(fy_end) == 8:
+                    period_str = f"{fy_end[2:4]}/{fy_end[4:6]}"
+                else:
+                    period_str = fy_end[2:7] # YY-MM
+                headers.append(period_str)
+                periods.append(y_data)
+            
+            row_format = "{:<16}" + " {:>10}" * len(periods)
+            print("-" * (16 + 11 * len(periods)))
+            print(row_format.format(*headers))
+            print("-" * (16 + 11 * len(periods)))
+            
+            # 各指標の行を作成
+            def get_op_margin(c):
+                return c.get("OperatingMargin") or (c.get("OP") / c.get("Sales") * 100 if c.get("Sales") else None)
+            
+            def get_eq_ratio(c):
+                return c.get("EquityRatio") or (c.get("Eq") / (c.get("TotalAssets") or c.get("Assets")) * 100 if (calc_data.get("TotalAssets") or calc_data.get("Assets")) else None)
+
+            metrics_to_show = [
+                ("売上高 (百万)", lambda c: c.get("Sales")),
+                ("営業利益 (百万)", lambda c: c.get("OP")),
+                ("ROE (%)", lambda c: c.get("ROE")),
+                ("ROIC (%)", lambda c: c.get("SimpleROIC")),
+                ("営業利益率 (%)", get_op_margin),
+                ("PER (倍)", lambda c: c.get("PER")),
+                ("PBR (倍)", lambda c: c.get("PBR")),
+            ]
+            
+            for label, func in metrics_to_show:
+                row = [label]
+                for p in periods:
+                    val = func(p.get("CalculatedData", {}))
+                    row.append(f"{val:>10.2f}" if val is not None else f"{'-':>10}")
+                print(row_format.format(*row))
+            
+            print("-" * (16 + 11 * len(periods)))
+            
         print("\n詳細な分析や定性情報は MCP版（Claude等）をご利用ください。")
         
     except Exception as e:
