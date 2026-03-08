@@ -519,9 +519,9 @@ def main():
         import asyncio
         asyncio.run(cmd_analyze(args))
     elif args.command == "config":
-        cmd_config(args, config_parser)
+        cmd_config(args, parser)
     elif args.command == "mcp":
-        cmd_mcp(args, mcp_parser)
+        cmd_mcp(args, parser)
     else:
         parser.print_help()
 

@@ -1,6 +1,6 @@
 # プロジェクト構造と責務
 
-このドキュメントは、`mebuki` の現行アーキテクチャ（`backend` 互換レイヤー導入後）を説明します。
+このドキュメントは、`mebuki` の現行アーキテクチャを説明します。
 
 ## 現行構造
 
@@ -16,7 +16,6 @@ mebuki/
 │   ├── analysis/          # 財務計算・XBRL解析
 │   ├── constants/
 │   └── utils/
-├── backend/               # 互換レイヤー（再エクスポートのみ）
 └── assets/                # 銘柄マスタ等
 ```
 
@@ -25,12 +24,10 @@ mebuki/
 - `mebuki.app` -> `mebuki.services`
 - `mebuki.services` -> `mebuki.analysis | mebuki.api | mebuki.infrastructure | mebuki.utils`
 - `mebuki.infrastructure` は `app/services` を参照しない
-- `backend.*` は deprecated 互換レイヤーとして `mebuki.*` を再エクスポート
 
 ## 互換性ポリシー
 
 - CLI (`mebuki` コマンド) と MCP ツール名/入出力は維持
-- `backend.*` import は移行期間中のみ維持（deprecation warning を発行）
 - 新規実装は `mebuki.*` 配下のみ追加する
 
 ## 主要フロー

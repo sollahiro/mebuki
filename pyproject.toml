@@ -14,8 +14,7 @@ mebuki = "mebuki.cli:main"
 
 [tool.poetry]
 packages = [
-    {include = "mebuki", from = "."},
-    {include = "backend", from = "."}
+    {include = "mebuki", from = "."}
 ]
 
 [tool.poetry.group.dev.dependencies]

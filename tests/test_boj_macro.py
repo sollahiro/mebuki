@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 # プロジェクトルートをパスに追加
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from backend.utils.boj_client import BOJClient
+from mebuki.infrastructure.boj_client import BOJClient
 from mebuki.utils.cache import CacheManager
 
 class TestBOJMacro(unittest.TestCase):
