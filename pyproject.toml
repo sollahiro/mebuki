@@ -18,6 +18,13 @@ packages = [
     {include = "backend", from = "."}
 ]
 
+[tool.poetry.group.dev.dependencies]
+pytest = "^9.0.0"
+pytest-asyncio = "^1.2.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

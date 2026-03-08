@@ -58,18 +58,25 @@ def prepare_edinet_search_data(
             period_groups[key] = []
         period_groups[key].append(record)
         
-    # 各グループから代表レコード（DiscDateが最小のもの）を選択
+    # 各グループから代表レコードを選択
+    # 1) 検索開始日は最も早い DiscDate を採用
+    # 2) 会計メタデータ（CurFYEn / CurPerEn）は最も新しい有効レコードを優先
     representatives = []
     for key, records in period_groups.items():
-        # DiscDateで昇順ソート（早い順）
-        records.sort(key=lambda x: x.get("DiscDate", ""))
-        best_record = records[0]
-        # 計算したfiscal_yearを付与しておく
+        records_by_disc = sorted(records, key=lambda x: x.get("DiscDate", ""))
+        earliest_record = records_by_disc[0]
+
+        latest_valid = None
+        for record in sorted(records, key=lambda x: x.get("DiscDate", ""), reverse=True):
+            if record.get("CurFYEn") or record.get("CurPerEn"):
+                latest_valid = record
+                break
+        if latest_valid is None:
+            latest_valid = records_by_disc[-1]
+
+        best_record = latest_valid.copy()
+        best_record["DiscDate"] = earliest_record.get("DiscDate", "")
         best_record["fiscal_year"] = key[0]
-        # 正規化したptypeを使うか、元のままにするか。
-        # 後続処理でCurPerTypeを使うので、元の辞書を使いつつfiscal_yearを追加してる。
-        # ただしprepare_edinet_search_dataの戻り値の辞書作成時にCurPerTypeを入れている。
-        # ここでは後でソートや抽出に使うためにリストに加える
         representatives.append(best_record)
 
     # 代表レコードを会計期間終了日で降順ソート（新しい順）

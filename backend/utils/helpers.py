@@ -1,25 +1,16 @@
-"""
-バックエンド共通ユーティリティ
+"""Compatibility layer for legacy imports.
+
+Deprecated: import from `mebuki.infrastructure.helpers`.
 """
 
-def validate_stock_code(code: str) -> str:
-    """
-    銘柄コードのバリデーションと正規化（4桁から5桁への変換）を行う
-    
-    Args:
-        code: 銘柄コード（4桁または5桁）
-        
-    Returns:
-        正規化された5桁の銘柄コード
-        
-    Raises:
-        ValueError: バリデーションエラー時
-    """
-    if not code or len(code) < 4:
-        raise ValueError("銘柄コードは4桁以上で入力してください")
-    
-    # 4桁の場合は0を追加して5桁にする
-    if len(code) == 4:
-        return code + "0"
-    
-    return code
+import warnings
+
+warnings.warn(
+    "backend.utils.helpers is deprecated; use mebuki.infrastructure.helpers",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
+from mebuki.infrastructure.helpers import validate_stock_code
+
+__all__ = ["validate_stock_code"]
