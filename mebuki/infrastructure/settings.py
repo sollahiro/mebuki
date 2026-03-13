@@ -138,7 +138,6 @@ class SettingsStore:
         
         # その他の設定を更新
         self._settings.update({k: v for k, v in settings.items() if k not in ["jquantsApiKey", "edinetApiKey"]})
-        self._settings["mcpEnabled"] = True
         
         if save:
             self.save()
@@ -154,9 +153,6 @@ class SettingsStore:
         Returns:
             設定値
         """
-        if key == "mcpEnabled":
-            return True
-            
         # APIキーの場合はキーチェーンから取得を試みる
         if key in ["jquantsApiKey", "edinetApiKey"]:
             try:
@@ -176,8 +172,7 @@ class SettingsStore:
             全設定の辞書
         """
         settings = self._settings.copy()
-        settings["mcpEnabled"] = True
-        
+
         # キーチェーンから値を上書き
         for key in ["jquantsApiKey", "edinetApiKey"]:
             try:
@@ -259,7 +254,7 @@ class SettingsStore:
 
     @property
     def mcp_enabled(self) -> bool:
-        return True
+        return self._settings.get("mcpEnabled", True)
 
 
     @property

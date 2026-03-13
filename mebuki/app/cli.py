@@ -130,8 +130,8 @@ async def cmd_analyze(args):
             display_list = [
                 ("ROE", "ROE (%)", calc_data.get("ROE")),
                 ("ROIC", "ROIC (%)", calc_data.get("SimpleROIC")),
-                ("Margin", "営業利益率 (%)", calc_data.get("OperatingMargin") or (calc_data.get("OP") / calc_data.get("Sales") * 100 if calc_data.get("Sales") else None)),
-                ("Equity", "自己資本比率 (%)", calc_data.get("EquityRatio") or (calc_data.get("Eq") / (calc_data.get("TotalAssets") or calc_data.get("Assets")) * 100 if (calc_data.get("TotalAssets") or calc_data.get("Assets")) else None)),
+                ("Margin", "営業利益率 (%)", calc_data.get("OperatingMargin") or (calc_data.get("OP") / calc_data.get("Sales") * 100 if calc_data.get("OP") and calc_data.get("Sales") else None)),
+                ("Equity", "自己資本比率 (%)", calc_data.get("EquityRatio") or (calc_data.get("Eq") / (calc_data.get("TotalAssets") or calc_data.get("Assets")) * 100 if calc_data.get("Eq") and (calc_data.get("TotalAssets") or calc_data.get("Assets")) else None)),
                 ("PER", "PER (倍)", calc_data.get("PER")),
                 ("PBR", "PBR (倍)", calc_data.get("PBR")),
                 ("Yield", "配当利回り (%)", calc_data.get("DividendYield")),
@@ -164,11 +164,11 @@ async def cmd_analyze(args):
             
             # 各指標の行を作成
             def get_op_margin(c):
-                return c.get("OperatingMargin") or (c.get("OP") / c.get("Sales") * 100 if c.get("Sales") else None)
-            
+                return c.get("OperatingMargin") or (c.get("OP") / c.get("Sales") * 100 if c.get("OP") and c.get("Sales") else None)
+
             def get_eq_ratio(c):
                 total_assets = c.get("TotalAssets") or c.get("Assets")
-                return c.get("EquityRatio") or (c.get("Eq") / total_assets * 100 if total_assets else None)
+                return c.get("EquityRatio") or (c.get("Eq") / total_assets * 100 if c.get("Eq") and total_assets else None)
 
             metrics_to_show = [
                 ("売上高 (百万)", lambda c: c.get("Sales")),
