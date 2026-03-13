@@ -184,9 +184,9 @@ class SettingsStore:
                 val = keyring.get_password("mebuki", key)
                 if val:
                     settings[key] = val
-            except:
-                pass
-                
+            except Exception as e:
+                logger.debug(f"Keychain access error for {key}: {e}")
+
         return settings
     
     def get_masked(self) -> Dict[str, Any]:

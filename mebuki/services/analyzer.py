@@ -4,6 +4,7 @@
 個別銘柄の詳細分析を実行します。
 """
 
+import copy
 import json
 import logging
 import asyncio
@@ -149,8 +150,8 @@ class IndividualAnalyzer:
                         price = self.api_client.get_price_at_date(code, date_str, use_nearest_trading_day=True)
                         if price:
                             prices[date_str] = price
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"株価個別取得に失敗: {e}")
         return prices
     
     def _calculate_metrics(
@@ -250,7 +251,7 @@ class IndividualAnalyzer:
                     result["metrics"] = metrics
                     result["status"] = "fetching_prices"
                     result["message"] = "株価と有価証券報告書を取得・解析中..."
-                    await queue.put(result.copy())
+                    await queue.put(copy.deepcopy(result))
                 
                 # 株価取得とEDINETデータ検索を並列で開始
                 # EDINETフローはタスクとして生成し、株価取得はgatherで並行実行
@@ -268,7 +269,7 @@ class IndividualAnalyzer:
                     result["metrics"] = metrics
                     result["status"] = "fetching_edinet"
                     result["message"] = "有価証券報告書を取得中..."
-                    await queue.put(result.copy())
+                    await queue.put(copy.deepcopy(result))
                 else:
                     await queue.put({"status": "error", "message": "株価反映後の指標計算に失敗しました"})
                     return
@@ -277,7 +278,7 @@ class IndividualAnalyzer:
                 # メインフロー完了
                 result["status"] = "fetching_edinet"
                 result["message"] = "有価証券報告書を取得中..."
-                await queue.put(result.copy())
+                await queue.put(copy.deepcopy(result))
 
                 await edinet_task
                 
@@ -286,7 +287,7 @@ class IndividualAnalyzer:
                 result["message"] = "分析完了"
                 if self.cache:
                     self.cache.set(cache_key, result.copy())
-                await queue.put(result.copy())
+                await queue.put(copy.deepcopy(result))
 
             except Exception as e:
                 logger.error(f"メインフローエラー: {e}", exc_info=True)
@@ -318,7 +319,7 @@ class IndividualAnalyzer:
                         result["edinet_data"][fy_key_str].append(report)
                     
                     # 準備ができた情報を都度送信
-                    await queue.put(result.copy())
+                    await queue.put(copy.deepcopy(result))
             except Exception as e:
                 logger.error(f"EDINETフローエラー: {e}", exc_info=True)
                 # EDINETのエラーはメインの妨げにしない
@@ -530,26 +531,14 @@ class IndividualAnalyzer:
                 if not found:
                     results[fy_key_str].append(report)
         
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-        if loop.is_running():
-            # すでにループが走っている場合は、このメソッド自体も非同期呼び出しされるべきだが、
-            # 暫定的にスレッドで回すか、呼び出し側を修正する必要がある。
-            # 現在の analyzer.py の中では to_thread で呼ばれているので、新規ループで実行。
-            import threading
-            def run_in_new_loop():
-                new_loop = asyncio.new_event_loop()
-                new_loop.run_until_complete(_run())
-                new_loop.close()
-            t = threading.Thread(target=run_in_new_loop)
-            t.start()
-            t.join()
-        else:
-            loop.run_until_complete(_run())
+        import threading
+        def run_in_new_loop():
+            new_loop = asyncio.new_event_loop()
+            new_loop.run_until_complete(_run())
+            new_loop.close()
+        t = threading.Thread(target=run_in_new_loop)
+        t.start()
+        t.join()
             
         return results
 
@@ -577,7 +566,7 @@ class IndividualAnalyzer:
             result["message"] = "有価証券報告書を再取得中..."
             yield result.copy()
 
-            edinet_data = await asyncio.to_thread(self._fetch_edinet_data, code, financial_data, max_documents=10)
+            edinet_data = await self._fetch_edinet_data_async(code, financial_data, max_documents=10)
             if edinet_data:
                 result["edinet_data"] = edinet_data
             
@@ -590,6 +579,40 @@ class IndividualAnalyzer:
         except Exception as e:
             logger.error(f"EDINET再取得エラー: {e}", exc_info=True)
             yield {"status": "error", "message": str(e)}
+
+
+    async def fetch_analysis_data(
+        self,
+        code: str,
+        analysis_years: int | None = None,
+        max_documents: int = 10,
+    ) -> Dict[str, Any]:
+        """財務指標 + EDINETデータを取得する公開API（use_cache=False）。
+
+        data_service などの上位層が private メソッドを直接呼ばずに済むよう提供する。
+        """
+        stock_info, financial_data, annual_data = await asyncio.to_thread(self._fetch_financial_data, code)
+        if not stock_info or not annual_data:
+            return {}
+
+        available_years = len(annual_data)
+        max_years = analysis_years or settings_store.get_max_analysis_years()
+        actual_years = min(available_years, max_years)
+
+        prices = await asyncio.to_thread(self._fetch_prices, code, annual_data, actual_years)
+        metrics = await asyncio.to_thread(self._calculate_metrics, code, annual_data, prices, actual_years)
+
+        edinet_data = {}
+        if financial_data:
+            edinet_data = await self._fetch_edinet_data_async(code, financial_data, max_documents=max_documents)
+
+        return {
+            "stock_info": stock_info,
+            "financial_data": financial_data,
+            "annual_data": annual_data,
+            "metrics": metrics,
+            "edinet_data": edinet_data,
+        }
 
 
 # 互換性維持

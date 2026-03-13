@@ -206,36 +206,15 @@ class DataService:
                     del cached["llm_financial_analysis"]
                 return cached
 
-        stock_info, financial_data, annual_data = await asyncio.to_thread(analyzer._fetch_financial_data, code)
-        if not stock_info or not annual_data:
+        result = await analyzer.fetch_analysis_data(code, analysis_years, max_documents)
+        if not result:
             return {}
-
-        available_years = len(annual_data)
-        max_years = analysis_years or settings_store.get_max_analysis_years()
-        actual_analysis_years = min(available_years, max_years)
-
-        prices = await asyncio.to_thread(analyzer._fetch_prices, code, annual_data, actual_analysis_years)
-        metrics = await asyncio.to_thread(
-            analyzer._calculate_metrics,
-            code,
-            annual_data,
-            prices,
-            actual_analysis_years,
-        )
-
-        edinet_data = {}
-        if financial_data:
-            edinet_data = await analyzer._fetch_edinet_data_async(
-                code,
-                financial_data,
-                max_documents=max_documents,
-            )
 
         return {
             "code": code,
             **self.fetch_stock_basic_info(code),
-            "metrics": metrics,
-            "edinet_data": edinet_data,
+            "metrics": result["metrics"],
+            "edinet_data": result["edinet_data"],
             "analyzed_at": datetime.now().isoformat(),
         }
 

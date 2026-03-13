@@ -10,16 +10,6 @@ from mebuki.services.master_data import master_data_manager
 
 logger = logging.getLogger(__name__)
 
-# アスキーアート
-WAKABA_ART = r"""
-  ███╗   ███╗███████╗██████╗ ██╗   ██╗██╗  ██╗██╗
-  ████╗ ████║██╔════╝██╔══██╗██║   ██║██║ ██╔╝██║
-  ██╔████╔██║█████╗  ██████╔╝██║   ██║█████╔╝ ██║
-  ██║╚██╔╝██║██╔══╝  ██╔══██╗██║   ██║██╔═██╗ ██║
-  ██║ ╚═╝ ██║███████╗██████╔╝╚██████╔╝██║  ██╗██║ 🌱
-  ╚═╝     ╚═╝╚══════╝╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝
-"""
-
 def print_banner():
     """バナーを水平グラデーション表示 (ブランドカラー: Green -> Cyan)"""
     banner_text = r"""
@@ -71,6 +61,27 @@ def cmd_search(args):
     for item in results:
         print(f"{item['code']:<8} {item['name']:<20} {item['market']:<15} {item['sector']}")
     print("-" * 60)
+
+    import questionary
+    choices = [
+        {"name": f"{item['code']}  {item['name']}  ({item['market']})", "value": item['code']}
+        for item in results
+    ]
+    choices.append({"name": "↩  分析しない / 戻る", "value": None})
+
+    selected = questionary.select(
+        "分析する銘柄を選択してください:",
+        choices=choices,
+    ).ask()
+
+    if selected:
+        import asyncio
+        asyncio.run(cmd_analyze(argparse.Namespace(
+            code=selected,
+            years=None,
+            format="table",
+            no_cache=False,
+        )))
 
 async def cmd_analyze(args):
     """銘柄分析コマンド"""
@@ -269,20 +280,19 @@ def cmd_interactive():
         if action == "search":
             query = questionary.text("検索キーワードを入力してください:").ask()
             if query:
-                # 擬似的な引数オブジェクトを作成
-                class Args: pass
-                args = Args(); args.query = query
-                cmd_search(args)
+                cmd_search(argparse.Namespace(query=query))
 
         elif action == "analyze":
             code = questionary.text("銘柄コードを入力してください (例: 7203):").ask()
             if code:
                 years = questionary.text("分析年数:", default=str(settings_store.analysis_years or 5)).ask()
-                class Args: pass
-                args = Args(); args.code = code; args.years = int(years) if years.isdigit() else 5
-                args.format = "table"; args.no_cache = False
                 import asyncio
-                asyncio.run(cmd_analyze(args))
+                asyncio.run(cmd_analyze(argparse.Namespace(
+                    code=code,
+                    years=int(years) if years.isdigit() else 5,
+                    format="table",
+                    no_cache=False,
+                )))
 
         elif action == "config":
             sub = questionary.select(
@@ -297,18 +307,17 @@ def cmd_interactive():
 
             if sub == "back" or sub is None: continue
 
-            class Args: pass
-            args = Args(); args.config_subcommand = sub
+            cfg_args = argparse.Namespace(config_subcommand=sub, key=None, value=None)
             if sub == "set":
-                args.key = questionary.select("変更する項目:", choices=[
+                cfg_args.key = questionary.select("変更する項目:", choices=[
                     "jquantsApiKey", "edinetApiKey", "analysisYears", "llmProvider"
                 ]).ask()
-                args.value = questionary.text(f"{args.key} の新しい値:").ask()
-            
+                cfg_args.value = questionary.text(f"{cfg_args.key} の新しい値:").ask()
+
             # ダミーの parser を渡す
             class DummyParser:
                 def print_help(self): print("config help")
-            cmd_config(args, DummyParser())
+            cmd_config(cfg_args, DummyParser())
 
         elif action == "mcp":
             sub = questionary.select(
@@ -323,11 +332,9 @@ def cmd_interactive():
 
             if sub == "back" or sub is None: continue
 
-            class Args: pass
-            args = Args(); args.mcp_subcommand = sub
             class DummyParser:
                 def print_help(self): print("mcp help")
-            cmd_mcp(args, DummyParser())
+            cmd_mcp(argparse.Namespace(mcp_subcommand=sub), DummyParser())
             
             if sub == "start":
                 break # start はブロッキングなのでループを抜ける
@@ -374,18 +381,18 @@ def cmd_mcp(args, parser):
             if getattr(sys, 'frozen', False):
                 # PyInstallerなどでパッケージ化されている場合
                 executable = sys.executable
-                args = ["mcp", "start"]
+                cmd_args = ["mcp", "start"]
             else:
                 # 通常のPython実行の場合
                 executable = sys.executable
-                args = ["-m", "mebuki.cli", "mcp", "start"]
-            
+                cmd_args = ["-m", "mebuki.cli", "mcp", "start"]
+
             project_root = str(Path(__file__).parent.parent.absolute())
-            
+
             # 登録内容の作成
             mcp_config = {
                 "command": executable,
-                "args": args,
+                "args": cmd_args,
                 "env": {
                     "PYTHONPATH": project_root,
                     "MEBUKI_USER_DATA_PATH": str(settings_store.user_data_path)
