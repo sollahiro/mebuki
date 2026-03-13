@@ -35,9 +35,8 @@ jobs:
 
       - name: Build CLI Binary (PyInstaller)
         run: |
-          # Use poetry run to ensure pyinstaller is available in the venv
           poetry run pip install pyinstaller
-          poetry run pyinstaller --onefile --name mebuki mebuki/cli.py --add-data "assets/data_j.csv:assets" --add-data "backend/prompts.py:backend"
+          poetry run pyinstaller mebuki.spec
         shell: bash
 
       - name: Package Binary
