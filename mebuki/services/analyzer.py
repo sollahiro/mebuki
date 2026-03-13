@@ -17,7 +17,6 @@ from mebuki.utils.financial_data import extract_annual_data
 from mebuki.analysis.calculator import calculate_metrics_flexible
 from mebuki.utils.jquants_utils import prepare_edinet_search_data
 from mebuki.api.edinet_client import EdinetAPIClient
-from mebuki.analysis.xbrl_parser import XBRLParser
 from mebuki.utils.cache import CacheManager
 
 from mebuki.infrastructure.settings import settings_store
@@ -70,10 +69,6 @@ class IndividualAnalyzer:
                 logger.warning(f"EDINETクライアントの初期化に失敗しました: {e}")
                 self.edinet_client = None
         
-        # XBRLパーサーは将来的な活用のために温存しますが、
-        # 現在のストリーミング分析フローでは使用しないため初期化はスキップします。
-        self.xbrl_parser = None
-    
     def _fetch_financial_data(
         self,
         code: str

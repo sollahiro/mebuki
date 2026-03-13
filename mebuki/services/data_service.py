@@ -6,6 +6,7 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 from mebuki.api.jquants_client import JQuantsAPIClient
@@ -15,6 +16,7 @@ from mebuki.infrastructure.settings import settings_store
 from mebuki.utils.cache import CacheManager
 
 from .analyzer import IndividualAnalyzer
+from .master_data import master_data_manager
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +25,6 @@ class DataService:
     """財務データおよび有報データの取得を行うクラス"""
 
     def __init__(self):
-        from pathlib import Path
-
         self.api_client = JQuantsAPIClient(api_key=settings_store.jquants_api_key)
         edinet_cache = Path(settings_store.cache_dir) / "edinet"
         self.edinet_client = EdinetAPIClient(
@@ -38,8 +38,6 @@ class DataService:
 
     def reinitialize(self) -> None:
         """設定変更時に呼び出され、APIクライアントなどの設定を更新します。"""
-        from pathlib import Path
-
         logger.info("再初期化中: APIクライアントの設定を更新します")
         self.api_client.update_api_key(settings_store.jquants_api_key)
         self.edinet_client.update_api_key(settings_store.edinet_api_key)
@@ -59,14 +57,10 @@ class DataService:
 
     async def search_companies(self, query: str) -> List[Dict[str, Any]]:
         """銘柄コードまたは名称で企業を検索します。"""
-        from .master_data import master_data_manager
-
         return master_data_manager.search(query, limit=50)
 
     def fetch_stock_basic_info(self, code: str) -> Dict[str, Any]:
         """銘柄の基本情報を取得"""
-        from .master_data import master_data_manager
-
         stock_info = master_data_manager.get_by_code(code)
         if not stock_info:
             logger.warning(f"銘柄情報が見つかりません: {code}")

@@ -91,6 +91,12 @@ class SettingsStore:
             
             logger.info(f"Loaded persistent settings from {config_path}")
         except Exception as e:
+            try:
+                backup_path = config_path.with_suffix(".json.bak")
+                config_path.rename(backup_path)
+                logger.warning(f"設定ファイルが破損しています。バックアップを作成しました: {backup_path}")
+            except Exception:
+                pass
             logger.error(f"Failed to load settings from {config_path}: {e}")
     
     def save(self) -> bool:
