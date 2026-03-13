@@ -35,15 +35,17 @@ class CacheManager:
     APIレスポンスをキャッシュし、日単位で有効期限を管理します。
     """
     
-    def __init__(self, cache_dir: str = "cache", enabled: bool = True):
+    def __init__(self, cache_dir: str = "cache", enabled: bool = True, ttl_days: int = 7):
         """
         初期化
 
         Args:
             cache_dir: キャッシュディレクトリのパス
             enabled: キャッシュを有効にするか（デフォルト: True）
+            ttl_days: キャッシュ有効期限（日数、デフォルト: 7）
         """
         self._metadata_cache: Optional[Dict[str, str]] = None
+        self.ttl_days = ttl_days
         self.cache_dir = Path(cache_dir)
         self.enabled = enabled
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -110,9 +112,7 @@ class CacheManager:
                 cache_date_obj = cache_datetime.date()
                 today = date.today()
                 
-                # 有効期限を7日間に緩和（以前は当日のみ有効だった）
-                # 日次で無効化されると、毎日最初のアクセスが非常に重くなるため。
-                if (today - cache_date_obj).days >= 7:
+                if (today - cache_date_obj).days >= self.ttl_days:
                     return None
             except (ValueError, TypeError):
                 return None

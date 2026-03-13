@@ -202,10 +202,105 @@ class IndividualAnalyzer:
             return {}
 
 
+    async def _edinet_flow(
+        self,
+        code: str,
+        financial_data: List[Dict[str, Any]],
+        edinet_code: Optional[str],
+        result: Dict[str, Any],
+        queue: asyncio.Queue,
+    ) -> None:
+        """EDINETフロー: 書類取得をストリーミングで result へ反映し queue へ通知"""
+        try:
+            async for data in self.fetch_edinet_reports_stream(code, financial_data, edinet_code=edinet_code):
+                fy_key = data["fy_key"]
+                report = data["report"]
+
+                if "edinet_data" not in result:
+                    result["edinet_data"] = {}
+
+                fy_key_str = str(fy_key)
+                if fy_key_str not in result["edinet_data"]:
+                    result["edinet_data"][fy_key_str] = []
+
+                found = False
+                for i, existing in enumerate(result["edinet_data"][fy_key_str]):
+                    if existing["docID"] == report["docID"]:
+                        result["edinet_data"][fy_key_str][i] = report
+                        found = True
+                        break
+                if not found:
+                    result["edinet_data"][fy_key_str].append(report)
+
+                await queue.put(copy.deepcopy(result))
+        except Exception as e:
+            logger.error(f"EDINETフローエラー: {e}", exc_info=True)
+            # EDINETのエラーはメインフローの妨げにしない
+
+    async def _main_flow(
+        self,
+        code: str,
+        cache_key: str,
+        result: Dict[str, Any],
+        queue: asyncio.Queue,
+    ) -> None:
+        """メインフロー: 財務データ取得 -> 指標計算 -> 株価反映 -> EDINETを並列実行"""
+        try:
+            stock_info, financial_data, annual_data = await asyncio.to_thread(self._fetch_financial_data, code)
+            if not stock_info or not financial_data or not annual_data:
+                await queue.put({"status": "error", "message": "財務データの取得に失敗しました"})
+                return
+
+            result.update({
+                "name": stock_info.get("CoName"),
+                "name_en": stock_info.get("CoNameEn"),
+                "sector_33_name": stock_info.get("S33Nm"),
+                "market_name": stock_info.get("MktNm"),
+            })
+
+            available_years = len(annual_data)
+            max_years = settings_store.get_max_analysis_years()
+            analysis_years = min(available_years, max_years)
+
+            metrics = await asyncio.to_thread(self._calculate_metrics, code, annual_data, None, analysis_years)
+            if metrics:
+                result["metrics"] = metrics
+                result["status"] = "fetching_prices"
+                result["message"] = "株価と有価証券報告書を取得・解析中..."
+                await queue.put(copy.deepcopy(result))
+
+            edinet_code = stock_info.get("EdinetCode")
+            edinet_task = asyncio.create_task(
+                self._edinet_flow(code, financial_data, edinet_code, result, queue)
+            )
+            prices = await asyncio.to_thread(self._fetch_prices, code, annual_data, analysis_years)
+            metrics = await asyncio.to_thread(self._calculate_metrics, code, annual_data, prices, analysis_years)
+
+            if metrics:
+                result["metrics"] = metrics
+                result["status"] = "fetching_edinet"
+                result["message"] = "有価証券報告書を取得中..."
+                await queue.put(copy.deepcopy(result))
+            else:
+                await queue.put({"status": "error", "message": "株価反映後の指標計算に失敗しました"})
+                return
+
+            await edinet_task
+
+            result["status"] = "complete"
+            result["message"] = "分析完了"
+            if self.cache:
+                self.cache.set(cache_key, result.copy())
+            await queue.put(copy.deepcopy(result))
+
+        except Exception as e:
+            logger.error(f"メインフローエラー: {e}", exc_info=True)
+            await queue.put({"status": "error", "message": str(e)})
+
     async def analyze_stock_stream(self, code: str) -> AsyncGenerator[Dict[str, Any], None]:
         """銘柄分析をストリーミング形式で実行（並列化版）"""
         cache_key = f"individual_analysis_{code}"
-        
+
         # 1. キャッシュチェック
         if self.use_cache and self.cache:
             cached_result = self.cache.get(cache_key)
@@ -214,118 +309,18 @@ class IndividualAnalyzer:
                 cached_result["message"] = "分析完了（キャッシュ）"
                 yield cached_result
                 return
-        # 共有される結果オブジェクト
+
         result = {
             "code": code,
             "status": "initializing",
             "message": "銘柄データを取得中...",
             "analyzed_at": datetime.now().isoformat(),
         }
-        
-        queue = asyncio.Queue()
 
-        async def main_flow():
-            """メインフロー: 財務 -> 株価 -> LLM"""
-            try:
-                # 財務データ取得
-                stock_info, financial_data, annual_data = await asyncio.to_thread(self._fetch_financial_data, code)
-                if not stock_info or not financial_data or not annual_data:
-                    await queue.put({"status": "error", "message": "財務データの取得に失敗しました"})
-                    return
-                
-                # 基本情報を反映
-                result.update({
-                    "name": stock_info.get("CoName"),
-                    "name_en": stock_info.get("CoNameEn"),
-                    "sector_33_name": stock_info.get("S33Nm"),
-                    "market_name": stock_info.get("MktNm"),
-                })
-                
-                # 指標計算 (第1段階: 株価なし)
-                available_years = len(annual_data)
-                max_years = settings_store.get_max_analysis_years()
-                analysis_years = min(available_years, max_years)
-                
-                metrics = await asyncio.to_thread(self._calculate_metrics, code, annual_data, None, analysis_years)
-                if metrics:
-                    result["metrics"] = metrics
-                    result["status"] = "fetching_prices"
-                    result["message"] = "株価と有価証券報告書を取得・解析中..."
-                    await queue.put(copy.deepcopy(result))
-                
-                # 株価取得とEDINETデータ検索を並列で開始
-                # EDINETフローはタスクとして生成し、株価取得はgatherで並行実行
-                async def fetch_prices_and_setup_edinet():
-                    prices_task = asyncio.to_thread(self._fetch_prices, code, annual_data, analysis_years)
-                    # search_documentsはEDINETフローの中で呼ばれるため、ここでは株価取得を優先つつgather
-                    return await prices_task
-
-                edinet_code = stock_info.get("EdinetCode")
-                edinet_task = asyncio.create_task(edinet_flow(financial_data, edinet_code))
-                prices = await fetch_prices_and_setup_edinet()
-                metrics = await asyncio.to_thread(self._calculate_metrics, code, annual_data, prices, analysis_years)
-                
-                if metrics:
-                    result["metrics"] = metrics
-                    result["status"] = "fetching_edinet"
-                    result["message"] = "有価証券報告書を取得中..."
-                    await queue.put(copy.deepcopy(result))
-                else:
-                    await queue.put({"status": "error", "message": "株価反映後の指標計算に失敗しました"})
-                    return
-
-
-                # メインフロー完了
-                result["status"] = "fetching_edinet"
-                result["message"] = "有価証券報告書を取得中..."
-                await queue.put(copy.deepcopy(result))
-
-                await edinet_task
-                
-                # 最終結果をキャッシュに保存
-                result["status"] = "complete"
-                result["message"] = "分析完了"
-                if self.cache:
-                    self.cache.set(cache_key, result.copy())
-                await queue.put(copy.deepcopy(result))
-
-            except Exception as e:
-                logger.error(f"メインフローエラー: {e}", exc_info=True)
-                await queue.put({"status": "error", "message": str(e)})
-
-        async def edinet_flow(financial_data, edinet_code=None):
-            """EDINETフロー: 書類取得 -> 要約 (ストリーミング)"""
-            try:
-                async for data in self.fetch_edinet_reports_stream(code, financial_data, edinet_code=edinet_code):
-                    fy_key = data["fy_key"]
-                    report = data["report"]
-                    
-                    if "edinet_data" not in result:
-                        result["edinet_data"] = {}
-                    
-                    # 互換性のために文字列キーを使用
-                    fy_key_str = str(fy_key)
-                    if fy_key_str not in result["edinet_data"]:
-                        result["edinet_data"][fy_key_str] = []
-                    
-                    # 既存のレポートを更新または追加
-                    found = False
-                    for i, existing in enumerate(result["edinet_data"][fy_key_str]):
-                        if existing["docID"] == report["docID"]:
-                            result["edinet_data"][fy_key_str][i] = report
-                            found = True
-                            break
-                    if not found:
-                        result["edinet_data"][fy_key_str].append(report)
-                    
-                    # 準備ができた情報を都度送信
-                    await queue.put(copy.deepcopy(result))
-            except Exception as e:
-                logger.error(f"EDINETフローエラー: {e}", exc_info=True)
-                # EDINETのエラーはメインの妨げにしない
+        queue: asyncio.Queue = asyncio.Queue()
 
         # 実行開始
-        main_task = asyncio.create_task(main_flow())
+        main_task = asyncio.create_task(self._main_flow(code, cache_key, result, queue))
         
         try:
             # 初回通知

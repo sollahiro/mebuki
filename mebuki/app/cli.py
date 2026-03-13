@@ -257,6 +257,12 @@ def cmd_config(args, parser):
         else:
             print("変更はありません。")
 
+class _DummyParser:
+    """対話型モードで cmd_config / cmd_mcp に渡すダミーパーサー"""
+    def print_help(self):
+        pass
+
+
 def cmd_interactive():
     """対話型モードの実装"""
     import questionary
@@ -314,10 +320,7 @@ def cmd_interactive():
                 ]).ask()
                 cfg_args.value = questionary.text(f"{cfg_args.key} の新しい値:").ask()
 
-            # ダミーの parser を渡す
-            class DummyParser:
-                def print_help(self): print("config help")
-            cmd_config(cfg_args, DummyParser())
+            cmd_config(cfg_args, _DummyParser())
 
         elif action == "mcp":
             sub = questionary.select(
@@ -332,19 +335,24 @@ def cmd_interactive():
 
             if sub == "back" or sub is None: continue
 
-            class DummyParser:
-                def print_help(self): print("mcp help")
-            cmd_mcp(argparse.Namespace(mcp_subcommand=sub), DummyParser())
+            cmd_mcp(argparse.Namespace(mcp_subcommand=sub), _DummyParser())
             
             if sub == "start":
                 break # start はブロッキングなのでループを抜ける
+
+def _get_mcp_command():
+    """PyInstaller実行時とPython直接実行時で異なるMCPコマンドを返す"""
+    if getattr(sys, 'frozen', False):
+        return sys.executable, ["mcp", "start"]
+    return sys.executable, ["-m", "mebuki.cli", "mcp", "start"]
+
 
 def cmd_mcp(args, parser):
     """MCP連携管理コマンド"""
     if not args.mcp_subcommand:
         parser.print_help()
         return
-        
+
     if args.mcp_subcommand == "start":
         print("mebuki native Python MCP server 起動中 (STDIO) ...", file=sys.stderr)
         from mebuki.app.mcp_server import serve
@@ -377,16 +385,7 @@ def cmd_mcp(args, parser):
         if not config_path.parent.exists():
             print(f"Claude Desktop の設定ディレクトリが見つかりません: {config_path.parent}")
         else:
-            # 実行可能パスの取得
-            if getattr(sys, 'frozen', False):
-                # PyInstallerなどでパッケージ化されている場合
-                executable = sys.executable
-                cmd_args = ["mcp", "start"]
-            else:
-                # 通常のPython実行の場合
-                executable = sys.executable
-                cmd_args = ["-m", "mebuki.cli", "mcp", "start"]
-
+            executable, cmd_args = _get_mcp_command()
             project_root = str(Path(__file__).parent.parent.absolute())
 
             # 登録内容の作成
@@ -430,14 +429,7 @@ def cmd_mcp(args, parser):
             return
 
         try:
-            # 実行可能パスの取得
-            if getattr(sys, 'frozen', False):
-                executable = sys.executable
-                cmd_args = ["mcp", "start"]
-            else:
-                executable = sys.executable
-                cmd_args = ["-m", "mebuki.cli", "mcp", "start"]
-
+            executable, cmd_args = _get_mcp_command()
             project_root = str(Path(__file__).parent.parent.absolute())
 
             # Goose用の設定 (YAML形式)
