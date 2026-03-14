@@ -36,7 +36,7 @@ def to_float(value: Any) -> Optional[float]:
         return result
     if isinstance(value, str):
         # 日本語のダッシュやカンマを除去
-        value = value.replace(",", "").replace("－", "").replace("-", "-").strip()
+        value = value.replace(",", "").replace("－", "-").strip()
         if not value:
             return None
         try:
