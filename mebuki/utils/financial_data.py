@@ -123,7 +123,9 @@ def extract_annual_data(
             for key, val in record.items():
                 # 新しいレコードに有効な値がある場合のみ上書きする
                 # Salesなどの主要項目だけでなく、全フィールドに対して行う
-                if is_valid_value(val) or (val is not None and val != ""):
+                # 数値0は未修正フィールドの可能性があるため上書きしない（is_valid_valueがFalseを返す）
+                # 文字列メタデータ（"2Q"等）はis_valid_valueがFalseを返すため、isinstance(str)で別途許可
+                if is_valid_value(val) or (isinstance(val, str) and val != ""):
                     existing_record[key] = val
             # DiscDate は常に最新のものに更新する（最新の状態を反映していることを示すため）
             existing_record["DiscDate"] = record.get("DiscDate", existing_record.get("DiscDate"))
@@ -599,7 +601,7 @@ def extract_quarterly_data(
             existing_record = seen_quarters[quarter_key]
             # 各フィールドを最新の有効な値でマージ
             for key, val in record.items():
-                if is_valid_value(val) or (val is not None and val != ""):
+                if is_valid_value(val) or (isinstance(val, str) and val != ""):
                     # 4Qの特別扱い: 元々あった4Qデータを計算された4Qデータより優先したいが、
                     # 既に is_valid_financial_record でフィルタ済みなので、
                     # 基本的には常に新しい有効値で上書きで良い。
