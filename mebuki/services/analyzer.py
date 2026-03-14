@@ -227,6 +227,7 @@ class IndividualAnalyzer:
                 await queue.put(copy.deepcopy(result))
         except Exception as e:
             logger.error(f"EDINETフローエラー: {e}", exc_info=True)
+            await queue.put(copy.deepcopy(result))  # エラー時も現状のresultを通知
             # EDINETのエラーはメインフローの妨げにしない
 
     async def _main_flow(

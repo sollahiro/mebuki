@@ -9,6 +9,7 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 
 from ..utils.converters import to_float, is_valid_value, is_valid_financial_record
+from ..infrastructure.settings import settings_store
 
 
 def to_millions(value):
@@ -96,7 +97,7 @@ def calculate_metrics_flexible(
     
     # 分析年数を取得
     if analysis_years is None:
-        max_years = config.get_max_analysis_years()
+        max_years = settings_store.get_max_analysis_years()
         analysis_years = min(len(annual_data), max_years)
     
     # データフィルタリング

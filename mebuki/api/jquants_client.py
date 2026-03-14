@@ -115,8 +115,11 @@ class JQuantsAPIClient:
             else:
                 # 400エラーの場合、サブスクリプション範囲外の可能性がある
                 if response.status_code == 400:
-                    error_data = response.json()
-                    msg = error_data.get("message", "")
+                    try:
+                        error_data = response.json()
+                        msg = error_data.get("message", "")
+                    except Exception:
+                        msg = ""
                     if "Your subscription covers" in msg:
                         # サブスクリプションエラーとして識別可能な情報を付与して送出
                         raise ValueError(f"SUBSCRIPTION_OUT_OF_RANGE: {msg}")
