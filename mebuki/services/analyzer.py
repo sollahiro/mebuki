@@ -178,12 +178,9 @@ class IndividualAnalyzer:
             master_data = await asyncio.to_thread(self.api_client.get_equity_master, code=code)
             edinet_code = master_data[0].get("EdinetCode") if master_data else None
             
-            # 検索データの準備
-            annual_data_idx, _ = prepare_edinet_search_data(financial_data, max_records=max_documents * 2 + 2)
-            
             results = {}
             # 非同期ストリームを直接回す
-            async for data in self.fetch_edinet_reports_stream(code, annual_data_idx, max_documents, edinet_code=edinet_code):
+            async for data in self.fetch_edinet_reports_stream(code, financial_data, max_documents, edinet_code=edinet_code):
                 fy_key = data["fy_key"]
                 report = data["report"]
                 fy_key_str = str(fy_key)
