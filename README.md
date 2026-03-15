@@ -1,8 +1,6 @@
 # mebuki 🍃
 
-**「投資すべきでない銘柄」をAIと共に特定する、MCPネイティブな財務分析CLIツール**
-
-mebukiは、J-QUANTS API、EDINET APIを最大限に活用し、投資判断における「負の側面」を浮き彫りにすることに特化した、**MCP (Model Context Protocol) 対応** の財務分析 Python CLI ツールです。
+mebukiは、J-QUANTS API、EDINET APIを最大限に活用した、**MCP (Model Context Protocol) 対応** の財務分析 Python CLI ツールです。
 
 > [!CAUTION]
 > **投資回避の判断をサポートするツールです**
