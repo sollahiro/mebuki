@@ -284,6 +284,25 @@ class JQuantsAPIClient:
 
         return self._get_all_pages("/equities/master", params)
 
+    def get_earnings_calendar(self) -> List[Dict[str, Any]]:
+        """
+        決算発表予定日を取得
+
+        翌営業日に決算発表が行われる銘柄の情報を返します。
+        3月期・9月期決算の会社が対象です。
+
+        Returns:
+            決算発表予定日のリスト。各要素は以下のフィールドを含む:
+                - Date: 決算発表予定日 (YYYY-MM-DD)
+                - Code: 銘柄コード
+                - CoName: 会社名
+                - FY: 決算期末
+                - SectorNm: 業種名
+                - FQ: 決算種別
+                - Section: 市場区分
+        """
+        return self._get_all_pages("/equities/earnings-calendar")
+
     def get_prices_at_dates(
         self,
         code: str,

@@ -5,7 +5,7 @@
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
@@ -19,6 +19,15 @@ from .analyzer import IndividualAnalyzer
 from .master_data import master_data_manager
 
 logger = logging.getLogger(__name__)
+
+_EARNINGS_CALENDAR_FQ_FILTER = {"本決算", "第２四半期"}
+
+
+def _parse_calendar_date(date_str: str) -> date:
+    try:
+        return datetime.strptime(date_str[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return date(2000, 1, 1)
 
 
 class DataService:
@@ -35,6 +44,38 @@ class DataService:
             cache_dir=settings_store.cache_dir,
             enabled=settings_store.cache_enabled,
         )
+
+    async def _refresh_earnings_calendar_if_needed(self) -> None:
+        """1日1回、決算カレンダーのストアを更新する"""
+        today = date.today()
+        today_str = today.isoformat()
+        if self.cache_manager.get("earnings_calendar_last_fetched") == today_str:
+            return
+
+        try:
+            raw = await asyncio.to_thread(self.api_client.get_earnings_calendar)
+            valid_new = [
+                e for e in raw
+                if _parse_calendar_date(e.get("Date", "")) >= today
+                and e.get("FQ") in _EARNINGS_CALENDAR_FQ_FILTER
+            ]
+
+            existing = self.cache_manager.get("earnings_calendar_store") or []
+            existing_valid = [
+                e for e in existing
+                if _parse_calendar_date(e.get("Date", "")) >= today
+            ]
+            existing_keys = {(e["Date"], e["Code"]) for e in existing_valid}
+            for entry in valid_new:
+                key = (entry.get("Date"), entry.get("Code"))
+                if key not in existing_keys:
+                    existing_valid.append(entry)
+                    existing_keys.add(key)
+
+            self.cache_manager.set("earnings_calendar_store", existing_valid)
+            self.cache_manager.set("earnings_calendar_last_fetched", today_str)
+        except Exception as e:
+            logger.warning(f"決算カレンダーの更新に失敗（処理を続行）: {e}")
 
     def reinitialize(self) -> None:
         """設定変更時に呼び出され、APIクライアントなどの設定を更新します。"""
@@ -97,11 +138,49 @@ class DataService:
             result = await analyzer.analyze_stock(code)
             if scope == "history" and result:
                 result["history"] = result.get("metrics", {}).get("years", [])
-            return result or {}
+            result = result or {}
+            try:
+                await self._refresh_earnings_calendar_if_needed()
+                store = self.cache_manager.get("earnings_calendar_store") or []
+                today = date.today()
+                for entry in store:
+                    if (
+                        entry.get("Code", "").startswith(code[:4])
+                        and _parse_calendar_date(entry.get("Date", "")) >= today
+                    ):
+                        result["upcoming_earnings"] = {
+                            "date": entry.get("Date"),
+                            "FQ": entry.get("FQ"),
+                            "SectorNm": entry.get("SectorNm"),
+                            "Section": entry.get("Section"),
+                        }
+                        break
+            except Exception:
+                pass
+            return result
 
         if scope == "metrics":
             metrics = await analyzer.get_metrics(code)
-            return metrics or {}
+            result = metrics or {}
+            try:
+                await self._refresh_earnings_calendar_if_needed()
+                store = self.cache_manager.get("earnings_calendar_store") or []
+                today = date.today()
+                for entry in store:
+                    if (
+                        entry.get("Code", "").startswith(code[:4])
+                        and _parse_calendar_date(entry.get("Date", "")) >= today
+                    ):
+                        result["upcoming_earnings"] = {
+                            "date": entry.get("Date"),
+                            "FQ": entry.get("FQ"),
+                            "SectorNm": entry.get("SectorNm"),
+                            "Section": entry.get("Section"),
+                        }
+                        break
+            except Exception:
+                pass
+            return result
 
         if scope == "raw":
             raw_data = await asyncio.to_thread(self.api_client.get_financial_summary, code=code)
