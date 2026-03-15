@@ -168,16 +168,17 @@ class IndividualAnalyzer:
         self,
         code: str,
         financial_data: List[Dict[str, Any]],
-        max_documents: int = 10
+        max_documents: int = 10,
+        edinet_code: Optional[str] = None,
     ) -> Dict[str, Any]:
         """EDINETデータを非同期で取得"""
         if not self.edinet_client:
             return {}
         try:
-            # API呼び出しを含む部分は ThreadPool で実行
-            master_data = await asyncio.to_thread(self.api_client.get_equity_master, code=code)
-            edinet_code = master_data[0].get("EdinetCode") if master_data else None
-            
+            if edinet_code is None:
+                master_data = await asyncio.to_thread(self.api_client.get_equity_master, code=code)
+                edinet_code = master_data[0].get("EdinetCode") if master_data else None
+
             results = {}
             # 非同期ストリームを直接回す
             async for data in self.fetch_edinet_reports_stream(code, financial_data, max_documents, edinet_code=edinet_code):
@@ -204,6 +205,7 @@ class IndividualAnalyzer:
     ) -> None:
         """EDINETフロー: 書類取得をストリーミングで result へ反映し queue へ通知"""
         try:
+            existing_indices: Dict[str, Dict[str, int]] = {}  # fy_key_str -> {docID -> index}
             async for data in self.fetch_edinet_reports_stream(code, financial_data, edinet_code=edinet_code):
                 fy_key = data["fy_key"]
                 report = data["report"]
@@ -214,14 +216,13 @@ class IndividualAnalyzer:
                 fy_key_str = str(fy_key)
                 if fy_key_str not in result["edinet_data"]:
                     result["edinet_data"][fy_key_str] = []
+                    existing_indices[fy_key_str] = {}
 
-                found = False
-                for i, existing in enumerate(result["edinet_data"][fy_key_str]):
-                    if existing["docID"] == report["docID"]:
-                        result["edinet_data"][fy_key_str][i] = report
-                        found = True
-                        break
-                if not found:
+                doc_id = report["docID"]
+                if doc_id in existing_indices.get(fy_key_str, {}):
+                    result["edinet_data"][fy_key_str][existing_indices[fy_key_str][doc_id]] = report
+                else:
+                    existing_indices.setdefault(fy_key_str, {})[doc_id] = len(result["edinet_data"][fy_key_str])
                     result["edinet_data"][fy_key_str].append(report)
 
                 await queue.put(copy.deepcopy(result))
@@ -386,10 +387,10 @@ class IndividualAnalyzer:
                 "analyzed_at": datetime.now().isoformat(),
             }
             
-            edinet_data = await self._fetch_edinet_data_async(code, financial_data)
+            edinet_data = await self._fetch_edinet_data_async(code, financial_data, edinet_code=stock_info.get("EdinetCode"))
             if edinet_data:
                 result["edinet_data"] = edinet_data
-            
+
             # 5. 保存とキャッシュ
             if self.cache:
                 self.cache.set(cache_key, result)

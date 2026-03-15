@@ -125,6 +125,23 @@ class DataService:
             "code": code,
         }
 
+    def _attach_upcoming_earnings(self, result: dict, code: str) -> None:
+        """決算スケジュールを result に付与する（該当なければ何もしない）"""
+        store = self.cache_manager.get("earnings_calendar_store") or []
+        today = date.today()
+        for entry in store:
+            if (
+                entry.get("Code", "").startswith(code[:4])
+                and _parse_calendar_date(entry.get("Date", "")) >= today
+            ):
+                result["upcoming_earnings"] = {
+                    "date": entry.get("Date"),
+                    "FQ": entry.get("FQ"),
+                    "SectorNm": entry.get("SectorNm"),
+                    "Section": entry.get("Section"),
+                }
+                break
+
     async def get_financial_data(
         self,
         code: str,
@@ -141,20 +158,7 @@ class DataService:
             result = result or {}
             try:
                 await self._refresh_earnings_calendar_if_needed()
-                store = self.cache_manager.get("earnings_calendar_store") or []
-                today = date.today()
-                for entry in store:
-                    if (
-                        entry.get("Code", "").startswith(code[:4])
-                        and _parse_calendar_date(entry.get("Date", "")) >= today
-                    ):
-                        result["upcoming_earnings"] = {
-                            "date": entry.get("Date"),
-                            "FQ": entry.get("FQ"),
-                            "SectorNm": entry.get("SectorNm"),
-                            "Section": entry.get("Section"),
-                        }
-                        break
+                self._attach_upcoming_earnings(result, code)
             except Exception:
                 pass
             return result
@@ -164,20 +168,7 @@ class DataService:
             result = metrics or {}
             try:
                 await self._refresh_earnings_calendar_if_needed()
-                store = self.cache_manager.get("earnings_calendar_store") or []
-                today = date.today()
-                for entry in store:
-                    if (
-                        entry.get("Code", "").startswith(code[:4])
-                        and _parse_calendar_date(entry.get("Date", "")) >= today
-                    ):
-                        result["upcoming_earnings"] = {
-                            "date": entry.get("Date"),
-                            "FQ": entry.get("FQ"),
-                            "SectorNm": entry.get("SectorNm"),
-                            "Section": entry.get("Section"),
-                        }
-                        break
+                self._attach_upcoming_earnings(result, code)
             except Exception:
                 pass
             return result
