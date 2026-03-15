@@ -34,13 +34,9 @@ class SettingsStore:
         self.user_data_path = self._get_default_user_data_path()
         
         cache_dir = self.user_data_path / "analysis_cache"
-        data_dir = self.user_data_path / "data"
-        reports_dir = self.user_data_path / "reports"
-        
+
         self.user_data_path.mkdir(parents=True, exist_ok=True)
         cache_dir.mkdir(exist_ok=True)
-        data_dir.mkdir(exist_ok=True)
-        reports_dir.mkdir(exist_ok=True)
         
         logger.info(f"Using persistent storage at: {self.user_data_path}")
 
@@ -51,8 +47,6 @@ class SettingsStore:
             "llmProvider": "none", # 初期値は none
             "cacheDir": str(cache_dir),
             "cacheEnabled": True,
-            "dataDir": str(data_dir),
-            "reportsDir": str(reports_dir),
             "mcpEnabled": True,
         }
         
@@ -261,11 +255,6 @@ class SettingsStore:
     @property
     def mcp_enabled(self) -> bool:
         return self._settings.get("mcpEnabled", True)
-
-
-    @property
-    def reports_dir(self) -> str:
-        return self._settings.get("reportsDir", "reports")
 
 
 # グローバル設定インスタンス

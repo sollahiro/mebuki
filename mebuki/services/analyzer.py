@@ -441,7 +441,6 @@ class IndividualAnalyzer:
             annual_data_idx, years_list = prepare_edinet_search_data(financial_data, max_records=max_documents * 3)
             
             # 1. 書類を検索・特定
-            reports_dir = Path(settings_store.reports_dir) / f"{code}_edinet"
             all_docs = await asyncio.to_thread(
                 self.edinet_client.search_documents,
                 code,
