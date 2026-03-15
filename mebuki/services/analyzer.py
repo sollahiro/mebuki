@@ -256,13 +256,6 @@ class IndividualAnalyzer:
             max_years = settings_store.get_max_analysis_years()
             analysis_years = min(available_years, max_years)
 
-            metrics = await asyncio.to_thread(self._calculate_metrics, code, annual_data, None, analysis_years)
-            if metrics:
-                result["metrics"] = metrics
-                result["status"] = "fetching_prices"
-                result["message"] = "株価と有価証券報告書を取得・解析中..."
-                await queue.put(copy.deepcopy(result))
-
             edinet_code = stock_info.get("EdinetCode")
             edinet_task = asyncio.create_task(
                 self._edinet_flow(code, financial_data, edinet_code, result, queue)

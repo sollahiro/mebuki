@@ -354,46 +354,26 @@ class XBRLParser:
         result = {}
         for section_id, section_def in sections.items():
             section_text = None
-            
-            # 方法1: 要素名で検索（完全一致または部分一致）
-            target_elements = section_def.get('xbrl_elements', [])
-            for xbrl_element in target_elements:
-                for block_name, block_text in all_text_blocks.items():
-                    if xbrl_element in block_name or block_name.endswith(xbrl_element):
-                        section_text = block_text
-                        logger.debug(f"セクション {section_id} ({section_def['title']}) を要素名で発見: {block_name}")
-                        break
-                if section_text:
+            section_title = section_def.get('title', '')
+            xbrl_elements = section_def.get('xbrl_elements', [])
+
+            # 完全な項目名のフレーズで検索（様々なパターン）
+            title_patterns = [
+                section_title,
+                f'【{section_title}】',
+                f'{section_title}】',
+                f'【{section_title}',
+            ]
+
+            for block_name, block_text in all_text_blocks.items():
+                element_found = any(
+                    element in block_name or block_name.endswith(element)
+                    for element in xbrl_elements
+                )
+                if element_found or any(pattern in block_text[:500] for pattern in title_patterns):
+                    section_text = block_text
+                    logger.debug(f"セクション {section_id} ({section_def['title']}) を発見: {block_name}")
                     break
-            
-            
-            # 方法4: キーワードで検索（フォールバック）
-            # 完全な項目名のフレーズで検索（簡略化されたキーワードは使用しない）
-            if not section_text:
-                section_title = section_def.get('title', '')
-                
-                for block_name, block_text in all_text_blocks.items():
-                    # XBRL要素名をチェック（英語の要素名）
-                    xbrl_elements = section_def.get('xbrl_elements', [])
-                    element_found = False
-                    for element in xbrl_elements:
-                        if element in block_name or block_name.endswith(element):
-                            element_found = True
-                            break
-                    
-                    # 完全な項目名のフレーズで検索（様々なパターン）
-                    title_patterns = [
-                        section_title,  # 完全一致
-                        f'【{section_title}】',  # 【項目名】
-                        f'{section_title}】',  # 項目名】
-                        f'【{section_title}',  # 【項目名
-                    ]
-                    
-                    # 完全な項目名のフレーズまたはXBRL要素名が見つかった場合
-                    if element_found or any(pattern in block_text[:500] for pattern in title_patterns):
-                        section_text = block_text
-                        logger.debug(f"セクション {section_id} ({section_def['title']}) を完全な項目名で発見")
-                        break
             
             if section_text:
                 # 項目名のフレーズで始まるように調整
