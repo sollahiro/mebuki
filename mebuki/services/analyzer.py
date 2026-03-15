@@ -278,7 +278,7 @@ class IndividualAnalyzer:
             result["message"] = "分析完了"
             if self.cache:
                 self.cache.set(cache_key, result.copy())
-            await queue.put(copy.deepcopy(result))
+            await queue.put(result)
 
         except Exception as e:
             logger.error(f"メインフローエラー: {e}", exc_info=True)

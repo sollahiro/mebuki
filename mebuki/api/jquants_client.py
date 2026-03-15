@@ -8,7 +8,7 @@ APIキー認証とデータ取得機能を提供します。
 import time
 import logging
 from typing import Optional, Dict, List, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import requests
 from ..constants.api import JQUANTS_API_BASE_URL
@@ -328,7 +328,6 @@ class JQuantsAPIClient:
         results = {}
         
         # 日付を正規化して範囲を計算
-        from datetime import datetime, timedelta
         normalized_dates = []
         date_objects = []
         
