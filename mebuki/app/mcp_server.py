@@ -111,18 +111,14 @@ async def list_tools() -> List[Tool]:
         ),
         Tool(
             name="get_macro_economic_data",
-            description="Fetch macro economic indicators for Japan environment. 日本のマクロ経済指標（為替、金融政策、コストプッシュ圧力）を取得します。",
+            description="Fetch macro economic indicators for Japan environment. 日本のマクロ経済指標（為替、金融政策）を取得します。",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "category": {
                         "type": "string",
-                        "enum": ["fx", "monetary", "cost_push"],
+                        "enum": ["fx", "monetary"],
                         "description": "Category of macro data.",
-                    },
-                    "sector": {
-                        "type": "string",
-                        "description": "Required for 'cost_push': Industry sector code (e.g., 'transportation_equipment').",
                     },
                     "start_date": {
                         "type": "string",
@@ -200,10 +196,6 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                 data = macro_analyzer.get_fx_environment(start, end)
             elif category == "monetary":
                 data = macro_analyzer.get_monetary_policy_status(start, end)
-            elif category == "cost_push":
-                if "sector" not in arguments:
-                    raise ValueError("'sector' is required for cost_push category")
-                data = macro_analyzer.get_cost_environment(arguments["sector"], start, end)
             else:
                 raise ValueError(f"Unknown macro category: {category}")
             return [TextContent(type="text", text=json.dumps(data, indent=2, ensure_ascii=False))]
