@@ -343,7 +343,10 @@ def cmd_interactive():
 def _get_mcp_command():
     """PyInstaller実行時とPython直接実行時で異なるMCPコマンドを返す"""
     if getattr(sys, 'frozen', False):
-        return sys.executable, ["mcp", "start"]
+        import shutil
+        symlink = shutil.which("mebuki")
+        executable = symlink if symlink else sys.executable
+        return executable, ["mcp", "start"]
     return sys.executable, ["-m", "mebuki.cli", "mcp", "start"]
 
 
@@ -386,14 +389,12 @@ def cmd_mcp(args, parser):
             print(f"Claude Desktop の設定ディレクトリが見つかりません: {config_path.parent}")
         else:
             executable, cmd_args = _get_mcp_command()
-            project_root = str(Path(__file__).parent.parent.absolute())
 
             # 登録内容の作成
             mcp_config = {
                 "command": executable,
                 "args": cmd_args,
                 "env": {
-                    "PYTHONPATH": project_root,
                     "MEBUKI_USER_DATA_PATH": str(settings_store.user_data_path)
                 }
             }
@@ -430,17 +431,16 @@ def cmd_mcp(args, parser):
 
         try:
             executable, cmd_args = _get_mcp_command()
-            project_root = str(Path(__file__).parent.parent.absolute())
 
             # Goose用の設定 (YAML形式)
             config_data = {"extensions": {}}
             if config_path.exists():
                 with open(config_path, "r", encoding="utf-8") as f:
                     config_data = yaml.safe_load(f) or {"extensions": {}}
-            
+
             if "extensions" not in config_data:
                 config_data["extensions"] = {}
-            
+
             config_data["extensions"]["mebuki"] = {
                 "enabled": True,
                 "name": "mebuki",
@@ -449,7 +449,6 @@ def cmd_mcp(args, parser):
                 "cmd": executable,
                 "args": cmd_args,
                 "envs": {
-                    "PYTHONPATH": project_root,
                     "MEBUKI_USER_DATA_PATH": str(settings_store.user_data_path)
                 },
                 "timeout": 300
