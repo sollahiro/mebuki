@@ -1,8 +1,10 @@
 """
 ポートフォリオストア（ウォッチリスト・保有銘柄の永続化）
 """
+import contextlib
 import json
 import logging
+import sys
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -26,6 +28,29 @@ class PortfolioStore:
         self._load_from_file()
         logger.info(f"Initialized PortfolioStore with path: {self.portfolio_path}")
 
+    @contextlib.contextmanager
+    def _file_lock(self):
+        """portfolio.json への排他アクセスを確保するコンテキストマネージャ"""
+        lock_path = self.portfolio_path.with_suffix(".json.lock")
+        if sys.platform == "win32":
+            import msvcrt
+            lock_file = open(lock_path, "w")
+            try:
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+                yield
+            finally:
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+                lock_file.close()
+        else:
+            import fcntl
+            lock_file = open(lock_path, "w")
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+                yield
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                lock_file.close()
+
     def _load_from_file(self) -> None:
         """portfolio.json からデータをロードする"""
         if not self.portfolio_path.exists():
@@ -33,8 +58,9 @@ class PortfolioStore:
             return
 
         try:
-            with open(self.portfolio_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            with self._file_lock():
+                with open(self.portfolio_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
             self._items = data.get("items", [])
             logger.info(f"Loaded {len(self._items)} portfolio items from {self.portfolio_path}")
         except Exception as e:
@@ -42,6 +68,7 @@ class PortfolioStore:
                 backup_path = self.portfolio_path.with_suffix(".json.bak")
                 self.portfolio_path.rename(backup_path)
                 logger.warning(f"Portfolio file was corrupted. Backup created: {backup_path}")
+                print(f"警告: ポートフォリオファイルが破損していました。バックアップを作成しました: {backup_path}", file=sys.stderr)
             except Exception:
                 pass
             logger.error(f"Failed to load portfolio from {self.portfolio_path}: {e}")
@@ -58,6 +85,10 @@ class PortfolioStore:
     def find_all_by_ticker(self, ticker_code: str) -> List[Dict[str, Any]]:
         """ticker_code に一致する全アイテムを返す"""
         return [item for item in self._items if item["ticker_code"] == ticker_code]
+
+    def find_all_by_status(self, status: str) -> List[Dict[str, Any]]:
+        """status に一致する全アイテムを返す"""
+        return [item for item in self._items if item.get("status") == status]
 
     def upsert(self, item: Dict[str, Any]) -> None:
         """アイテムを追加または更新する（一意キーで照合）"""
@@ -88,8 +119,9 @@ class PortfolioStore:
     def save(self) -> bool:
         """現在のデータを portfolio.json に保存する"""
         try:
-            with open(self.portfolio_path, "w", encoding="utf-8") as f:
-                json.dump({"items": self._items}, f, indent=2, ensure_ascii=False)
+            with self._file_lock():
+                with open(self.portfolio_path, "w", encoding="utf-8") as f:
+                    json.dump({"items": self._items}, f, indent=2, ensure_ascii=False)
             return True
         except Exception as e:
             logger.error(f"Failed to save portfolio to {self.portfolio_path}: {e}")

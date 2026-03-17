@@ -69,10 +69,7 @@ class PortfolioService:
 
     def get_watchlist(self) -> List[Dict[str, Any]]:
         """ウォッチリスト（status="watch"）を返す"""
-        return [
-            item for item in portfolio_store._items
-            if item.get("status") == "watch"
-        ]
+        return portfolio_store.find_all_by_status("watch")
 
     # ──────────────────────────────
     # 保有銘柄操作
@@ -212,10 +209,7 @@ class PortfolioService:
 
     def get_holdings(self) -> List[Dict[str, Any]]:
         """全保有エントリを返す"""
-        return [
-            item for item in portfolio_store._items
-            if item.get("status") == "holding"
-        ]
+        return portfolio_store.find_all_by_status("holding")
 
     # ──────────────────────────────
     # 名寄せビュー
