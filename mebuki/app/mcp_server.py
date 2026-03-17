@@ -10,6 +10,7 @@ from mcp.types import TextContent, Tool
 from mebuki.infrastructure.helpers import validate_stock_code
 from mebuki.services.data_service import data_service
 from mebuki.services.macro_analyzer import macro_analyzer
+from mebuki.services.portfolio_service import portfolio_service
 
 logger = logging.getLogger("mebuki-mcp")
 app = Server("mebuki-mcp-server")
@@ -146,6 +147,98 @@ async def list_tools() -> List[Tool]:
                 "required": ["code"],
             },
         ),
+        Tool(
+            name="get_japan_stock_watchlist",
+            description="Get the current watchlist of Japanese stocks being monitored. ウォッチリスト（監視銘柄一覧）を取得します。",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
+        Tool(
+            name="manage_japan_stock_watchlist",
+            description="Add or remove a Japanese stock from the watchlist. ウォッチリストへの銘柄追加・削除を行います。",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["add", "remove"],
+                        "description": "Action to perform: 'add' or 'remove'.",
+                    },
+                    "code": {
+                        "type": "string",
+                        "description": "Four-digit or five-digit Japanese stock code.",
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Optional: company name. Auto-resolved if omitted.",
+                    },
+                },
+                "required": ["action", "code"],
+            },
+        ),
+        Tool(
+            name="get_japan_stock_portfolio",
+            description="Get the portfolio of held Japanese stocks. 保有銘柄のポートフォリオを取得します。",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "mode": {
+                        "type": "string",
+                        "enum": ["consolidated", "detail"],
+                        "default": "consolidated",
+                        "description": "'consolidated' (default): per-ticker summary. 'detail': per-account breakdown.",
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="manage_japan_stock_portfolio",
+            description="Add a holding, sell shares, or remove a position from the portfolio. ポートフォリオの保有追加・売却・削除を行います。",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["add", "sell", "remove"],
+                        "description": "Action: 'add' (buy), 'sell', or 'remove' (force-delete).",
+                    },
+                    "code": {
+                        "type": "string",
+                        "description": "Four-digit or five-digit Japanese stock code.",
+                    },
+                    "quantity": {
+                        "type": "number",
+                        "description": "Number of shares. Required for 'add' and 'sell'.",
+                    },
+                    "cost_price": {
+                        "type": "number",
+                        "description": "Purchase price per share. Required for 'add'.",
+                    },
+                    "broker": {
+                        "type": "string",
+                        "description": "Broker name (free text). Optional.",
+                    },
+                    "account_type": {
+                        "type": "string",
+                        "enum": ["特定", "一般", "NISA"],
+                        "description": "Account type. Defaults to '特定'.",
+                    },
+                    "bought_at": {
+                        "type": "string",
+                        "description": "Purchase date (YYYY-MM-DD). Optional, defaults to today.",
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Company name. Auto-resolved if omitted.",
+                    },
+                },
+                "required": ["action", "code"],
+            },
+        ),
     ]
 
 
@@ -203,6 +296,66 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
         if name == "visualize_financial_data":
             code = validate_stock_code(str(arguments["code"]))
             result = await data_service.visualize_financial_data(code)
+            return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
+
+        if name == "get_japan_stock_watchlist":
+            data = portfolio_service.get_watchlist()
+            return [TextContent(type="text", text=json.dumps(data, indent=2, ensure_ascii=False))]
+
+        if name == "manage_japan_stock_watchlist":
+            action = str(arguments["action"])
+            code = validate_stock_code(str(arguments["code"]))
+            if action == "add":
+                result = portfolio_service.add_watch(code, name=str(arguments.get("name", "") or ""))
+            elif action == "remove":
+                result = portfolio_service.remove_watch(code)
+            else:
+                raise ValueError(f"Unknown watchlist action: {action}")
+            return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
+
+        if name == "get_japan_stock_portfolio":
+            mode = str(arguments.get("mode", "consolidated"))
+            if mode == "detail":
+                data = portfolio_service.get_holdings()
+            else:
+                data = portfolio_service.get_consolidated()
+            return [TextContent(type="text", text=json.dumps(data, indent=2, ensure_ascii=False))]
+
+        if name == "manage_japan_stock_portfolio":
+            action = str(arguments["action"])
+            code = validate_stock_code(str(arguments["code"]))
+            broker = str(arguments.get("broker", "") or "")
+            account_type = str(arguments.get("account_type", "特定") or "特定")
+            if action == "add":
+                quantity = int(arguments["quantity"])
+                cost_price = float(arguments["cost_price"])
+                bought_at = str(arguments.get("bought_at", "") or "")
+                name = str(arguments.get("name", "") or "")
+                result = portfolio_service.add_holding(
+                    code=code,
+                    quantity=quantity,
+                    cost_price=cost_price,
+                    broker=broker,
+                    account_type=account_type,
+                    bought_at=bought_at,
+                    name=name,
+                )
+            elif action == "sell":
+                quantity = int(arguments["quantity"])
+                result = portfolio_service.sell_holding(
+                    code=code,
+                    quantity=quantity,
+                    broker=broker,
+                    account_type=account_type,
+                )
+            elif action == "remove":
+                result = portfolio_service.remove_holding(
+                    code=code,
+                    broker=broker,
+                    account_type=account_type,
+                )
+            else:
+                raise ValueError(f"Unknown portfolio action: {action}")
             return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
 
         raise ValueError(f"Unknown tool: {name}")

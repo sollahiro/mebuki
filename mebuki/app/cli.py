@@ -6,6 +6,7 @@ import logging
 from typing import List, Dict, Any, Optional
 from mebuki import __version__
 from mebuki.infrastructure.settings import settings_store
+from mebuki.infrastructure.helpers import validate_stock_code
 from mebuki.services.master_data import master_data_manager
 
 logger = logging.getLogger(__name__)
@@ -172,7 +173,22 @@ async def cmd_analyze(args):
             print(f"\n次回決算予定: {upcoming.get('date', '不明')}  {upcoming.get('FQ', '')}")
 
         print("\n詳細な分析や定性情報は MCP版（Claude等）をご利用ください。")
-        
+
+        # ウォッチリスト追加の確認（対話端末のみ）
+        if args.format == "table" and sys.stdin.isatty():
+            import questionary
+            from mebuki.services.portfolio_service import portfolio_service
+            from mebuki.infrastructure.portfolio_store import portfolio_store as _ps
+            already = _ps.find(validate_stock_code(code), "", "")
+            if not already or already.get("status") != "watch":
+                add_watch = await questionary.confirm(
+                    f"{code} {info['name']} をウォッチリストに追加しますか？",
+                    default=False,
+                ).ask_async()
+                if add_watch:
+                    portfolio_service.add_watch(code, name=info.get("name", ""))
+                    print(f"ウォッチリストに追加しました: {code} {info['name']}")
+
     except Exception as e:
         print(f"エラー: 分析中に例外が発生しました: {e}")
         logger.exception(e)
@@ -254,11 +270,13 @@ def cmd_interactive():
         action = questionary.select(
             "実行するアクションを選択してください:",
             choices=[
-                {"name": "🔍 銘柄検索 (search)", "value": "search"},
-                {"name": "📊 銘柄分析 (analyze)", "value": "analyze"},
-                {"name": "⚙️ 設定管理 (config)", "value": "config"},
-                {"name": "🔌 MCP連携 (mcp)", "value": "mcp"},
-                {"name": "🚪 終了", "value": "exit"}
+                {"name": "銘柄検索 (search)", "value": "search"},
+                {"name": "銘柄分析 (analyze)", "value": "analyze"},
+                {"name": "ウォッチリスト (watch)", "value": "watch"},
+                {"name": "ポートフォリオ (portfolio)", "value": "portfolio"},
+                {"name": "設定管理 (config)", "value": "config"},
+                {"name": "MCP連携 (mcp)", "value": "mcp"},
+                {"name": "終了", "value": "exit"}
             ]
         ).ask()
 
@@ -286,10 +304,10 @@ def cmd_interactive():
             sub = questionary.select(
                 "設定アクション:",
                 choices=[
-                    {"name": "📋 設定を表示", "value": "show"},
-                    {"name": "✏️ 値を変更", "value": "set"},
-                    {"name": "🌟 初期設定を開始", "value": "init"},
-                    {"name": "⬅️ 戻る", "value": "back"}
+                    {"name": "設定を表示", "value": "show"},
+                    {"name": "値を変更", "value": "set"},
+                    {"name": "初期設定を開始", "value": "init"},
+                    {"name": "戻る", "value": "back"}
                 ]
             ).ask()
 
@@ -304,21 +322,128 @@ def cmd_interactive():
 
             cmd_config(cfg_args, _DummyParser())
 
+        elif action == "watch":
+            sub = questionary.select(
+                "ウォッチリストアクション:",
+                choices=[
+                    {"name": "追加", "value": "add"},
+                    {"name": "削除", "value": "remove"},
+                    {"name": "一覧", "value": "list"},
+                    {"name": "戻る", "value": "back"},
+                ]
+            ).ask()
+
+            if sub == "back" or sub is None: continue
+
+            if sub == "add":
+                query = questionary.text("銘柄名またはコードで検索:").ask()
+                if not query:
+                    continue
+                results = master_data_manager.search(query)
+                if not results:
+                    print(f"'{query}' に一致する銘柄は見つかりませんでした。")
+                    continue
+                choices = [
+                    {"name": f"{item['code']}  {item['name']}  ({item['market']})", "value": item}
+                    for item in results
+                ]
+                choices.append({"name": "↩  キャンセル", "value": None})
+                selected = questionary.select("ウォッチリストに追加する銘柄:", choices=choices).ask()
+                if selected:
+                    cmd_watch(argparse.Namespace(watch_subcommand="add", code=selected["code"], name=selected["name"]))
+            elif sub == "remove":
+                code = questionary.text("銘柄コード:").ask()
+                if code:
+                    cmd_watch(argparse.Namespace(watch_subcommand="remove", code=code))
+            elif sub == "list":
+                cmd_watch(argparse.Namespace(watch_subcommand="list"))
+
+        elif action == "portfolio":
+            sub = questionary.select(
+                "ポートフォリオアクション:",
+                choices=[
+                    {"name": "保有追加", "value": "add"},
+                    {"name": "売却", "value": "sell"},
+                    {"name": "ポジション削除", "value": "remove"},
+                    {"name": "一覧 (名寄せ)", "value": "list"},
+                    {"name": "一覧 (口座別詳細)", "value": "list_detail"},
+                    {"name": "戻る", "value": "back"},
+                ]
+            ).ask()
+
+            if sub == "back" or sub is None: continue
+
+            broker_suggestions = ["SBI", "楽天", "松井", "マネックス", "auカブコム", "その他"]
+
+            if sub == "add":
+                code = questionary.text("銘柄コード:").ask()
+                qty_str = questionary.text("数量:").ask()
+                price_str = questionary.text("取得単価 (円):").ask()
+                broker = questionary.autocomplete("証券会社:", choices=broker_suggestions, default="").ask()
+                account = questionary.select("口座種別:", choices=["特定", "一般", "NISA"]).ask()
+                date = questionary.text("取得日 (YYYY-MM-DD, 省略可):", default="").ask()
+                name = questionary.text("銘柄名 (省略で自動取得):", default="").ask()
+                if code and qty_str and price_str:
+                    try:
+                        cmd_portfolio(argparse.Namespace(
+                            portfolio_subcommand="add",
+                            code=code,
+                            quantity=int(qty_str),
+                            cost_price=float(price_str),
+                            broker=broker or "",
+                            account=account or "特定",
+                            date=date or "",
+                            name=name or "",
+                        ))
+                    except ValueError:
+                        print("エラー: 数量・単価は数値で入力してください")
+            elif sub == "sell":
+                code = questionary.text("銘柄コード:").ask()
+                qty_str = questionary.text("売却数量:").ask()
+                broker = questionary.autocomplete("証券会社:", choices=broker_suggestions, default="").ask()
+                account = questionary.select("口座種別:", choices=["特定", "一般", "NISA"]).ask()
+                if code and qty_str:
+                    try:
+                        cmd_portfolio(argparse.Namespace(
+                            portfolio_subcommand="sell",
+                            code=code,
+                            quantity=int(qty_str),
+                            broker=broker or "",
+                            account=account or "特定",
+                        ))
+                    except ValueError:
+                        print("エラー: 数量は整数で入力してください")
+            elif sub == "remove":
+                code = questionary.text("銘柄コード:").ask()
+                broker = questionary.autocomplete("証券会社:", choices=broker_suggestions, default="").ask()
+                account = questionary.select("口座種別:", choices=["特定", "一般", "NISA"]).ask()
+                if code:
+                    cmd_portfolio(argparse.Namespace(
+                        portfolio_subcommand="remove",
+                        code=code,
+                        broker=broker or "",
+                        account=account or "特定",
+                    ))
+            elif sub == "list":
+                cmd_portfolio(argparse.Namespace(portfolio_subcommand="list", detail=False))
+            elif sub == "list_detail":
+                cmd_portfolio(argparse.Namespace(portfolio_subcommand="list", detail=True))
+
         elif action == "mcp":
             sub = questionary.select(
                 "MCP連携アクション:",
                 choices=[
-                    {"name": "🚀 サーバー起動 (start)", "value": "start"},
-                    {"name": "📥 Claude Desktop への登録 (install-claude)", "value": "install-claude"},
-                    {"name": "🦆 Goose への登録 (install-goose)", "value": "install-goose"},
-                    {"name": "⬅️ 戻る", "value": "back"}
+                    {"name": "サーバー起動 (start)", "value": "start"},
+                    {"name": "Claude Desktop への登録 (install-claude)", "value": "install-claude"},
+                    {"name": "Goose への登録 (install-goose)", "value": "install-goose"},
+                    {"name": "戻る", "value": "back"}
                 ]
             ).ask()
 
             if sub == "back" or sub is None: continue
 
             cmd_mcp(argparse.Namespace(mcp_subcommand=sub), _DummyParser())
-            
+
             if sub == "start":
                 break # start はブロッキングなのでループを抜ける
 
@@ -444,23 +569,152 @@ def cmd_mcp(args, parser):
         except Exception as e:
             print(f"エラー: Goose への登録中に問題が発生しました: {e}")
 
+def cmd_watch(args):
+    """ウォッチリスト管理コマンド"""
+    from mebuki.services.portfolio_service import portfolio_service
+
+    sub = args.watch_subcommand
+
+    if sub == "add":
+        try:
+            result = portfolio_service.add_watch(args.code, name=getattr(args, "name", "") or "")
+            if result["status"] == "already_exists":
+                print(f"既にウォッチリストに存在します: {args.code}")
+            else:
+                item = result["item"]
+                print(f"ウォッチリストに追加しました: {item['ticker_code']} {item['name']}")
+        except ValueError as e:
+            print(f"エラー: {e}")
+
+    elif sub == "remove":
+        try:
+            result = portfolio_service.remove_watch(args.code)
+            if result["status"] == "removed":
+                print(f"ウォッチリストから削除しました: {args.code}")
+            else:
+                print(f"見つかりませんでした: {args.code}")
+        except ValueError as e:
+            print(f"エラー: {e}")
+
+    elif sub == "list":
+        watchlist = portfolio_service.get_watchlist()
+        if not watchlist:
+            print("ウォッチリストは空です。")
+            return
+        print(f"\nウォッチリスト ({len(watchlist)}件):")
+        print("-" * 40)
+        print(f"{'コード':<8} {'銘柄名':<20} {'追加日'}")
+        print("-" * 40)
+        for item in watchlist:
+            added = item.get("added_at", "")[:10]
+            print(f"{item['ticker_code']:<8} {item['name']:<20} {added}")
+        print("-" * 40)
+
+    else:
+        print("サブコマンドを指定してください: add / remove / list")
+
+
+def cmd_portfolio(args):
+    """ポートフォリオ管理コマンド"""
+    from mebuki.services.portfolio_service import portfolio_service
+
+    sub = args.portfolio_subcommand
+
+    if sub == "add":
+        try:
+            result = portfolio_service.add_holding(
+                code=args.code,
+                quantity=args.quantity,
+                cost_price=args.cost_price,
+                broker=getattr(args, "broker", "") or "",
+                account_type=getattr(args, "account", "特定") or "特定",
+                bought_at=getattr(args, "date", "") or "",
+                name=getattr(args, "name", "") or "",
+            )
+            lot = result["lot"]
+            print(f"保有を追加しました: {args.code}  {lot['quantity']}株 @{lot['cost_price']}円  ({lot['bought_at']})")
+        except ValueError as e:
+            print(f"エラー: {e}")
+
+    elif sub == "sell":
+        try:
+            result = portfolio_service.sell_holding(
+                code=args.code,
+                quantity=args.quantity,
+                broker=getattr(args, "broker", "") or "",
+                account_type=getattr(args, "account", "特定") or "特定",
+            )
+            print(f"売却処理完了: {args.code}  {result['sold_quantity']}株  残{result['remaining_quantity']}株")
+        except ValueError as e:
+            print(f"エラー: {e}")
+
+    elif sub == "remove":
+        try:
+            result = portfolio_service.remove_holding(
+                code=args.code,
+                broker=getattr(args, "broker", "") or "",
+                account_type=getattr(args, "account", "特定") or "特定",
+            )
+            if result["status"] == "removed":
+                print(f"保有エントリを削除しました: {args.code}")
+            else:
+                print(f"見つかりませんでした: {args.code}")
+        except ValueError as e:
+            print(f"エラー: {e}")
+
+    elif sub == "list":
+        detail = getattr(args, "detail", False)
+        if detail:
+            holdings = portfolio_service.get_holdings()
+            if not holdings:
+                print("保有銘柄はありません。")
+                return
+            print(f"\nポートフォリオ詳細 ({len(holdings)}ポジション):")
+            print("-" * 70)
+            for item in holdings:
+                qty = sum(lot["quantity"] for lot in item["lots"])
+                if qty == 0:
+                    continue
+                avg = sum(lot["quantity"] * lot["cost_price"] for lot in item["lots"]) / qty
+                print(f"  {item['ticker_code']} {item['name']}  [{item['broker']} {item['account_type']}]")
+                print(f"    保有数: {qty}株  平均取得単価: {avg:.2f}円")
+                for lot in item["lots"]:
+                    print(f"      ロット: {lot['quantity']}株 @{lot['cost_price']}円 ({lot['bought_at']})")
+            print("-" * 70)
+        else:
+            consolidated = portfolio_service.get_consolidated()
+            if not consolidated:
+                print("保有銘柄はありません。")
+                return
+            print(f"\nポートフォリオ ({len(consolidated)}銘柄):")
+            print("-" * 60)
+            print(f"{'コード':<8} {'銘柄名':<20} {'保有数':>8} {'平均取得単価':>12}")
+            print("-" * 60)
+            for c in consolidated:
+                print(f"{c['ticker_code']:<8} {c['name']:<20} {c['total_quantity']:>8} {c['avg_cost_price']:>12.2f}")
+            print("-" * 60)
+
+    else:
+        print("サブコマンドを指定してください: add / sell / remove / list")
+
+
 def build_parser() -> argparse.ArgumentParser:
     """CLIパーサーを構築します。"""
     parser = argparse.ArgumentParser(description="mebuki: 投資分析ツール CLI")
     parser.add_argument("--version", action="version", version=f"mebuki {__version__}")
     subparsers = parser.add_subparsers(dest="command", help="サブコマンド")
-    
+
     # search
     search_parser = subparsers.add_parser("search", help="銘柄を検索")
     search_parser.add_argument("query", help="検索クエリ（銘柄名またはコード）")
-    
+
     # analyze
     analyze_parser = subparsers.add_parser("analyze", help="銘柄を分析")
     analyze_parser.add_argument("code", help="銘柄コード")
     analyze_parser.add_argument("--years", type=int, help="分析年数")
     analyze_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
     analyze_parser.add_argument("--no-cache", action="store_true", help="キャッシュを使用しない")
-    
+
     # config
     config_parser = subparsers.add_parser("config", help="設定の表示・変更")
     config_sub = config_parser.add_subparsers(dest="config_subcommand", help="設定サブコマンド")
@@ -469,13 +723,51 @@ def build_parser() -> argparse.ArgumentParser:
     set_parser.add_argument("key", help="設定キー (jquants-key, edinet-key, years 等)")
     set_parser.add_argument("value", help="設定値")
     config_sub.add_parser("init", help="対話形式で初期設定")
-    
+
     # mcp
     mcp_parser = subparsers.add_parser("mcp", help="MCP連携管理")
     mcp_sub = mcp_parser.add_subparsers(dest="mcp_subcommand")
     mcp_sub.add_parser("install-claude", help="Claude Desktop に登録")
     mcp_sub.add_parser("install-goose", help="Goose に登録")
     mcp_sub.add_parser("start", help="MCPサーバーを起動 (STDIO)")
+
+    # watch
+    watch_parser = subparsers.add_parser("watch", help="ウォッチリスト管理")
+    watch_sub = watch_parser.add_subparsers(dest="watch_subcommand")
+    watch_add = watch_sub.add_parser("add", help="ウォッチリストに追加")
+    watch_add.add_argument("code", help="銘柄コード")
+    watch_add.add_argument("--name", help="銘柄名（省略時は自動取得）")
+    watch_rm = watch_sub.add_parser("remove", help="ウォッチリストから削除")
+    watch_rm.add_argument("code", help="銘柄コード")
+    watch_sub.add_parser("list", help="ウォッチリストを表示")
+
+    # portfolio
+    pf_parser = subparsers.add_parser("portfolio", help="ポートフォリオ管理")
+    pf_sub = pf_parser.add_subparsers(dest="portfolio_subcommand")
+
+    pf_add = pf_sub.add_parser("add", help="保有銘柄を追加")
+    pf_add.add_argument("code", help="銘柄コード")
+    pf_add.add_argument("quantity", type=int, help="数量")
+    pf_add.add_argument("cost_price", type=float, help="取得単価")
+    pf_add.add_argument("--broker", default="", help="証券会社名")
+    pf_add.add_argument("--account", choices=["特定", "一般", "NISA"], default="特定", help="口座種別")
+    pf_add.add_argument("--date", help="取得日 (YYYY-MM-DD)")
+    pf_add.add_argument("--name", help="銘柄名（省略時は自動取得）")
+
+    pf_sell = pf_sub.add_parser("sell", help="保有銘柄を売却")
+    pf_sell.add_argument("code", help="銘柄コード")
+    pf_sell.add_argument("quantity", type=int, help="売却数量")
+    pf_sell.add_argument("--broker", default="", help="証券会社名")
+    pf_sell.add_argument("--account", choices=["特定", "一般", "NISA"], default="特定", help="口座種別")
+
+    pf_rm = pf_sub.add_parser("remove", help="保有エントリを削除")
+    pf_rm.add_argument("code", help="銘柄コード")
+    pf_rm.add_argument("--broker", default="", help="証券会社名")
+    pf_rm.add_argument("--account", choices=["特定", "一般", "NISA"], default="特定", help="口座種別")
+
+    pf_list = pf_sub.add_parser("list", help="ポートフォリオを表示")
+    pf_list.add_argument("--detail", action="store_true", help="口座別詳細を表示")
+
     return parser
 
 
@@ -502,6 +794,10 @@ def main():
         cmd_config(args, parser)
     elif args.command == "mcp":
         cmd_mcp(args, parser)
+    elif args.command == "watch":
+        cmd_watch(args)
+    elif args.command == "portfolio":
+        cmd_portfolio(args)
     else:
         parser.print_help()
 
