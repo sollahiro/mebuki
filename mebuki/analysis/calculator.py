@@ -43,9 +43,7 @@ def _calculate_profitability_metrics(np: Optional[float], op: Optional[float], e
     if np is not None and eq is not None and eq != 0:
         roe = (np / eq) * 100
 
-    simple_roic = None
-    if op is not None and eq is not None and eq != 0:
-        simple_roic = (op / eq) * 100
+    simple_roic = None  # 廃止: IBDマージ時に ROIC として計算
 
     cf_conversion_rate = None
     if cfo is not None and op is not None and op != 0:

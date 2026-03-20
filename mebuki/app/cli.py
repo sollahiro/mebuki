@@ -165,12 +165,20 @@ async def cmd_analyze(args):
         def get_op_margin(c):
             return c.get("OperatingMargin") or (c.get("OP") / c.get("Sales") * 100 if c.get("OP") and c.get("Sales") else None)
 
+        def _get_ibd_component(label):
+            def _getter(c):
+                for comp in c.get("IBDComponents", []):
+                    if comp.get("label") == label and comp.get("current") is not None:
+                        return comp["current"] / 1_000_000
+                return None
+            return _getter
+
         metrics_to_show = [
             ("売上高 (百万)", lambda c: c.get("Sales")),
             ("営業利益 (百万)", lambda c: c.get("OP")),
             ("営業利益率 (%)", get_op_margin),
             ("ROE (%)", lambda c: c.get("ROE")),
-            ("簡易ROIC (%)", lambda c: c.get("SimpleROIC")),
+            ("ROIC (%)", lambda c: c.get("ROIC")),
             ("営業CF (百万)", lambda c: c.get("CFO")),
             ("投資CF (百万)", lambda c: c.get("CFI")),
             ("フリーCF (百万)", lambda c: c.get("CFC")),
@@ -178,6 +186,14 @@ async def cmd_analyze(args):
             ("PER (倍)", lambda c: c.get("PER")),
             ("PBR (倍)", lambda c: c.get("PBR")),
             ("年度末株価 (円)", lambda c: c.get("Price")),
+            # ── 有利子負債 ──
+            ("有利子負債合計 (百万)", lambda c: c.get("InterestBearingDebt")),
+            ("  短期借入金 (百万)",     _get_ibd_component("短期借入金")),
+            ("  CP (百万)",            _get_ibd_component("コマーシャル・ペーパー")),
+            ("  1年内償還社債 (百万)",  _get_ibd_component("1年内償還予定の社債")),
+            ("  1年内返済長借 (百万)",  _get_ibd_component("1年内返済予定の長期借入金")),
+            ("  社債 (百万)",           _get_ibd_component("社債")),
+            ("  長期借入金 (百万)",     _get_ibd_component("長期借入金")),
         ]
 
         for label, func in metrics_to_show:

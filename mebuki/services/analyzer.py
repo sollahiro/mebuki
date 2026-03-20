@@ -577,6 +577,41 @@ class IndividualAnalyzer:
             yield {"status": "error", "message": str(e)}
 
 
+    async def _extract_ibd_by_year(
+        self,
+        code: str,
+        financial_data: List[Dict[str, Any]],
+        max_years: int,
+    ) -> Dict[str, dict]:
+        """年度別に有利子負債を抽出。Returns: { "YYYYMMDD": ibd_result_dict }"""
+        from mebuki.analysis.interest_bearing_debt import extract_interest_bearing_debt
+
+        if not self.edinet_client or not self.edinet_client.api_key:
+            return {}
+        try:
+            docs = await asyncio.to_thread(
+                self.edinet_client.search_recent_reports,
+                code, financial_data, max_years, ["120"], max_years
+            )
+            ibd_by_year = {}
+            for doc in docs:
+                fy_end_iso = doc.get("jquants_fy_end", "")       # "2025-03-31"
+                fy_end_8 = fy_end_iso.replace("-", "")            # "20250331"
+                if not fy_end_8:
+                    continue
+                xbrl_dir = await asyncio.to_thread(
+                    self.edinet_client.download_document, doc["docID"], 1
+                )
+                if xbrl_dir:
+                    ibd = await asyncio.to_thread(
+                        extract_interest_bearing_debt, Path(xbrl_dir)
+                    )
+                    ibd_by_year[fy_end_8] = ibd
+            return ibd_by_year
+        except Exception as e:
+            logger.warning(f"IBD抽出エラー: {code} - {e}")
+            return {}
+
     async def fetch_analysis_data(
         self,
         code: str,
@@ -604,6 +639,24 @@ class IndividualAnalyzer:
         edinet_data = {}
         if financial_data:
             edinet_data = await self._fetch_edinet_data_async(code, financial_data, max_documents=max_documents)
+
+        # 有利子負債を年度別に抽出してmetricsにマージ
+        if financial_data and metrics:
+            ibd_by_year = await self._extract_ibd_by_year(code, financial_data, actual_years)
+            for year in metrics.get("years", []):
+                fy_end = year.get("fy_end", "")
+                fy_end_key = fy_end.replace("-", "")  # "2025-03-31" → "20250331"
+                ibd = ibd_by_year.get(fy_end_key)
+                if ibd and ibd.get("current") is not None:
+                    ibd_m = ibd["current"] / 1_000_000
+                    year["CalculatedData"]["InterestBearingDebt"] = ibd_m
+                    year["CalculatedData"]["IBDComponents"] = ibd.get("components", [])
+                    year["CalculatedData"]["IBDMethod"] = ibd.get("method", "")
+                    # ROIC = OP / (Eq + IBD)
+                    op = year["CalculatedData"].get("OP")
+                    eq = year["CalculatedData"].get("Eq")
+                    if op is not None and eq is not None and (eq + ibd_m) != 0:
+                        year["CalculatedData"]["ROIC"] = op / (eq + ibd_m) * 100
 
         return {
             "stock_info": stock_info,
