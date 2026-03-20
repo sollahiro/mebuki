@@ -34,7 +34,7 @@ class EdinetAPIClient:
         # セッションの初期化（コネクション再利用のため）
         self.session = requests.Session()
 
-    def update_api_key(self, api_key: str):
+    def update_api_key(self, api_key: str) -> None:
         """APIキーを更新します。"""
         self.api_key = api_key.strip() if api_key else ""
 
@@ -106,7 +106,7 @@ class EdinetAPIClient:
                 logger.warning(f"Cache load failed: {e}")
         return None
 
-    def _save_search_cache(self, filename: str, data: List[Dict[str, Any]]):
+    def _save_search_cache(self, filename: str, data: List[Dict[str, Any]]) -> None:
         """検索結果をキャッシュに保存"""
         cache_path = self.cache_dir / filename
         try:

@@ -6,7 +6,7 @@
 
 import math
 import logging
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -147,7 +147,7 @@ def is_valid_value(value: Any) -> bool:
         return False
 
 
-def is_valid_financial_record(record: dict) -> bool:
+def is_valid_financial_record(record: Dict[str, Any]) -> bool:
     """
     財務レコードが有効かどうかを判定
     

@@ -17,7 +17,7 @@ class BOJClient:
         self._last_request_time = 0
         self.interval = 1.1
 
-    def _wait_for_interval(self):
+    def _wait_for_interval(self) -> None:
         elapsed = time.time() - self._last_request_time
         if elapsed < self.interval:
             time.sleep(self.interval - elapsed)

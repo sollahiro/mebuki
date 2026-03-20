@@ -37,7 +37,7 @@ class XBRLParser:
     # 後方互換性のためにクラス属性としてもエイリアスを定義
     COMMON_SECTIONS = XBRL_SECTIONS
     
-    def __init__(self):
+    def __init__(self) -> None:
         """初期化"""
         if not BS4_AVAILABLE:
             logger.warning("beautifulsoup4がインストールされていません。")

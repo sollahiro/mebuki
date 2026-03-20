@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class _NumpyEncoder(json.JSONEncoder):
-    def default(self, obj):
+    def default(self, obj) -> Any:
         try:
             import numpy as np
             if isinstance(obj, np.integer):
@@ -76,7 +76,7 @@ class CacheManager:
         self._metadata_cache = {}
         return self._metadata_cache
 
-    def _save_metadata(self, metadata: Dict[str, str]):
+    def _save_metadata(self, metadata: Dict[str, str]) -> None:
         """メタデータを保存し、メモリキャッシュも更新"""
         metadata_path = self._get_metadata_file_path()
         with open(metadata_path, "w", encoding="utf-8") as f:
@@ -124,7 +124,7 @@ class CacheManager:
         except (json.JSONDecodeError, IOError):
             return None
     
-    def set(self, key: str, value: Any):
+    def set(self, key: str, value: Any) -> None:
         """
         キャッシュにデータを保存
         
@@ -151,7 +151,7 @@ class CacheManager:
         metadata[key] = datetime.now().isoformat()
         self._save_metadata(metadata)
     
-    def clear(self, key: Optional[str] = None):
+    def clear(self, key: Optional[str] = None) -> None:
         """
         キャッシュをクリア
         

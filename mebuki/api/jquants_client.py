@@ -47,7 +47,7 @@ class JQuantsAPIClient:
                 "x-api-key": self.api_key
             })
 
-    def update_api_key(self, api_key: str):
+    def update_api_key(self, api_key: str) -> None:
         """APIキーを更新し、セッションヘッダーを更新します。"""
         self.api_key = api_key.strip() if api_key else ""
         self.session.headers.update({

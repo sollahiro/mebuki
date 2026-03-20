@@ -12,7 +12,7 @@ from ..utils.converters import to_float, is_valid_value, is_valid_financial_reco
 from ..infrastructure.settings import settings_store
 
 
-def to_millions(value):
+def to_millions(value: Any) -> Optional[float]:
     """円単位の値を百万円単位に変換"""
     if value is None:
         return None

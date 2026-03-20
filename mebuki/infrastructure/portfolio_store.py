@@ -6,7 +6,7 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import Iterator, List, Optional, Dict, Any
 from datetime import datetime
 
 from mebuki.infrastructure.settings import settings_store
@@ -29,7 +29,7 @@ class PortfolioStore:
         logger.info(f"Initialized PortfolioStore with path: {self.portfolio_path}")
 
     @contextlib.contextmanager
-    def _file_lock(self):
+    def _file_lock(self) -> Iterator[None]:
         """portfolio.json への排他アクセスを確保するコンテキストマネージャ"""
         lock_path = self.portfolio_path.with_suffix(".json.lock")
         if sys.platform == "win32":

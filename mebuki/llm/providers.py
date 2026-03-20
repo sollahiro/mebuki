@@ -99,10 +99,10 @@ class GeminiProvider(LLMProvider):
     google-genai パッケージ（新SDK）のみをサポートします。
     """
     
-    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-3-flash-preview"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-3-flash-preview") -> None:
         """
         初期化
-        
+
         Args:
             api_key: Gemini APIキー（Noneの場合は環境変数から取得）
             model: 使用するモデル名
@@ -327,10 +327,10 @@ class OllamaProvider(LLMProvider):
     ローカルで実行されるOllamaを使用してテキストを生成します。
     """
     
-    def __init__(self, model: str = "gemma3:1b", host: Optional[str] = None):
+    def __init__(self, model: str = "gemma3:1b", host: Optional[str] = None) -> None:
         """
         初期化
-        
+
         Args:
             model: 使用するモデル名
             host: Ollamaホスト（デフォルト: localhost:11434）
