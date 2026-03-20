@@ -327,7 +327,7 @@ def cmd_macro(args):
         else:
             # リスト形式のデータを想定して直近12件を表示
             if isinstance(data, list):
-                rows = data[-12:]
+                rows = data[-12:] 
                 print(f"\n[マクロ経済データ] {args.category}  (直近{len(rows)}件)")
                 print("-" * 60)
                 for row in rows:
@@ -398,7 +398,7 @@ def cmd_config(args, parser):
                 return
             target_value = target_value.lower()
 
-        settings_store.update({target_key: target_value}, save=True)
+        settings_store.update({target_key: target_value}, save=True) 
         print(f"設定を更新しました: {target_key}")
 
     elif args.config_subcommand == "init":
@@ -528,8 +528,8 @@ def cmd_interactive():
                     {"name": "保有追加", "value": "add"},
                     {"name": "売却", "value": "sell"},
                     {"name": "ポジション削除", "value": "remove"},
-                    {"name": "一覧 (名寄せ)", "value": "list"},
-                    {"name": "一覧 (口座別詳細)", "value": "list_detail"},
+                    {"name": "銘柄一覧", "value": "list"},
+                    {"name": "保有明細", "value": "list_detail"},
                     {"name": "戻る", "value": "back"},
                 ]
             ).ask()
