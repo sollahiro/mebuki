@@ -71,7 +71,8 @@ class IndividualAnalyzer:
         
     def _fetch_financial_data(
         self,
-        code: str
+        code: str,
+        include_2q: bool = False
     ) -> tuple[Optional[Dict[str, Any]], Optional[List[Dict[str, Any]]], Optional[List[Dict[str, Any]]]]:
         """財務データを取得"""
         master_data = self.api_client.get_equity_master(code=code)
@@ -92,7 +93,7 @@ class IndividualAnalyzer:
             return stock_info, None, None
         
         try:
-            annual_data = extract_annual_data(financial_data)
+            annual_data = extract_annual_data(financial_data, include_2q=include_2q)
         except Exception as e:
             logger.error(f"銘柄コード {code}: 年度データ抽出中にエラーが発生しました - {e}", exc_info=True)
             return stock_info, financial_data, None
@@ -111,23 +112,30 @@ class IndividualAnalyzer:
         dates_to_fetch = []
         date_to_fy_end = {}
         
-        for year_data in annual_data[:analysis_years]:
+        fy_count = 0
+        for year_data in annual_data:
+            if fy_count >= analysis_years:
+                break
             fy_end = year_data.get("CurFYEn")
             if fy_end:
                 if len(fy_end) == 8:
                     fy_end_formatted = f"{fy_end[:4]}-{fy_end[4:6]}-{fy_end[6:8]}"
                 else:
                     fy_end_formatted = fy_end[:10] if len(fy_end) >= 10 else fy_end
-                
+
                 try:
                     fy_end_date = datetime.strptime(fy_end, "%Y%m%d") if len(fy_end) == 8 else datetime.strptime(fy_end[:10], "%Y-%m-%d")
                     if fy_end_date and fy_end_date < subscription_start_date:
+                        if year_data.get("CurPerType") == "FY":
+                            fy_count += 1
                         continue
-                    
+
                     dates_to_fetch.append(fy_end_formatted)
                     date_to_fy_end[fy_end_formatted] = fy_end
                 except (ValueError, TypeError):
                     pass
+            if year_data.get("CurPerType") == "FY":
+                fy_count += 1
         
         if dates_to_fetch:
             try:
@@ -237,10 +245,13 @@ class IndividualAnalyzer:
         cache_key: str,
         result: Dict[str, Any],
         queue: asyncio.Queue,
+        include_2q: bool = False,
     ) -> None:
         """メインフロー: 財務データ取得 -> 指標計算 -> 株価反映 -> EDINETを並列実行"""
         try:
-            stock_info, financial_data, annual_data = await asyncio.to_thread(self._fetch_financial_data, code)
+            stock_info, financial_data, annual_data = await asyncio.to_thread(
+                self._fetch_financial_data, code, include_2q
+            )
             if not stock_info or not financial_data or not annual_data:
                 await queue.put({"status": "error", "message": "財務データの取得に失敗しました"})
                 return
@@ -252,7 +263,7 @@ class IndividualAnalyzer:
                 "market_name": stock_info.get("MktNm"),
             })
 
-            available_years = len(annual_data)
+            available_years = sum(1 for d in annual_data if d.get("CurPerType") == "FY")
             max_years = settings_store.get_max_analysis_years()
             analysis_years = min(available_years, max_years)
 
@@ -344,10 +355,10 @@ class IndividualAnalyzer:
                 except Exception as e:
                     logger.error(f"タスクキャンセル中のエラー: {e}")
 
-    async def analyze_stock(self, code: str, progress_callback: Optional[Callable] = None) -> Optional[Dict[str, Any]]:
+    async def analyze_stock(self, code: str, progress_callback: Optional[Callable] = None, include_2q: bool = False) -> Optional[Dict[str, Any]]:
         """個別銘柄を詳細分析"""
         cache_key = f"individual_analysis_{code}"
-        
+
         if self.use_cache and self.cache:
             cached_result = self.cache.get(cache_key)
             if cached_result is not None:
@@ -355,12 +366,14 @@ class IndividualAnalyzer:
 
         try:
             # 1. 財務データ取得
-            stock_info, financial_data, annual_data = await asyncio.to_thread(self._fetch_financial_data, code)
+            stock_info, financial_data, annual_data = await asyncio.to_thread(
+                self._fetch_financial_data, code, include_2q
+            )
             if not stock_info or not financial_data or not annual_data:
                 return None
-            
+
             # 2. 指標計算
-            available_years = len(annual_data)
+            available_years = sum(1 for d in annual_data if d.get("CurPerType") == "FY")
             max_years = settings_store.get_max_analysis_years()
             analysis_years = min(available_years, max_years)
             
@@ -396,18 +409,20 @@ class IndividualAnalyzer:
     async def get_metrics(
         self,
         code: str,
-        analysis_years: Optional[int] = None
+        analysis_years: Optional[int] = None,
+        include_2q: bool = False
     ) -> Optional[Dict[str, Any]]:
         """
         指標データのみを返す公開API。
         上位層（CLI/MCP）は private メソッドへ依存せず、このメソッドを利用する。
         """
-        stock_info, _, annual_data = await asyncio.to_thread(self._fetch_financial_data, code)
+        stock_info, _, annual_data = await asyncio.to_thread(self._fetch_financial_data, code, include_2q)
         if not stock_info or not annual_data:
             return None
 
         max_years = analysis_years or settings_store.get_max_analysis_years()
-        years = min(len(annual_data), max_years)
+        fy_count = sum(1 for d in annual_data if d.get("CurPerType") == "FY")
+        years = min(fy_count, max_years)
         prices = await asyncio.to_thread(self._fetch_prices, code, annual_data, years)
         return await asyncio.to_thread(self._calculate_metrics, code, annual_data, prices, years)
 
@@ -567,16 +582,19 @@ class IndividualAnalyzer:
         code: str,
         analysis_years: int | None = None,
         max_documents: int = 10,
+        include_2q: bool = False,
     ) -> Dict[str, Any]:
         """財務指標 + EDINETデータを取得する公開API（use_cache=False）。
 
         data_service などの上位層が private メソッドを直接呼ばずに済むよう提供する。
         """
-        stock_info, financial_data, annual_data = await asyncio.to_thread(self._fetch_financial_data, code)
+        stock_info, financial_data, annual_data = await asyncio.to_thread(
+            self._fetch_financial_data, code, include_2q
+        )
         if not stock_info or not annual_data:
             return {}
 
-        available_years = len(annual_data)
+        available_years = sum(1 for d in annual_data if d.get("CurPerType") == "FY")
         max_years = analysis_years or settings_store.get_max_analysis_years()
         actual_years = min(available_years, max_years)
 

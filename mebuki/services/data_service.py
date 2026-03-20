@@ -147,12 +147,13 @@ class DataService:
         code: str,
         scope: str = "overview",
         use_cache: bool = True,
+        include_2q: bool = False,
     ) -> Any:
         """財務データ取得の統一公開API。"""
         analyzer = self.get_analyzer(use_cache=use_cache)
 
         if scope in {"overview", "history"}:
-            result = await analyzer.analyze_stock(code)
+            result = await analyzer.analyze_stock(code, include_2q=include_2q)
             if scope == "history" and result:
                 result["history"] = result.get("metrics", {}).get("years", [])
             result = result or {}
@@ -164,7 +165,7 @@ class DataService:
             return result
 
         if scope == "metrics":
-            metrics = await analyzer.get_metrics(code)
+            metrics = await analyzer.get_metrics(code, include_2q=include_2q)
             result = metrics or {}
             try:
                 await self._refresh_earnings_calendar_if_needed()
@@ -259,6 +260,7 @@ class DataService:
         use_cache: bool = True,
         max_documents: int = 2,
         analysis_years: Optional[int] = None,
+        include_2q: bool = False,
     ) -> Dict[str, Any]:
         """AI分析抜きの純粋な分析データを取得（財務指標 + 有報テキスト）"""
         analyzer = self.get_analyzer(use_cache=use_cache)
@@ -270,7 +272,7 @@ class DataService:
                     del cached["llm_financial_analysis"]
                 return cached
 
-        result = await analyzer.fetch_analysis_data(code, analysis_years, max_documents)
+        result = await analyzer.fetch_analysis_data(code, analysis_years, max_documents, include_2q=include_2q)
         if not result:
             return {}
 

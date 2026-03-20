@@ -118,7 +118,10 @@ async def cmd_analyze(args):
     
     try:
         # data_service を使って生の財務データを取得
-        result = await data_service.get_raw_analysis_data(code, use_cache=not args.no_cache, analysis_years=years_to_analyze)
+        result = await data_service.get_raw_analysis_data(
+            code, use_cache=not args.no_cache, analysis_years=years_to_analyze,
+            include_2q=getattr(args, 'include_2q', False)
+        )
         
         if not result or not result.get("metrics"):
             print("エラー: 財務データの取得に失敗しました。APIキーが正しく設定されているか確認してください。")
@@ -147,6 +150,9 @@ async def cmd_analyze(args):
                 period_str = f"{fy_end[2:4]}/{fy_end[4:6]}"
             else:
                 period_str = fy_end[2:7] # YY-MM
+            per_type = y_data.get("RawData", {}).get("CurPerType", "FY")
+            if per_type == "2Q":
+                period_str += "(2Q)"
             headers.append(period_str)
             periods.append(y_data)
 
@@ -878,6 +884,10 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_parser.add_argument("--years", type=int, help="分析年数")
     analyze_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
     analyze_parser.add_argument("--no-cache", action="store_true", help="キャッシュを使用しない")
+    analyze_parser.add_argument(
+        "--include-2q", action="store_true", dest="include_2q",
+        help="2Q（中間）データも含めて集計する"
+    )
 
     # price
     price_parser = subparsers.add_parser("price", help="株価データを取得")

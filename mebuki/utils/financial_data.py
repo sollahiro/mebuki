@@ -108,18 +108,22 @@ def extract_annual_data(
         reverse=False
     )
     
+    # include_2q=True の場合は (CurFYEn, CurPerType) をキーにして FY と 2Q を別エントリとして保持する
     seen_years = {}
     for record in annual_data:
         fy_end = record.get("CurFYEn")
         if not fy_end:
             continue
-            
-        if fy_end not in seen_years:
+
+        per_type = record.get("CurPerType", "FY")
+        dedup_key = (fy_end, per_type) if include_2q else fy_end
+
+        if dedup_key not in seen_years:
             # 最初のレコード（その年度で最も古いデータ）をベースにする
-            seen_years[fy_end] = record.copy()
+            seen_years[dedup_key] = record.copy()
         else:
             # 既にデータがある場合は、新しい有効な値でマージする
-            existing_record = seen_years[fy_end]
+            existing_record = seen_years[dedup_key]
             for key, val in record.items():
                 # 新しいレコードに有効な値がある場合のみ上書きする
                 # Salesなどの主要項目だけでなく、全フィールドに対して行う
@@ -131,9 +135,13 @@ def extract_annual_data(
             existing_record["DiscDate"] = record.get("DiscDate", existing_record.get("DiscDate"))
 
     # マージ後のデータを新しい順（降順）に並べ替えて返す
+    # 同一 CurFYEn では FY を 2Q より後（新しい側）に並べる
     unique_annual_data = list(seen_years.values())
-    unique_annual_data.sort(key=lambda x: x.get("CurFYEn", ""), reverse=True)
-    
+    unique_annual_data.sort(
+        key=lambda x: (x.get("CurFYEn", ""), 0 if x.get("CurPerType") == "FY" else 1),
+        reverse=True
+    )
+
     return unique_annual_data
 
 

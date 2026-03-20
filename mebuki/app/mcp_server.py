@@ -51,6 +51,11 @@ async def list_tools() -> List[Tool]:
                         "description": "Scope of data: 'overview' (default), 'history' (10y series), 'metrics' (calculated ratios), or 'raw' (J-QUANTS data).",
                     },
                     "use_cache": {"type": "boolean", "default": True},
+                    "include_2q": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Include 2Q (half-year) data in the financial summary. Default: false (FY only).",
+                    },
                 },
                 "required": ["code"],
             },
@@ -255,7 +260,8 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             code = validate_stock_code(str(arguments["code"]))
             scope = arguments.get("scope", "overview")
             use_cache = arguments.get("use_cache", True)
-            result = await data_service.get_financial_data(code, scope=scope, use_cache=use_cache)
+            include_2q = arguments.get("include_2q", False)
+            result = await data_service.get_financial_data(code, scope=scope, use_cache=use_cache, include_2q=include_2q)
             return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
 
         if name == "get_japan_stock_price_data":

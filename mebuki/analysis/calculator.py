@@ -106,12 +106,19 @@ def calculate_metrics_flexible(
     current_month = today.month
     
     years_data = []
-    seen_fy_ends = set()
+    seen_entries = set()
+    fy_count = 0
     for year_data in annual_data:
+        if fy_count >= analysis_years:
+            break
         fy_end = year_data.get("CurFYEn")
-        if not fy_end or fy_end in seen_fy_ends:
+        if not fy_end:
             continue
-        
+        per_type = year_data.get("CurPerType", "FY")
+        dedup_key = (fy_end, per_type)
+        if dedup_key in seen_entries:
+            continue
+
         # 未来の年度データを除外
         try:
             if len(fy_end) == 8:
@@ -120,19 +127,19 @@ def calculate_metrics_flexible(
                 y, m = int(fy_end[:4]), int(fy_end[5:7])
             else:
                 y, m = None, None
-            
+
             if y is not None and (y > current_year or (y == current_year and m > current_month)):
                 continue
         except (ValueError, IndexError):
             pass
-        
+
         if not is_valid_financial_record(year_data):
             continue
-        
+
         years_data.append(year_data)
-        seen_fy_ends.add(fy_end)
-        if len(years_data) >= analysis_years:
-            break
+        seen_entries.add(dedup_key)
+        if per_type == "FY":
+            fy_count += 1
     
     if not years_data:
         return {}
@@ -199,6 +206,8 @@ def calculate_metrics_flexible(
                     financial_period = f"{y}年{m:02d}月期"
             except (ValueError, IndexError):
                 pass
+        if year_data.get("CurPerType") == "2Q":
+            financial_period += " (2Q)"
 
         calc_values['FinancialPeriod'] = financial_period
 
@@ -222,13 +231,20 @@ def calculate_metrics_flexible(
         price = None
         if prices and fy_end:
             price = prices.get(fy_end) or prices.get(fy_end.replace("-", ""))
-        
+
         market_metrics = _calculate_market_metrics(price, calc_values['AdjustedEPS'], calc_values['AdjustedBPS'])
         calc_values.update({
             'Price': price,
             'PER': market_metrics['per'],
             'PBR': market_metrics['pbr']
         })
+
+        # 2Qは6ヶ月分のEPS/BPSのため、比率系指標は無効
+        if year_data.get("CurPerType") == "2Q":
+            calc_values.update({
+                'ROE': None, 'SimpleROIC': None, 'CFCVR': None,
+                'PER': None, 'PBR': None
+            })
 
         # 決算期の文字列作成 (YYYY年MM月期)
         financial_period = ""
@@ -237,6 +253,8 @@ def calculate_metrics_flexible(
                 financial_period = f"{fy_end[:4]}年{fy_end[4:6]}月期"
             elif len(fy_end) >= 10:
                 financial_period = f"{fy_end[:4]}年{fy_end[5:7]}月期"
+        if year_data.get("CurPerType") == "2Q":
+            financial_period += " (2Q)"
 
         years_metrics.append({
             "fy_end": fy_end,
