@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 
 import requests
 from ..constants.api import JQUANTS_API_BASE_URL
+from mebuki.constants.formats import DATE_LEN_COMPACT
 
 logger = logging.getLogger(__name__)
 
@@ -367,7 +368,7 @@ class JQuantsAPIClient:
                 bar_date = bar.get("Date", "")
                 if bar_date:
                     # 日付形式を正規化
-                    if len(bar_date) == 8:
+                    if len(bar_date) == DATE_LEN_COMPACT:
                         normalized_bar_date = f"{bar_date[:4]}-{bar_date[4:6]}-{bar_date[6:8]}"
                     else:
                         normalized_bar_date = bar_date[:10] if len(bar_date) >= 10 else bar_date
@@ -431,7 +432,7 @@ class JQuantsAPIClient:
                         for bar in all_bars:
                             bar_date = bar.get("Date", "")
                             if bar_date:
-                                if len(bar_date) == 8:
+                                if len(bar_date) == DATE_LEN_COMPACT:
                                     normalized_bar_date = f"{bar_date[:4]}-{bar_date[4:6]}-{bar_date[6:8]}"
                                 else:
                                     normalized_bar_date = bar_date[:10] if len(bar_date) >= 10 else bar_date

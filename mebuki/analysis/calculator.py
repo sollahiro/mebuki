@@ -10,13 +10,15 @@ from datetime import datetime
 
 from ..utils.converters import to_float, is_valid_value, is_valid_financial_record
 from ..infrastructure.settings import settings_store
+from mebuki.constants.formats import DATE_LEN_COMPACT, DATE_LEN_HYPHENATED
+from mebuki.constants.financial import PERCENT, MILLION_YEN
 
 
 def to_millions(value: Any) -> Optional[float]:
     """円単位の値を百万円単位に変換"""
     if value is None:
         return None
-    return value / 1_000_000
+    return value / MILLION_YEN
 
 
 def calculate_adjustment_ratio(current_avg_sh: Optional[float], base_avg_sh: Optional[float]) -> Optional[float]:
@@ -41,13 +43,13 @@ def _calculate_profitability_metrics(np: Optional[float], op: Optional[float], e
     """収益性指標（ROE, ROIC, CF変換率）の計算"""
     roe = None
     if np is not None and eq is not None and eq != 0:
-        roe = (np / eq) * 100
+        roe = (np / eq) * PERCENT
 
     simple_roic = None  # 廃止: IBDマージ時に ROIC として計算
 
     cf_conversion_rate = None
     if cfo is not None and op is not None and op != 0:
-        cf_conversion_rate = (cfo / op) * 100
+        cf_conversion_rate = (cfo / op) * PERCENT
         
     return {
         "roe": roe,
@@ -119,9 +121,9 @@ def calculate_metrics_flexible(
 
         # 未来の年度データを除外
         try:
-            if len(fy_end) == 8:
+            if len(fy_end) == DATE_LEN_COMPACT:
                 y, m = int(fy_end[:4]), int(fy_end[4:6])
-            elif len(fy_end) == 10:
+            elif len(fy_end) == DATE_LEN_HYPHENATED:
                 y, m = int(fy_end[:4]), int(fy_end[5:7])
             else:
                 y, m = None, None
@@ -188,7 +190,7 @@ def calculate_metrics_flexible(
             'CFO': to_millions(raw_values['CFO']),
             'CFI': to_millions(raw_values['CFI']),
             'CashEq': to_millions(raw_values['CashEq']),
-            'PayoutRatio': raw_values['PayoutRatioAnn'] * 100 if raw_values['PayoutRatioAnn'] is not None else None,
+            'PayoutRatio': raw_values['PayoutRatioAnn'] * PERCENT if raw_values['PayoutRatioAnn'] is not None else None,
             'CFC': (to_millions(raw_values['CFO']) + to_millions(raw_values['CFI'])) if (raw_values['CFO'] is not None and raw_values['CFI'] is not None) else None
         }
 
@@ -196,10 +198,10 @@ def calculate_metrics_flexible(
         financial_period = ""
         if fy_end:
             try:
-                if len(fy_end) == 8:
+                if len(fy_end) == DATE_LEN_COMPACT:
                     y, m = int(fy_end[:4]), int(fy_end[4:6])
                     financial_period = f"{y}年{m:02d}月期"
-                elif len(fy_end) >= 10:
+                elif len(fy_end) >= DATE_LEN_HYPHENATED:
                     y, m = int(fy_end[:4]), int(fy_end[5:7])
                     financial_period = f"{y}年{m:02d}月期"
             except (ValueError, IndexError):
@@ -247,9 +249,9 @@ def calculate_metrics_flexible(
         # 決算期の文字列作成 (YYYY年MM月期)
         financial_period = ""
         if fy_end:
-            if len(fy_end) == 8:
+            if len(fy_end) == DATE_LEN_COMPACT:
                 financial_period = f"{fy_end[:4]}年{fy_end[4:6]}月期"
-            elif len(fy_end) >= 10:
+            elif len(fy_end) >= DATE_LEN_HYPHENATED:
                 financial_period = f"{fy_end[:4]}年{fy_end[5:7]}月期"
         if year_data.get("CurPerType") == "2Q":
             financial_period += " (2Q)"
@@ -332,18 +334,18 @@ def calculate_quarterly_metrics(
         price = None
         if prices and quarter_end:
             date_key = quarter_end
-            if len(quarter_end) == 8:
+            if len(quarter_end) == DATE_LEN_COMPACT:
                 date_key = f"{quarter_end[:4]}-{quarter_end[4:6]}-{quarter_end[6:8]}"
             price = prices.get(date_key) or prices.get(quarter_end)
-        
+
         market_metrics = _calculate_market_metrics(price, eps, bps)
-        
+
         # 決算期の文字列作成 (YYYY年MM月期)
         financial_period = ""
         if quarter_end:
-            if len(quarter_end) == 8:
+            if len(quarter_end) == DATE_LEN_COMPACT:
                 financial_period = f"{quarter_end[:4]}年{quarter_end[4:6]}月期"
-            elif len(quarter_end) >= 10:
+            elif len(quarter_end) >= DATE_LEN_HYPHENATED:
                 financial_period = f"{quarter_end[:4]}年{quarter_end[5:7]}月期"
 
         quarters_metrics.append({
@@ -367,7 +369,7 @@ def calculate_quarterly_metrics(
         oldest = quarters_metrics[-1]
         
         def calc_idx(curr, base):
-            return (curr / base) * 100 if curr is not None and base and base > 0 else None
+            return (curr / base) * PERCENT if curr is not None and base and base > 0 else None
 
         metrics.update({
             "price_index": [calc_idx(m['price'], oldest['price']) for m in quarters_metrics],

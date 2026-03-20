@@ -32,6 +32,8 @@ try:
 except ImportError:
     _BS4_AVAILABLE = False
 
+from mebuki.constants.financial import MILLION_YEN
+
 
 # 有利子負債合計タグ（直接法で使うタグ）
 INTEREST_BEARING_DEBT_TAGS = [
@@ -339,7 +341,7 @@ def _extract_usgaap_from_html(htm_file: Path) -> Optional[Dict[str, Any]]:
     lt_longterm_prior   = _subtract(lt_total_prior,   lt_1yr_prior)
 
     def _to_yen(v):
-        return v * 1_000_000 if v is not None else None
+        return v * MILLION_YEN if v is not None else None
 
     components = [
         {"label": "短期借入金",               "tag": "USGAAP_ShortTermLoans",        "current": _to_yen(short_term_current),  "prior": _to_yen(short_term_prior)},

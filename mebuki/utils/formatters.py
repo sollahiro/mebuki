@@ -7,6 +7,7 @@
 from typing import Optional
 
 from .fiscal_year import extract_fiscal_year_from_fy_end as _extract_fiscal_year_from_fy_end
+from mebuki.constants.financial import MILLION_YEN
 
 
 def format_currency(value: Optional[float], decimals: int = 0) -> str:
@@ -28,7 +29,7 @@ def format_currency(value: Optional[float], decimals: int = 0) -> str:
             return "0"
         abs_val = abs(val)
         sign = "-" if val < 0 else ""
-        formatted = abs_val / 1000000
+        formatted = abs_val / MILLION_YEN
         return f"{sign}{formatted:,.{decimals}f}百万円"
     except (ValueError, TypeError):
         return "N/A"

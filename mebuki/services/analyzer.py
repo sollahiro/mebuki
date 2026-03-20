@@ -21,6 +21,8 @@ from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.utils.cache import CacheManager
 
 from mebuki.infrastructure.settings import settings_store
+from mebuki.constants.formats import DATE_LEN_COMPACT
+from mebuki.constants.financial import PERCENT, MILLION_YEN
 
 logger = logging.getLogger(__name__)
 
@@ -124,13 +126,13 @@ class IndividualAnalyzer:
                 break
             fy_end = year_data.get("CurFYEn")
             if fy_end:
-                if len(fy_end) == 8:
+                if len(fy_end) == DATE_LEN_COMPACT:
                     fy_end_formatted = f"{fy_end[:4]}-{fy_end[4:6]}-{fy_end[6:8]}"
                 else:
                     fy_end_formatted = fy_end[:10] if len(fy_end) >= 10 else fy_end
 
                 try:
-                    fy_end_date = datetime.strptime(fy_end, "%Y%m%d") if len(fy_end) == 8 else datetime.strptime(fy_end[:10], "%Y-%m-%d")
+                    fy_end_date = datetime.strptime(fy_end, "%Y%m%d") if len(fy_end) == DATE_LEN_COMPACT else datetime.strptime(fy_end[:10], "%Y-%m-%d")
                     if fy_end_date and fy_end_date < subscription_start_date:
                         if year_data.get("CurPerType") == "FY":
                             fy_count += 1
@@ -662,7 +664,7 @@ class IndividualAnalyzer:
                 fy_end_key = fy_end.replace("-", "")  # "2025-03-31" → "20250331"
                 ibd = ibd_by_year.get(fy_end_key)
                 if ibd and ibd.get("current") is not None:
-                    ibd_m = ibd["current"] / 1_000_000
+                    ibd_m = ibd["current"] / MILLION_YEN
                     year["CalculatedData"]["InterestBearingDebt"] = ibd_m
                     year["CalculatedData"]["IBDComponents"] = ibd.get("components", [])
                     year["CalculatedData"]["IBDMethod"] = ibd.get("method", "")
@@ -670,7 +672,7 @@ class IndividualAnalyzer:
                     op = year["CalculatedData"].get("OP")
                     eq = year["CalculatedData"].get("Eq")
                     if op is not None and eq is not None and (eq + ibd_m) != 0:
-                        year["CalculatedData"]["ROIC"] = op / (eq + ibd_m) * 100
+                        year["CalculatedData"]["ROIC"] = op / (eq + ibd_m) * PERCENT
 
         return {
             "stock_info": stock_info,

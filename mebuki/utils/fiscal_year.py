@@ -7,6 +7,8 @@
 from datetime import datetime
 from typing import Optional, Tuple
 
+from mebuki.constants.formats import DATE_LEN_COMPACT, DATE_LEN_HYPHENATED
+
 
 def normalize_date_format(date_str: Optional[str]) -> Optional[str]:
     """
@@ -23,10 +25,10 @@ def normalize_date_format(date_str: Optional[str]) -> Optional[str]:
     
     try:
         # YYYYMMDD形式
-        if len(date_str) == 8 and date_str.isdigit():
+        if len(date_str) == DATE_LEN_COMPACT and date_str.isdigit():
             return f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
         # YYYY-MM-DD形式
-        elif len(date_str) >= 10:
+        elif len(date_str) >= DATE_LEN_HYPHENATED:
             # 最初の10文字を取得
             date_part = date_str[:10]
             datetime.strptime(date_part, "%Y-%m-%d")
@@ -133,10 +135,10 @@ def parse_date_string(date_str: Optional[str]) -> Optional[datetime]:
     
     try:
         # YYYYMMDD形式
-        if len(date_str) == 8 and date_str.isdigit():
+        if len(date_str) == DATE_LEN_COMPACT and date_str.isdigit():
             return datetime.strptime(date_str, "%Y%m%d")
         # YYYY-MM-DD形式
-        elif len(date_str) >= 10:
+        elif len(date_str) >= DATE_LEN_HYPHENATED:
             return datetime.strptime(date_str[:10], "%Y-%m-%d")
     except (ValueError, TypeError):
         pass

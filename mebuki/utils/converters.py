@@ -9,6 +9,8 @@ import logging
 from typing import Any, Dict, Optional
 from datetime import datetime
 
+from mebuki.constants.formats import DATE_LEN_COMPACT, DATE_LEN_HYPHENATED
+
 logger = logging.getLogger(__name__)
 
 
@@ -205,11 +207,11 @@ def normalize_date(date_str: str) -> Optional[str]:
     date_str = date_str.strip()
     
     # 既にYYYY-MM-DD形式の場合
-    if len(date_str) == 10 and date_str[4] == '-' and date_str[7] == '-':
+    if len(date_str) == DATE_LEN_HYPHENATED and date_str[4] == '-' and date_str[7] == '-':
         return date_str
-    
+
     # YYYYMMDD形式の場合
-    if len(date_str) == 8 and date_str.isdigit():
+    if len(date_str) == DATE_LEN_COMPACT and date_str.isdigit():
         return f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
     
     # その他の形式は変換を試みる
@@ -294,11 +296,11 @@ def extract_year_month(date_str: str) -> tuple[Optional[int], Optional[int]]:
     
     try:
         # YYYYMMDD形式
-        if len(date_str) == 8 and date_str.isdigit():
+        if len(date_str) == DATE_LEN_COMPACT and date_str.isdigit():
             return int(date_str[:4]), int(date_str[4:6])
-        
+
         # YYYY-MM-DD形式
-        if len(date_str) >= 10 and date_str[4] == '-':
+        if len(date_str) >= DATE_LEN_HYPHENATED and date_str[4] == '-':
             return int(date_str[:4]), int(date_str[5:7])
         
         # その他の形式はparse_dateを使用

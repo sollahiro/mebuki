@@ -8,6 +8,8 @@ from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 
 from .converters import to_float, is_valid_value, is_valid_financial_record
+from mebuki.constants.formats import DATE_LEN_COMPACT, DATE_LEN_HYPHENATED
+from mebuki.constants.financial import PERCENT
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +53,9 @@ def extract_annual_data(
         if disc_date:
             try:
                 # YYYYMMDD形式またはYYYY-MM-DD形式を想定
-                if len(disc_date) == 8:  # YYYYMMDD
+                if len(disc_date) == DATE_LEN_COMPACT:  # YYYYMMDD
                     disc_date_obj = datetime.strptime(disc_date, "%Y%m%d")
-                elif len(disc_date) == 10:  # YYYY-MM-DD
+                elif len(disc_date) == DATE_LEN_HYPHENATED:  # YYYY-MM-DD
                     disc_date_obj = datetime.strptime(disc_date, "%Y-%m-%d")
                 else:
                     disc_date_obj = None
@@ -68,21 +70,21 @@ def extract_annual_data(
         # 年度終了日が未来の場合は除外
         if fy_end:
             # YYYYMMDD形式またはYYYY-MM-DD形式を想定
-            if len(fy_end) == 8:  # YYYYMMDD
+            if len(fy_end) == DATE_LEN_COMPACT:  # YYYYMMDD
                 year = int(fy_end[:4])
                 month = int(fy_end[4:6])
-            elif len(fy_end) == 10:  # YYYY-MM-DD
+            elif len(fy_end) == DATE_LEN_HYPHENATED:  # YYYY-MM-DD
                 year = int(fy_end[:4])
                 month = int(fy_end[5:7])
             else:
                 # 形式が不明な場合は含める
                 annual_data.append(record)
                 continue
-            
+
             # 現在日付より未来の年度は除外
             # 例: 2026/03/07時点で2026/03/31のデータは除外
             try:
-                if len(fy_end) == 8:
+                if len(fy_end) == DATE_LEN_COMPACT:
                     fy_end_dt = datetime.strptime(fy_end, "%Y%m%d")
                 else:
                     fy_end_dt = datetime.strptime(fy_end[:10], "%Y-%m-%d")
@@ -194,7 +196,7 @@ def calculate_metrics(
         bps = to_float(year_data.get("BPS"))
         # 配当性向（APIからは小数で返ってくるので100倍してパーセント値に変換）
         payout_ratio_raw = to_float(year_data.get("PayoutRatioAnn"))
-        payout_ratio = payout_ratio_raw * 100 if payout_ratio_raw is not None else None
+        payout_ratio = payout_ratio_raw * PERCENT if payout_ratio_raw is not None else None
         # 配当金総額（円単位）
         div_total = to_float(year_data.get("DivTotalAnn"))
         
@@ -210,7 +212,7 @@ def calculate_metrics(
                 eq_float = float(eq) if not isinstance(eq, (int, float)) else eq
                 if eq_float != 0:
                     np_float = float(np) if not isinstance(np, (int, float)) else np
-                    roe = (np_float / eq_float) * 100
+                    roe = (np_float / eq_float) * PERCENT
             except (ValueError, TypeError, ZeroDivisionError):
                 roe = None
         
@@ -369,9 +371,9 @@ def get_fiscal_year_end_price(
     """
     try:
         # 日付形式を統一（YYYY-MM-DD形式に変換）
-        if len(fiscal_year_end) == 8:  # YYYYMMDD形式
+        if len(fiscal_year_end) == DATE_LEN_COMPACT:  # YYYYMMDD形式
             date_str = f"{fiscal_year_end[:4]}-{fiscal_year_end[4:6]}-{fiscal_year_end[6:8]}"
-        elif len(fiscal_year_end) == 10:  # YYYY-MM-DD形式
+        elif len(fiscal_year_end) == DATE_LEN_HYPHENATED:  # YYYY-MM-DD形式
             date_str = fiscal_year_end
         else:
             return None
@@ -406,17 +408,17 @@ def _calculate_quarter_end_date(fy_end: str, per_type: str) -> Optional[str]:
     
     try:
         # 日付形式を統一
-        if len(fy_end) == 8:  # YYYYMMDD
+        if len(fy_end) == DATE_LEN_COMPACT:  # YYYYMMDD
             fy_year = int(fy_end[:4])
             fy_month = int(fy_end[4:6])
             fy_day = int(fy_end[6:8])
-        elif len(fy_end) == 10:  # YYYY-MM-DD
+        elif len(fy_end) == DATE_LEN_HYPHENATED:  # YYYY-MM-DD
             fy_year = int(fy_end[:4])
             fy_month = int(fy_end[5:7])
             fy_day = int(fy_end[8:10])
         else:
             return None
-        
+
         # 四半期タイプを正規化（"1Q" -> 1, "Q1" -> 1）
         quarter_num = None
         if per_type in ["1Q", "Q1"]:
@@ -585,7 +587,7 @@ def extract_quarterly_data(
     def get_sort_key_asc(record):
         quarter_end = record.get("_quarter_end_date", "")
         disc_date = record.get("DiscDate", "")
-        if disc_date and len(disc_date) == 8:
+        if disc_date and len(disc_date) == DATE_LEN_COMPACT:
             disc_date = f"{disc_date[:4]}-{disc_date[4:6]}-{disc_date[6:8]}"
         return (quarter_end, disc_date)
     
@@ -666,9 +668,9 @@ def get_quarter_end_price(
     """
     try:
         # 日付形式を統一（YYYY-MM-DD形式に変換）
-        if len(quarter_end) == 8:  # YYYYMMDD形式
+        if len(quarter_end) == DATE_LEN_COMPACT:  # YYYYMMDD形式
             date_str = f"{quarter_end[:4]}-{quarter_end[4:6]}-{quarter_end[6:8]}"
-        elif len(quarter_end) == 10:  # YYYY-MM-DD形式
+        elif len(quarter_end) == DATE_LEN_HYPHENATED:  # YYYY-MM-DD形式
             date_str = quarter_end
         else:
             return None
