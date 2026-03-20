@@ -8,6 +8,7 @@ import copy
 import json
 import logging
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Any, Optional, Callable, AsyncGenerator
 from datetime import datetime
 from pathlib import Path
@@ -75,19 +76,24 @@ class IndividualAnalyzer:
         include_2q: bool = False
     ) -> tuple[Optional[Dict[str, Any]], Optional[List[Dict[str, Any]]], Optional[List[Dict[str, Any]]]]:
         """財務データを取得"""
-        master_data = self.api_client.get_equity_master(code=code)
+        # マスタ取得と財務サマリ取得は独立しているため並列実行する
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            master_future = executor.submit(self.api_client.get_equity_master, code=code)
+            financial_future = executor.submit(
+                self.api_client.get_financial_summary,
+                code=code,
+                period_types=["FY", "2Q"],
+                include_fields=None,
+            )
+            master_data = master_future.result()
+            financial_data = financial_future.result()
+
         stock_info = master_data[0] if master_data else {}
-        
+
         if not stock_info:
             logger.warning(f"銘柄コード {code}: 銘柄マスタにデータが見つかりませんでした。")
             return None, None, None
-        
-        financial_data = self.api_client.get_financial_summary(
-            code=code,
-            period_types=["FY", "2Q"],
-            include_fields=None
-        )
-        
+
         if not financial_data:
             logger.warning(f"銘柄コード {code}: 財務データが取得できませんでした。")
             return stock_info, None, None
@@ -372,16 +378,24 @@ class IndividualAnalyzer:
             if not stock_info or not financial_data or not annual_data:
                 return None
 
-            # 2. 指標計算
+            # 2. 指標計算とEDINET取得を並列実行
             available_years = sum(1 for d in annual_data if d.get("CurPerType") == "FY")
             max_years = settings_store.get_max_analysis_years()
             analysis_years = min(available_years, max_years)
-            
+
+            # EDINET取得は財務データが揃った時点で開始し、prices/metrics計算と並列化する
+            edinet_task = asyncio.create_task(
+                self._fetch_edinet_data_async(
+                    code, financial_data, edinet_code=stock_info.get("EdinetCode")
+                )
+            )
+
             prices = await asyncio.to_thread(self._fetch_prices, code, annual_data, analysis_years)
             metrics = await asyncio.to_thread(self._calculate_metrics, code, annual_data, prices, analysis_years)
             if not metrics:
+                edinet_task.cancel()
                 return None
-            
+
             # 3. 結果の作成
             result = {
                 "code": code,
@@ -392,15 +406,15 @@ class IndividualAnalyzer:
                 "metrics": metrics,
                 "analyzed_at": datetime.now().isoformat(),
             }
-            
-            edinet_data = await self._fetch_edinet_data_async(code, financial_data, edinet_code=stock_info.get("EdinetCode"))
+
+            edinet_data = await edinet_task
             if edinet_data:
                 result["edinet_data"] = edinet_data
 
             # 5. 保存とキャッシュ
             if self.cache:
                 self.cache.set(cache_key, result)
-            
+
             return result
         except Exception as e:
             logger.error(f"エラー: {code} の分析に失敗しました: {e}", exc_info=True)
