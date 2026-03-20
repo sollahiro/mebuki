@@ -82,13 +82,28 @@ def cmd_search(args):
             years=None,
             format="table",
             no_cache=False,
+            scope=None,
         )))
 
 async def cmd_analyze(args):
     """銘柄分析コマンド"""
     from mebuki.services.data_service import data_service
-    
-    code = args.code
+
+    code = validate_stock_code(args.code)
+
+    # --scope が指定された場合はスコープ別取得
+    if getattr(args, "scope", None):
+        try:
+            result = await data_service.get_financial_data(code, scope=args.scope, use_cache=not args.no_cache)
+            if args.format == "json":
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+            else:
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+        except Exception as e:
+            print(f"エラー: {e}")
+            logger.exception(e)
+        return
+
     # 銘柄情報の確認
     info = data_service.fetch_stock_basic_info(code)
     if not info.get("name"):
@@ -192,6 +207,153 @@ async def cmd_analyze(args):
     except Exception as e:
         print(f"エラー: 分析中に例外が発生しました: {e}")
         logger.exception(e)
+
+async def cmd_price(args):
+    """株価データ取得コマンド"""
+    from mebuki.services.data_service import data_service
+
+    code = validate_stock_code(args.code)
+    try:
+        data = await data_service.get_price_data(code, days=args.days)
+        if not data:
+            print(f"株価データが見つかりませんでした: {code}")
+            return
+        if args.format == "json":
+            print(json.dumps(data, indent=2, ensure_ascii=False))
+        else:
+            print(f"\n[株価データ] {code}  直近{args.days}日")
+            print("-" * 70)
+            print(f"{'日付':<12} {'始値':>8} {'高値':>8} {'安値':>8} {'終値':>8} {'出来高':>12}")
+            print("-" * 70)
+            for row in data:
+                o = row.get('AdjO') or row.get('O', '-')
+                h = row.get('AdjH') or row.get('H', '-')
+                l = row.get('AdjL') or row.get('L', '-')
+                c = row.get('AdjC') or row.get('C', '-')
+                v = row.get('AdjVo') or row.get('Vo', '-')
+                print(
+                    f"{row.get('Date',''):<12}"
+                    f" {o:>8}"
+                    f" {h:>8}"
+                    f" {l:>8}"
+                    f" {c:>8}"
+                    f" {v:>12}"
+                )
+            print("-" * 70)
+    except Exception as e:
+        print(f"エラー: {e}")
+        logger.exception(e)
+
+
+async def cmd_filings(args):
+    """EDINET書類一覧コマンド"""
+    from mebuki.services.data_service import data_service
+
+    code = validate_stock_code(args.code)
+    try:
+        docs = await data_service.search_filings(
+            code,
+            max_years=10,
+            doc_types=["120", "130", "140", "150", "160", "170"],
+            max_documents=10,
+        )
+        if not docs:
+            print(f"書類が見つかりませんでした: {code}")
+            return
+        if args.format == "json":
+            print(json.dumps(docs, indent=2, ensure_ascii=False))
+        else:
+            print(f"\n[EDINET書類一覧] {code} ({len(docs)}件)")
+            print("-" * 80)
+            print(f"{'書類ID':<16} {'種別':<6} {'提出日時':<20} {'書類名'}")
+            print("-" * 80)
+            for doc in docs:
+                print(
+                    f"{doc.get('docID',''):<16}"
+                    f" {doc.get('docTypeCode',''):<6}"
+                    f" {doc.get('submitDateTime',''):<20}"
+                    f" {doc.get('docDescription','')}"
+                )
+            print("-" * 80)
+    except Exception as e:
+        print(f"エラー: {e}")
+        logger.exception(e)
+
+
+async def cmd_filing(args):
+    """EDINET書類抽出コマンド"""
+    from mebuki.services.data_service import data_service
+
+    code = validate_stock_code(args.code)
+    doc_id = getattr(args, "doc_id", None)
+    sections = getattr(args, "sections", None) or []
+    try:
+        result = await data_service.extract_filing_content(
+            code,
+            doc_id=doc_id or None,
+            sections=sections or None,
+        )
+        if args.format == "json":
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        else:
+            secs = result.get("sections", {})
+            if not secs:
+                print("セクションデータが見つかりませんでした。")
+                return
+            for sec_name, sec_text in secs.items():
+                print(f"\n[{sec_name}]")
+                print("-" * 60)
+                text = sec_text if isinstance(sec_text, str) else json.dumps(sec_text, ensure_ascii=False)
+                print(text[:2000] + ("..." if len(text) > 2000 else ""))
+    except Exception as e:
+        print(f"エラー: {e}")
+        logger.exception(e)
+
+
+def cmd_macro(args):
+    """マクロ経済データ取得コマンド"""
+    from mebuki.services.macro_analyzer import macro_analyzer
+
+    start = getattr(args, "start", None)
+    end = getattr(args, "end", None)
+    try:
+        if args.category == "fx":
+            data = macro_analyzer.get_fx_environment(start, end)
+        else:
+            data = macro_analyzer.get_monetary_policy_status(start, end)
+
+        if args.format == "json":
+            print(json.dumps(data, indent=2, ensure_ascii=False))
+        else:
+            # リスト形式のデータを想定して直近12件を表示
+            if isinstance(data, list):
+                rows = data[-12:]
+                print(f"\n[マクロ経済データ] {args.category}  (直近{len(rows)}件)")
+                print("-" * 60)
+                for row in rows:
+                    print(json.dumps(row, ensure_ascii=False))
+                print("-" * 60)
+            elif isinstance(data, dict):
+                print(json.dumps(data, indent=2, ensure_ascii=False))
+            else:
+                print(data)
+    except Exception as e:
+        print(f"エラー: {e}")
+        logger.exception(e)
+
+
+async def cmd_visualize(args):
+    """財務データ可視化コマンド"""
+    from mebuki.services.data_service import data_service
+
+    code = validate_stock_code(args.code)
+    try:
+        result = await data_service.visualize_financial_data(code)
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+    except Exception as e:
+        print(f"エラー: {e}")
+        logger.exception(e)
+
 
 def cmd_config(args, parser):
     """設定管理コマンド"""
@@ -298,6 +460,7 @@ def cmd_interactive():
                     years=int(years) if years.isdigit() else 5,
                     format="table",
                     no_cache=False,
+                    scope=None,
                 )))
 
         elif action == "config":
@@ -711,9 +874,39 @@ def build_parser() -> argparse.ArgumentParser:
     # analyze
     analyze_parser = subparsers.add_parser("analyze", help="銘柄を分析")
     analyze_parser.add_argument("code", help="銘柄コード")
+    analyze_parser.add_argument("--scope", choices=["overview", "history", "metrics", "raw"], default=None, help="取得スコープ")
     analyze_parser.add_argument("--years", type=int, help="分析年数")
     analyze_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
     analyze_parser.add_argument("--no-cache", action="store_true", help="キャッシュを使用しない")
+
+    # price
+    price_parser = subparsers.add_parser("price", help="株価データを取得")
+    price_parser.add_argument("code", help="銘柄コード")
+    price_parser.add_argument("--days", type=int, default=30, help="取得日数 (デフォルト: 30)")
+    price_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+
+    # filings
+    filings_parser = subparsers.add_parser("filings", help="EDINET書類一覧を取得")
+    filings_parser.add_argument("code", help="銘柄コード")
+    filings_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+
+    # filing
+    filing_parser = subparsers.add_parser("filing", help="EDINET書類の内容を抽出")
+    filing_parser.add_argument("code", help="銘柄コード")
+    filing_parser.add_argument("--doc-id", dest="doc_id", help="書類ID (省略時は最新の有価証券報告書)")
+    filing_parser.add_argument("--sections", nargs="+", help="抽出するセクション名 (複数指定可)")
+    filing_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+
+    # macro
+    macro_parser = subparsers.add_parser("macro", help="マクロ経済データを取得")
+    macro_parser.add_argument("category", choices=["fx", "monetary"], help="カテゴリ (fx: 為替, monetary: 金融政策)")
+    macro_parser.add_argument("--start", help="開始月 (YYYYMM)")
+    macro_parser.add_argument("--end", help="終了月 (YYYYMM)")
+    macro_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+
+    # visualize
+    visualize_parser = subparsers.add_parser("visualize", help="財務データを可視化形式で取得")
+    visualize_parser.add_argument("code", help="銘柄コード")
 
     # config
     config_parser = subparsers.add_parser("config", help="設定の表示・変更")
@@ -794,6 +987,20 @@ def main():
         cmd_config(args, parser)
     elif args.command == "mcp":
         cmd_mcp(args, parser)
+    elif args.command == "price":
+        import asyncio
+        asyncio.run(cmd_price(args))
+    elif args.command == "filings":
+        import asyncio
+        asyncio.run(cmd_filings(args))
+    elif args.command == "filing":
+        import asyncio
+        asyncio.run(cmd_filing(args))
+    elif args.command == "macro":
+        cmd_macro(args)
+    elif args.command == "visualize":
+        import asyncio
+        asyncio.run(cmd_visualize(args))
     elif args.command == "watch":
         cmd_watch(args)
     elif args.command == "portfolio":
