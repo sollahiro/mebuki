@@ -59,6 +59,33 @@ mebuki/
 - CLI (`mebuki` コマンド) と MCP ツール名/入出力は維持
 - 新規実装は `mebuki.*` 配下のみ追加する
 
+## 2Q（中間期）データの取り扱い
+
+`extract_annual_data()` はデフォルト（`include_2q=False`）でFYのみを返す。`include_2q=True` を指定するとFYと2Qの両方を返す。
+
+**フラグ伝達経路:**
+
+```
+CLI --include-2q
+    → cmd_analyze(args.include_2q)
+        → data_service.get_raw_analysis_data(include_2q)
+            → analyzer.fetch_analysis_data(include_2q)
+                → _fetch_financial_data(include_2q)
+                    → extract_annual_data(financial_data, include_2q=include_2q)
+
+MCP include_2q パラメータ
+    → data_service.get_financial_data(include_2q)
+        → analyzer.analyze_stock(include_2q) / get_metrics(include_2q)
+            → _fetch_financial_data(include_2q)
+```
+
+**設計上の制約:**
+
+- 2QのEPS/BPSは6ヶ月分のため、**PER/PBR/ROE/ROICは`None`**（誤値防止）
+- `analysis_years` はFY件数でカウントする（2Qはカウント外）
+- `extract_annual_data` の重複除去キーは `(CurFYEn, CurPerType)` ペアを使用（同一FY末日のFYと2Qを別エントリとして保持）
+- `calculate_metrics_flexible` の重複除去も同様に `(fy_end, per_type)` ペアを使用
+
 ## 主要フロー
 
 1. CLI/MCP (`mebuki.app.*`) が要求を受け取る
