@@ -6,6 +6,13 @@ from mebuki.services.master_data import master_data_manager
 logger = logging.getLogger(__name__)
 
 
+def _ask_broker_and_account(questionary, broker_suggestions: list[str]) -> tuple[str, str]:
+    """証券会社と口座種別をインタラクティブに尋ねて返す。"""
+    broker = questionary.autocomplete("証券会社:", choices=broker_suggestions, default="").ask()
+    account = questionary.select("口座種別:", choices=["特定", "一般", "NISA"]).ask()
+    return broker or "", account or "特定"
+
+
 def cmd_interactive():
     """対話型モードの実装"""
     import questionary
@@ -92,12 +99,8 @@ def cmd_interactive():
                 if not results:
                     print(f"'{query}' に一致する銘柄は見つかりませんでした。")
                     continue
-                choices = [
-                    {"name": f"{item['code']}  {item['name']}  ({item['market']})", "value": item}
-                    for item in results
-                ]
-                choices.append({"name": "↩  キャンセル", "value": None})
-                selected = questionary.select("ウォッチリストに追加する銘柄:", choices=choices).ask()
+                from .ui import select_stock_from_results
+                selected = select_stock_from_results(results, "ウォッチリストに追加する銘柄:", "↩  キャンセル")
                 if selected:
                     cmd_watch(argparse.Namespace(watch_subcommand="add", code=selected["code"], name=selected["name"]))
             elif sub == "remove":
@@ -128,8 +131,7 @@ def cmd_interactive():
                 code = questionary.text("銘柄コード:").ask()
                 qty_str = questionary.text("数量:").ask()
                 price_str = questionary.text("取得単価 (円):").ask()
-                broker = questionary.autocomplete("証券会社:", choices=broker_suggestions, default="").ask()
-                account = questionary.select("口座種別:", choices=["特定", "一般", "NISA"]).ask()
+                broker, account = _ask_broker_and_account(questionary, broker_suggestions)
                 date = questionary.text("取得日 (YYYY-MM-DD, 省略可):", default="").ask()
                 name = questionary.text("銘柄名 (省略で自動取得):", default="").ask()
                 if code and qty_str and price_str:
@@ -139,8 +141,8 @@ def cmd_interactive():
                             code=code,
                             quantity=int(qty_str),
                             cost_price=float(price_str),
-                            broker=broker or "",
-                            account=account or "特定",
+                            broker=broker,
+                            account=account,
                             date=date or "",
                             name=name or "",
                         ))
@@ -149,29 +151,27 @@ def cmd_interactive():
             elif sub == "sell":
                 code = questionary.text("銘柄コード:").ask()
                 qty_str = questionary.text("売却数量:").ask()
-                broker = questionary.autocomplete("証券会社:", choices=broker_suggestions, default="").ask()
-                account = questionary.select("口座種別:", choices=["特定", "一般", "NISA"]).ask()
+                broker, account = _ask_broker_and_account(questionary, broker_suggestions)
                 if code and qty_str:
                     try:
                         cmd_portfolio(argparse.Namespace(
                             portfolio_subcommand="sell",
                             code=code,
                             quantity=int(qty_str),
-                            broker=broker or "",
-                            account=account or "特定",
+                            broker=broker,
+                            account=account,
                         ))
                     except ValueError:
                         print("エラー: 数量は整数で入力してください")
             elif sub == "remove":
                 code = questionary.text("銘柄コード:").ask()
-                broker = questionary.autocomplete("証券会社:", choices=broker_suggestions, default="").ask()
-                account = questionary.select("口座種別:", choices=["特定", "一般", "NISA"]).ask()
+                broker, account = _ask_broker_and_account(questionary, broker_suggestions)
                 if code:
                     cmd_portfolio(argparse.Namespace(
                         portfolio_subcommand="remove",
                         code=code,
-                        broker=broker or "",
-                        account=account or "特定",
+                        broker=broker,
+                        account=account,
                     ))
             elif sub == "list":
                 cmd_portfolio(argparse.Namespace(portfolio_subcommand="list", detail=False))

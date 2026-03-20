@@ -1,6 +1,18 @@
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def select_stock_from_results(results: list[dict], prompt: str, cancel_text: str = "↩  戻る") -> dict | None:
+    """検索結果リストから銘柄をインタラクティブに選択する。キャンセル時は None を返す。"""
+    import questionary
+    choices = [
+        {"name": f"{item['code']}  {item['name']}  ({item['market']})", "value": item}
+        for item in results
+    ]
+    choices.append({"name": cancel_text, "value": None})
+    return questionary.select(prompt, choices=choices).ask()
 
 
 def print_banner():

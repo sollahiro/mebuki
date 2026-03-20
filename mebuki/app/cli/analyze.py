@@ -28,22 +28,13 @@ def cmd_search(args):
         print(f"{item['code']:<8} {item['name']:<20} {item['market']:<15} {item['sector']}")
     print("-" * 60)
 
-    import questionary
-    choices = [
-        {"name": f"{item['code']}  {item['name']}  ({item['market']})", "value": item['code']}
-        for item in results
-    ]
-    choices.append({"name": "↩  分析しない / 戻る", "value": None})
-
-    selected = questionary.select(
-        "分析する銘柄を選択してください:",
-        choices=choices,
-    ).ask()
+    from .ui import select_stock_from_results
+    selected = select_stock_from_results(results, "分析する銘柄を選択してください:", "↩  分析しない / 戻る")
 
     if selected:
         import asyncio
         asyncio.run(cmd_analyze(argparse.Namespace(
-            code=selected,
+            code=selected['code'],
             years=None,
             format="table",
             no_cache=False,
