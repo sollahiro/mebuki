@@ -46,9 +46,9 @@ async def list_tools() -> List[Tool]:
                     },
                     "scope": {
                         "type": "string",
-                        "enum": ["overview", "metrics", "raw", "roic"],
+                        "enum": ["overview", "metrics", "raw"],
                         "default": "overview",
-                        "description": "Scope of data: 'overview' (default), 'metrics' (calculated ratios), 'raw' (J-QUANTS data), or 'roic' (ROIC + interest-bearing debt via XBRL, slow).",
+                        "description": "Scope of data: 'overview' (default, includes ROIC + interest-bearing debt), 'metrics' (calculated ratios), or 'raw' (J-QUANTS data).",
                     },
                     "use_cache": {"type": "boolean", "default": True},
                     "include_2q": {

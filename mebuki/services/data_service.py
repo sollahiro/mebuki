@@ -153,8 +153,7 @@ class DataService:
         analyzer = self.get_analyzer(use_cache=use_cache)
 
         if scope == "overview":
-            result = await analyzer.analyze_stock(code, include_2q=include_2q)
-            result = result or {}
+            result = await self.get_raw_analysis_data(code, use_cache=use_cache, include_2q=include_2q)
             try:
                 await self._refresh_earnings_calendar_if_needed()
                 self._attach_upcoming_earnings(result, code)
@@ -171,9 +170,6 @@ class DataService:
             except Exception:
                 pass
             return result
-
-        if scope == "roic":
-            return await self.get_raw_analysis_data(code, use_cache=use_cache, include_2q=include_2q)
 
         if scope == "raw":
             raw_data = await asyncio.to_thread(self.api_client.get_financial_summary, code=code)
@@ -277,13 +273,16 @@ class DataService:
         if not result:
             return {}
 
-        return {
+        formatted = {
             "code": code,
             **self.fetch_stock_basic_info(code),
             "metrics": result["metrics"],
             "edinet_data": result["edinet_data"],
             "analyzed_at": datetime.now().isoformat(),
         }
+        if use_cache:
+            self.cache_manager.set(f"individual_analysis_{code}", formatted)
+        return formatted
 
 
 # シングルトンインスタンス
