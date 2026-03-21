@@ -387,8 +387,25 @@ def _extract_usgaap_from_html(htm_file: Path) -> Optional[Dict[str, Any]]:
         "current": safe_sum([c["current"] for c in components]),
         "prior":   safe_sum([c["prior"]   for c in components]),
         "method":  "usgaap_html",
+        "accounting_standard": "US-GAAP",
         "components": components,
     }
+
+
+def _detect_accounting_standard(tag_elements: dict) -> str:
+    """会計基準を判定: 'J-GAAP' | 'IFRS' | 'US-GAAP'"""
+    if _is_usgaap_xbrl(tag_elements):
+        return "US-GAAP"
+    ifrs_marker_tags = [
+        "InterestBearingLiabilitiesCLIFRS",
+        "InterestBearingLiabilitiesNCLIFRS",
+        "BorrowingsCLIFRS",
+        "BondsPayableNCLIFRS",
+        "BorrowingsNCLIFRS",
+    ]
+    if any(t in tag_elements for t in ifrs_marker_tags):
+        return "IFRS"
+    return "J-GAAP"
 
 
 def _is_usgaap_xbrl(tag_elements: dict) -> bool:
@@ -434,6 +451,7 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
             "current": float | None,      # 合計 当期末（円）
             "prior":   float | None,      # 合計 前期末（円）
             "method":  str,               # "direct" | "computed" | "usgaap_html" | "not_found"
+            "accounting_standard": str,   # "J-GAAP" | "IFRS" | "US-GAAP"
             "components": [               # 各コンポーネント
                 {
                     "label": str,
@@ -457,6 +475,8 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
                 tag_elements[tag] = {}
             tag_elements[tag].update(ctx_map)
 
+    accounting_standard = _detect_accounting_standard(tag_elements)
+
     # US-GAAP 企業: HTML解析にフォールバック
     if _is_usgaap_xbrl(tag_elements):
         htm_files = list(xbrl_dir.rglob("*.htm")) + list(xbrl_dir.rglob("*.html"))
@@ -469,8 +489,8 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
             if "借入金等明細表" in content and "該当事項はありません" in content:
                 zero_comps = [{"label": d["label"], "tag": None, "current": 0.0, "prior": 0.0}
                               for d in COMPONENT_DEFINITIONS]
-                return {"current": 0.0, "prior": 0.0, "method": "usgaap_zero", "components": zero_comps}
-        return {"current": None, "prior": None, "method": "not_found", "components": []}
+                return {"current": 0.0, "prior": 0.0, "method": "usgaap_zero", "accounting_standard": "US-GAAP", "components": zero_comps}
+        return {"current": None, "prior": None, "method": "not_found", "accounting_standard": "US-GAAP", "components": []}
 
     # 直接法
     for ibd_tag in INTEREST_BEARING_DEBT_TAGS:
@@ -482,6 +502,7 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
                 "current": current,
                 "prior": prior,
                 "method": "direct",
+                "accounting_standard": accounting_standard,
                 "components": [{"label": "有利子負債合計", "tag": ibd_tag,
                                 "current": current, "prior": prior}],
             }
@@ -541,7 +562,7 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
 
     found = [c for c in components if c["current"] is not None or c["prior"] is not None]
     if not found:
-        return {"current": None, "prior": None, "method": "not_found", "components": components}
+        return {"current": None, "prior": None, "method": "not_found", "accounting_standard": accounting_standard, "components": components}
 
     def safe_sum(vals):
         vs = [v for v in vals if v is not None]
@@ -554,5 +575,6 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
         "current": total_current,
         "prior": total_prior,
         "method": "computed",
+        "accounting_standard": accounting_standard,
         "components": components,
     }

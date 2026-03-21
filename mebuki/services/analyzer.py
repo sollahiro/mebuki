@@ -683,8 +683,16 @@ class IndividualAnalyzer:
                 if ibd and ibd.get("current") is not None:
                     ibd_m = ibd["current"] / MILLION_YEN
                     year["CalculatedData"]["InterestBearingDebt"] = ibd_m
-                    year["CalculatedData"]["IBDComponents"] = ibd.get("components", [])
-                    year["CalculatedData"]["IBDMethod"] = ibd.get("method", "")
+                    raw_comps = ibd.get("components", [])
+                    year["CalculatedData"]["IBDComponents"] = [
+                        {
+                            "label": c["label"],
+                            "current": c["current"] / MILLION_YEN if c["current"] is not None else None,
+                            "prior": c["prior"] / MILLION_YEN if c["prior"] is not None else None,
+                        }
+                        for c in raw_comps
+                    ]
+                    year["CalculatedData"]["IBDAccountingStandard"] = ibd.get("accounting_standard", "unknown")
                     # ROIC = NP / (Eq + IBD)  ※OPがない場合はNP（当期純利益）を使用
                     np_ = year["CalculatedData"].get("NP")
                     eq = year["CalculatedData"].get("Eq")
