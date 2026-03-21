@@ -101,6 +101,25 @@ AGGREGATE_IFRS_DEFINITIONS = [
     },
 ]
 
+# XBRL解析で収集対象とするローカルタグ名のセット（不要要素のスキップに使用）
+_IBD_RELEVANT_TAGS: frozenset[str] = frozenset(
+    INTEREST_BEARING_DEBT_TAGS
+    + [tag for comp in COMPONENT_DEFINITIONS for tag in comp["tags"]]
+    + [agg["tag"] for agg in AGGREGATE_IFRS_DEFINITIONS]
+    + [
+        # US-GAAP判定用
+        "TotalAssetsUSGAAPSummaryOfBusinessResults",
+        "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
+        "CashAndCashEquivalentsUSGAAPSummaryOfBusinessResults",
+        # IFRSマーカー判定用
+        "InterestBearingLiabilitiesCLIFRS",
+        "InterestBearingLiabilitiesNCLIFRS",
+        "BorrowingsCLIFRS",
+        "BondsPayableNCLIFRS",
+        "BorrowingsNCLIFRS",
+    ]
+)
+
 # contextRef で連結期末時点を表すパターン
 INSTANT_CONTEXT_PATTERNS = [
     "CurrentYearInstant",
@@ -155,8 +174,14 @@ def _parse_value(text: Optional[str]) -> Optional[float]:
         return None
 
 
-def _collect_numeric_elements(xml_file: Path) -> Dict[str, Any]:
-    """XMLファイルから {local_tag: {ctx: value}} の辞書を返す。"""
+def _collect_numeric_elements(
+    xml_file: Path,
+    allowed_tags: frozenset[str] | None = None,
+) -> Dict[str, Any]:
+    """XMLファイルから {local_tag: {ctx: value}} の辞書を返す。
+
+    allowed_tags が指定された場合、そのセットに含まれないタグはスキップする。
+    """
     results: dict = {}
     try:
         tree = ET.parse(xml_file)
@@ -164,6 +189,8 @@ def _collect_numeric_elements(xml_file: Path) -> Dict[str, Any]:
         for elem in root.iter():
             tag = elem.tag
             local_tag = tag.split("}")[1] if "}" in tag else tag
+            if allowed_tags is not None and local_tag not in allowed_tags:
+                continue
             ctx = elem.attrib.get("contextRef", "")
             value = _parse_value(elem.text)
             if value is not None and ctx:
@@ -425,7 +452,7 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
 
     tag_elements: dict = {}
     for f in xml_files:
-        for tag, ctx_map in _collect_numeric_elements(f).items():
+        for tag, ctx_map in _collect_numeric_elements(f, allowed_tags=_IBD_RELEVANT_TAGS).items():
             if tag not in tag_elements:
                 tag_elements[tag] = {}
             tag_elements[tag].update(ctx_map)
