@@ -98,7 +98,20 @@ mebuki filings <code> [--format table|json]
 mebuki filings 7203
 ```
 
-### ⑤ 有価証券報告書セクション抽出
+### ⑤ 財務データ可視化
+
+財務データをLLM向け構造化JSON形式で取得する（グラフ描画・比較分析用途）。
+
+```bash
+mebuki visualize <code>
+```
+
+例：
+```bash
+mebuki visualize 7203
+```
+
+### ⑥ 有価証券報告書セクション抽出
 
 有価証券報告書から特定セクションを抽出する。
 
@@ -119,7 +132,7 @@ mebuki filing 7203 --sections business_risks mda
 mebuki filing 7203 --doc-id S100XXXX --sections mda
 ```
 
-### ⑥ マクロ経済データ
+### ⑦ マクロ経済データ
 
 為替・金融政策などのマクロ経済データを取得する。
 
@@ -136,7 +149,7 @@ mebuki macro fx
 mebuki macro monetary --start 202001 --end 202512
 ```
 
-### ⑦ ウォッチリスト管理
+### ⑧ ウォッチリスト管理
 
 注目銘柄のウォッチリストを管理する。
 
@@ -153,7 +166,7 @@ mebuki watch list
 mebuki watch remove 7203
 ```
 
-### ⑧ ポートフォリオ管理
+### ⑨ ポートフォリオ管理
 
 保有銘柄のポートフォリオを管理する。
 

@@ -8,8 +8,19 @@
 mebuki/
 ├── mebuki/
 │   ├── app/               # エントリポイント層 (CLI/MCP)
-│   │   ├── cli.py         # CLI コマンド (search/analyze/config/mcp/watch/portfolio)
+│   │   ├── cli/           # CLI サブパッケージ
+│   │   │   ├── main.py        # エントリポイント・ディスパッチャ
+│   │   │   ├── parser.py      # argparse パーサー定義
+│   │   │   ├── analyze.py     # search/analyze/price/filings/filing/visualize コマンド
+│   │   │   ├── macro.py       # macro コマンド
+│   │   │   ├── config.py      # config コマンド
+│   │   │   ├── mcp.py         # mcp コマンド
+│   │   │   ├── portfolio.py   # watch/portfolio コマンド
+│   │   │   ├── interactive.py # 対話モード
+│   │   │   └── ui.py          # バナー・UI補助
 │   │   └── mcp_server.py  # MCP サーバー (全11ツール)
+│   ├── cli.py             # 後方互換エントリポイント (deprecated shim)
+│   ├── mcp_server.py      # 後方互換エントリポイント (deprecated shim)
 │   ├── services/          # ユースケース層 (分析/検索/集約)
 │   │   ├── data_service.py
 │   │   ├── analyzer.py
@@ -27,12 +38,15 @@ mebuki/
 │   │   └── edinet_client.py
 │   ├── analysis/          # 財務計算・XBRL解析
 │   │   ├── calculator.py
-│   │   └── xbrl_parser.py
+│   │   ├── xbrl_parser.py
+│   │   └── interest_bearing_debt.py  # 有利子負債抽出ロジック
 │   ├── llm/               # LLMプロバイダ連携
 │   │   └── providers.py
 │   ├── constants/
 │   │   ├── api.py
-│   │   └── xbrl.py
+│   │   ├── xbrl.py
+│   │   ├── formats.py     # 出力フォーマット定数
+│   │   └── financial.py   # 財務定数
 │   ├── utils/
 │   │   ├── cache.py
 │   │   ├── converters.py
