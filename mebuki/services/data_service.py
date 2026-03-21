@@ -152,10 +152,8 @@ class DataService:
         """財務データ取得の統一公開API。"""
         analyzer = self.get_analyzer(use_cache=use_cache)
 
-        if scope in {"overview", "history"}:
+        if scope == "overview":
             result = await analyzer.analyze_stock(code, include_2q=include_2q)
-            if scope == "history" and result:
-                result["history"] = result.get("metrics", {}).get("years", [])
             result = result or {}
             try:
                 await self._refresh_earnings_calendar_if_needed()
@@ -173,6 +171,9 @@ class DataService:
             except Exception:
                 pass
             return result
+
+        if scope == "roic":
+            return await self.get_raw_analysis_data(code, use_cache=use_cache, include_2q=include_2q)
 
         if scope == "raw":
             raw_data = await asyncio.to_thread(self.api_client.get_financial_summary, code=code)

@@ -53,20 +53,20 @@ mebuki search 7203
 銘柄の財務データを分析する。
 
 ```bash
-mebuki analyze <code> [--scope overview|history|metrics|raw] [--years N] [--format table|json] [--include-2q]
+mebuki analyze <code> [--scope overview|metrics|raw|roic] [--years N] [--format table|json] [--include-2q]
 ```
 
 - `--scope overview`: 財務サマリー（デフォルト）
-- `--scope history`: 複数年の財務推移
-- `--scope metrics`: 財務指標（ROE/ROICなど）
+- `--scope metrics`: 財務指標（ROE/PER/PBRなど）
 - `--scope raw`: 生データ
+- `--scope roic`: ROIC・有利子負債（XBRLパースのため低速）
 - `--years N`: 取得年数（デフォルト: 5）。**FY（通期）の件数**でカウントする
 - `--include-2q`: 2Q（中間期）データも含めて表示する（opt-in）。2Qの ROE/ROIC/PER/PBR は表示しない（6ヶ月分の値のため）
 
 例：
 ```bash
 mebuki analyze 7203
-mebuki analyze 7203 --scope history --years 10
+mebuki analyze 7203 --scope roic --years 5
 mebuki analyze 7203 --scope metrics --format json
 mebuki analyze 7203 --years 5 --include-2q          # 通期5年 + 中間期を合わせて表示
 ```
@@ -198,7 +198,7 @@ mebuki portfolio sell 7203 50
 新規銘柄を調査する際の標準フロー：
 
 1. **銘柄特定**: `mebuki search <社名>` でコードを確認
-2. **財務分析**: `mebuki analyze <code> --scope history --years 5` で財務推移を確認
+2. **財務分析**: `mebuki analyze <code> --years 5` で財務推移を確認（ROIC・有利子負債が必要な場合は `--scope roic`）
    - 中間期も確認したい場合: `--include-2q` を追加
 3. **書類一覧**: `mebuki filings <code>` でEDINET提出書類を確認
 4. **報告書抽出**: `mebuki filing <code> --sections business_risks mda` でリスクと経営状況を確認

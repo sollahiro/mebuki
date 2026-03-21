@@ -45,15 +45,12 @@ def _calculate_profitability_metrics(np: Optional[float], op: Optional[float], e
     if np is not None and eq is not None and eq != 0:
         roe = (np / eq) * PERCENT
 
-    simple_roic = None  # 廃止: IBDマージ時に ROIC として計算
-
     cf_conversion_rate = None
     if cfo is not None and op is not None and op != 0:
         cf_conversion_rate = (cfo / op) * PERCENT
         
     return {
         "roe": roe,
-        "simple_roic": simple_roic,
         "cf_conversion_rate": cf_conversion_rate
     }
 
@@ -215,7 +212,6 @@ def calculate_metrics_flexible(
         profit_metrics = _calculate_profitability_metrics(calc_values['NP'], calc_values['OP'], calc_values['Eq'], calc_values['CFO'])
         calc_values.update({
             'ROE': profit_metrics['roe'],
-            'SimpleROIC': profit_metrics['simple_roic'],
             'CFCVR': profit_metrics['cf_conversion_rate']
         })
 
@@ -242,7 +238,7 @@ def calculate_metrics_flexible(
         # 2Qは6ヶ月分のEPS/BPSのため、比率系指標は無効
         if year_data.get("CurPerType") == "2Q":
             calc_values.update({
-                'ROE': None, 'SimpleROIC': None, 'CFCVR': None,
+                'ROE': None, 'CFCVR': None,
                 'PER': None, 'PBR': None
             })
 

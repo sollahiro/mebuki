@@ -25,7 +25,7 @@ LLM_PROMPTS = {
 データフィールドの単位:
 - 金額（sales, op, np, eq, cfo, cfi, fcf, cash_eq）: 百万円
 - 1株あたり（eps, bps, price）: 円
-- 比率（roe, simple_roic, cf_conversion_rate, payout_ratio）: %
+- 比率（roe, roic, cf_conversion_rate, payout_ratio）: %
 - 倍率（per, pbr）: 倍
 
 注意: years配列は新しい順（最新が先頭）で並んでいますが、分析は時系列順（古い→新しい）で行ってください。
