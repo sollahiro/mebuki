@@ -122,14 +122,6 @@ async def cmd_analyze(args):
         def get_op_margin(c):
             return c.get("OperatingMargin") or (c.get("OP") / c.get("Sales") * 100 if c.get("OP") and c.get("Sales") else None)
 
-        def _get_ibd_component(label):
-            def _getter(c):
-                for comp in c.get("IBDComponents", []):
-                    if comp.get("label") == label and comp.get("current") is not None:
-                        return comp["current"] / 1_000_000
-                return None
-            return _getter
-
         metrics_to_show = [
             ("売上高 (百万)", lambda c: c.get("Sales")),
             ("営業利益 (百万)", lambda c: c.get("OP")),
@@ -145,12 +137,7 @@ async def cmd_analyze(args):
             ("年度末株価 (円)", lambda c: c.get("Price")),
             # ── 有利子負債 ──
             ("有利子負債合計 (百万)", lambda c: c.get("InterestBearingDebt")),
-            ("  短期借入金 (百万)",     _get_ibd_component("短期借入金")),
-            ("  CP (百万)",            _get_ibd_component("コマーシャル・ペーパー")),
-            ("  1年内償還社債 (百万)",  _get_ibd_component("1年内償還予定の社債")),
-            ("  1年内返済長借 (百万)",  _get_ibd_component("1年内返済予定の長期借入金")),
-            ("  社債 (百万)",           _get_ibd_component("社債")),
-            ("  長期借入金 (百万)",     _get_ibd_component("長期借入金")),
+            ("投下資本 (百万)",       lambda c: (c.get("InterestBearingDebt") + c.get("Eq")) if c.get("InterestBearingDebt") is not None and c.get("Eq") is not None else None),
         ]
 
         for label, func in metrics_to_show:

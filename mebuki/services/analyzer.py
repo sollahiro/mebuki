@@ -604,17 +604,18 @@ class IndividualAnalyzer:
 
         if not self.edinet_client or not self.edinet_client.api_key:
             return {}
-        try:
-            docs = await asyncio.to_thread(
-                self.edinet_client.search_recent_reports,
-                code, financial_data, max_years, ["120"], max_years
-            )
-            ibd_by_year = {}
-            for doc in docs:
-                fy_end_iso = doc.get("jquants_fy_end", "")       # "2025-03-31"
-                fy_end_8 = fy_end_iso.replace("-", "")            # "20250331"
-                if not fy_end_8:
-                    continue
+        docs = await asyncio.to_thread(
+            self.edinet_client.search_recent_reports,
+            code, financial_data, max_years, ["120"], max_years
+        )
+        logger.info(f"[IBD] {code}: {len(docs)}件のEDINET文書を検索")
+        ibd_by_year = {}
+        for doc in docs:
+            fy_end_iso = doc.get("jquants_fy_end", "")       # "2025-03-31"
+            fy_end_8 = fy_end_iso.replace("-", "")            # "20250331"
+            if not fy_end_8:
+                continue
+            try:
                 xbrl_dir = await asyncio.to_thread(
                     self.edinet_client.download_document, doc["docID"], 1
                 )
@@ -622,11 +623,13 @@ class IndividualAnalyzer:
                     ibd = await asyncio.to_thread(
                         extract_interest_bearing_debt, Path(xbrl_dir)
                     )
+                    logger.info(f"[IBD] {code} {fy_end_8}: current={ibd.get('current')}, method={ibd.get('method')}")
                     ibd_by_year[fy_end_8] = ibd
-            return ibd_by_year
-        except Exception as e:
-            logger.warning(f"IBD抽出エラー: {code} - {e}")
-            return {}
+                else:
+                    logger.warning(f"[IBD] {code} {fy_end_8}: XBRLダウンロード失敗")
+            except Exception as e:
+                logger.warning(f"[IBD] {code} {fy_end_8}: 抽出エラー - {e}")
+        return ibd_by_year
 
     async def fetch_analysis_data(
         self,
@@ -668,11 +671,11 @@ class IndividualAnalyzer:
                     year["CalculatedData"]["InterestBearingDebt"] = ibd_m
                     year["CalculatedData"]["IBDComponents"] = ibd.get("components", [])
                     year["CalculatedData"]["IBDMethod"] = ibd.get("method", "")
-                    # ROIC = OP / (Eq + IBD)
-                    op = year["CalculatedData"].get("OP")
+                    # ROIC = NP / (Eq + IBD)  ※OPがない場合はNP（当期純利益）を使用
+                    np_ = year["CalculatedData"].get("NP")
                     eq = year["CalculatedData"].get("Eq")
-                    if op is not None and eq is not None and (eq + ibd_m) != 0:
-                        year["CalculatedData"]["ROIC"] = op / (eq + ibd_m) * PERCENT
+                    if np_ is not None and eq is not None and (eq + ibd_m) != 0:
+                        year["CalculatedData"]["ROIC"] = np_ / (eq + ibd_m) * PERCENT
 
         return {
             "stock_info": stock_info,

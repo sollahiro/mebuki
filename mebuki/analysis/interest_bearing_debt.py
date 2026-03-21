@@ -375,6 +375,18 @@ def _is_usgaap_xbrl(tag_elements: dict) -> bool:
     if not has_usgaap:
         return False
 
+    # IFRSマーカータグが存在する場合は、*USGAAPSummaryOfBusinessResults タグが
+    # 旧期間比較データとして残存しているだけ（IFRS移行後の企業）と判断する
+    ifrs_marker_tags = [
+        "InterestBearingLiabilitiesCLIFRS",
+        "InterestBearingLiabilitiesNCLIFRS",
+        "BorrowingsCLIFRS",
+        "BondsPayableNCLIFRS",
+        "BorrowingsNCLIFRS",
+    ]
+    if any(t in tag_elements for t in ifrs_marker_tags):
+        return False
+
     debt_tags = [
         "ShortTermLoansPayable", "BorrowingsCLIFRS",
         "BondsPayable", "LongTermLoansPayable",
