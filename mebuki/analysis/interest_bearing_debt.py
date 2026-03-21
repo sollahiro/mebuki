@@ -508,34 +508,46 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
             }
 
     # 積み上げ法（コンポーネント別）
+    # Pass 1: 連結値のみ収集
     components = []
     for comp_def in COMPONENT_DEFINITIONS:
         found_tag = None
         current = prior = None
-
-        # Phase 1: 連結値を探す
         for tag in comp_def["tags"]:
             c, p = _find_consolidated_value(tag_elements, tag)
             if c is not None or p is not None:
                 found_tag = tag
                 current, prior = c, p
                 break
-
-        # Phase 2: 連結値がなければ個別値にフォールバック
-        if found_tag is None:
-            for tag in comp_def["tags"]:
-                c, p = _find_nonconsolidated_value(tag_elements, tag)
-                if c is not None or p is not None:
-                    found_tag = tag
-                    current, prior = c, p
-                    break
-
         components.append({
             "label": comp_def["label"],
             "tag": found_tag,
             "current": current,
             "prior": prior,
         })
+
+    # 連結財務諸表が存在するか判定。
+    # 1つでも連結値があれば連結財務諸表のみを使用し、単体値との混入を防ぐ。
+    has_consolidated = any(c["current"] is not None or c["prior"] is not None for c in components)
+
+    # Pass 2: 連結値が全くない場合のみ単体にフォールバック（単体のみ企業への対応）
+    if not has_consolidated:
+        components = []
+        for comp_def in COMPONENT_DEFINITIONS:
+            found_tag = None
+            current = prior = None
+            for tag in comp_def["tags"]:
+                c, p = _find_nonconsolidated_value(tag_elements, tag)
+                if c is not None or p is not None:
+                    found_tag = tag
+                    current, prior = c, p
+                    break
+            components.append({
+                "label": comp_def["label"],
+                "tag": found_tag,
+                "current": current,
+                "prior": prior,
+            })
 
     # 集約IFRSタグによる後処理
     for agg_def in AGGREGATE_IFRS_DEFINITIONS:
