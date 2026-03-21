@@ -1,3 +1,4 @@
+import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -8,11 +9,14 @@ def cmd_watch(args):
     from mebuki.services.portfolio_service import portfolio_service
 
     sub = args.watch_subcommand
+    fmt = getattr(args, 'format', 'table')
 
     if sub == "add":
         try:
             result = portfolio_service.add_watch(args.code, name=getattr(args, "name", "") or "")
-            if result["status"] == "already_exists":
+            if fmt == "json":
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+            elif result["status"] == "already_exists":
                 print(f"既にウォッチリストに存在します: {args.code}")
             else:
                 item = result["item"]
@@ -23,7 +27,9 @@ def cmd_watch(args):
     elif sub == "remove":
         try:
             result = portfolio_service.remove_watch(args.code)
-            if result["status"] == "removed":
+            if fmt == "json":
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+            elif result["status"] == "removed":
                 print(f"ウォッチリストから削除しました: {args.code}")
             else:
                 print(f"見つかりませんでした: {args.code}")
@@ -32,6 +38,9 @@ def cmd_watch(args):
 
     elif sub == "list":
         watchlist = portfolio_service.get_watchlist()
+        if fmt == "json":
+            print(json.dumps(watchlist, indent=2, ensure_ascii=False))
+            return
         if not watchlist:
             print("ウォッチリストは空です。")
             return
@@ -53,6 +62,7 @@ def cmd_portfolio(args):
     from mebuki.services.portfolio_service import portfolio_service
 
     sub = args.portfolio_subcommand
+    fmt = getattr(args, 'format', 'table')
 
     if sub == "add":
         try:
@@ -65,8 +75,11 @@ def cmd_portfolio(args):
                 bought_at=getattr(args, "date", "") or "",
                 name=getattr(args, "name", "") or "",
             )
-            lot = result["lot"]
-            print(f"保有を追加しました: {args.code}  {lot['quantity']}株 @{lot['cost_price']}円  ({lot['bought_at']})")
+            if fmt == "json":
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+            else:
+                lot = result["lot"]
+                print(f"保有を追加しました: {args.code}  {lot['quantity']}株 @{lot['cost_price']}円  ({lot['bought_at']})")
         except ValueError as e:
             print(f"エラー: {e}")
 
@@ -78,7 +91,10 @@ def cmd_portfolio(args):
                 broker=getattr(args, "broker", "") or "",
                 account_type=getattr(args, "account", "特定") or "特定",
             )
-            print(f"売却処理完了: {args.code}  {result['sold_quantity']}株  残{result['remaining_quantity']}株")
+            if fmt == "json":
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+            else:
+                print(f"売却処理完了: {args.code}  {result['sold_quantity']}株  残{result['remaining_quantity']}株")
         except ValueError as e:
             print(f"エラー: {e}")
 
@@ -89,7 +105,9 @@ def cmd_portfolio(args):
                 broker=getattr(args, "broker", "") or "",
                 account_type=getattr(args, "account", "特定") or "特定",
             )
-            if result["status"] == "removed":
+            if fmt == "json":
+                print(json.dumps(result, indent=2, ensure_ascii=False))
+            elif result["status"] == "removed":
                 print(f"保有エントリを削除しました: {args.code}")
             else:
                 print(f"見つかりませんでした: {args.code}")
@@ -98,6 +116,10 @@ def cmd_portfolio(args):
 
     elif sub == "list":
         detail = getattr(args, "detail", False)
+        if fmt == "json":
+            data = portfolio_service.get_holdings() if detail else portfolio_service.get_consolidated()
+            print(json.dumps(data, indent=2, ensure_ascii=False))
+            return
         if detail:
             holdings = portfolio_service.get_holdings()
             if not holdings:

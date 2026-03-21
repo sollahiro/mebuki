@@ -20,6 +20,10 @@ def cmd_search(args):
         print(f"'{args.query}' に一致する銘柄は見つかりませんでした。")
         return
 
+    if getattr(args, 'format', 'table') == 'json':
+        print(json.dumps(results, indent=2, ensure_ascii=False))
+        return
+
     print(f"\n'{args.query}' の検索結果 ({len(results)}件):")
     print("-" * 60)
     print(f"{'コード':<8} {'銘柄名':<20} {'市場':<15} {'業種'}")
@@ -52,10 +56,7 @@ async def cmd_analyze(args):
     if getattr(args, "scope", None):
         try:
             result = await data_service.get_financial_data(code, scope=args.scope, use_cache=not args.no_cache)
-            if args.format == "json":
-                print(json.dumps(result, indent=2, ensure_ascii=False))
-            else:
-                print(json.dumps(result, indent=2, ensure_ascii=False))
+            print(json.dumps(result, indent=2, ensure_ascii=False))
         except Exception as e:
             print(f"エラー: {e}")
             logger.exception(e)
