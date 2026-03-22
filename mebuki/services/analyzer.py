@@ -2,47 +2,40 @@
 個別詳細分析モジュール
 
 個別銘柄の詳細分析を実行します。
+FinancialFetcher / EdinetFetcher を組み合わせてオーケストレーションします。
 """
 
-import json
 import logging
 import asyncio
-import time
-from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Any, Optional, Callable, AsyncGenerator
 from datetime import datetime
 from pathlib import Path
 
 from mebuki.api.jquants_client import JQuantsAPIClient
-from mebuki.utils.financial_data import extract_annual_data
-from mebuki.analysis.calculator import calculate_metrics_flexible
-from mebuki.utils.jquants_utils import prepare_edinet_search_data
 from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.utils.cache import CacheManager
-
 from mebuki.infrastructure.settings import settings_store
-from mebuki.constants.formats import DATE_LEN_COMPACT
-from mebuki.utils.fiscal_year import normalize_date_format
 from mebuki.constants.financial import PERCENT, MILLION_YEN
+
+from .financial_fetcher import FinancialFetcher
+from .edinet_fetcher import EdinetFetcher
 
 logger = logging.getLogger(__name__)
 
 
-
-
 class IndividualAnalyzer:
     """個別詳細分析クラス"""
-    
+
     def __init__(
         self,
         api_client: Optional[JQuantsAPIClient] = None,
-        edinet_client: Optional['EdinetAPIClient'] = None,
+        edinet_client: Optional[EdinetAPIClient] = None,
         cache: Optional[CacheManager] = None,
-        use_cache: bool = True
+        use_cache: bool = True,
     ):
         """
         初期化
-        
+
         Args:
             api_client: J-QUANTS APIクライアント。Noneの場合は新規作成
             edinet_client: EDINET APIクライアント。Noneの場合は新規作成
@@ -54,163 +47,61 @@ class IndividualAnalyzer:
         self.cache = cache if cache is not None else (
             CacheManager(
                 cache_dir=settings_store.cache_dir,
-                enabled=settings_store.cache_enabled
+                enabled=settings_store.cache_enabled,
             ) if use_cache else None
         )
-        
+
         # EDINET統合
         if edinet_client is not None:
             self.edinet_client = edinet_client
         else:
             try:
-                # EDINETの検索用キャッシュも永続領域へ
                 edinet_cache_dir = Path(settings_store.cache_dir) / "edinet"
                 self.edinet_client = EdinetAPIClient(
                     api_key=settings_store.edinet_api_key,
-                    cache_dir=str(edinet_cache_dir)
+                    cache_dir=str(edinet_cache_dir),
                 )
             except Exception as e:
                 logger.warning(f"EDINETクライアントの初期化に失敗しました: {e}")
                 self.edinet_client = None
-        
-    def _fetch_financial_data(
-        self,
-        code: str,
-        include_2q: bool = False
-    ) -> tuple[Optional[Dict[str, Any]], Optional[List[Dict[str, Any]]], Optional[List[Dict[str, Any]]]]:
-        """財務データを取得"""
-        # マスタ取得と財務サマリ取得は独立しているため並列実行する
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            master_future = executor.submit(self.api_client.get_equity_master, code=code)
-            financial_future = executor.submit(
-                self.api_client.get_financial_summary,
-                code=code,
-                period_types=["FY", "2Q"],
-                include_fields=None,
-            )
-            master_data = master_future.result()
-            financial_data = financial_future.result()
 
-        stock_info = master_data[0] if master_data else {}
+        self._financial_fetcher = FinancialFetcher(self.api_client)
+        self._edinet_fetcher = EdinetFetcher(self.api_client, self.edinet_client)
 
-        if not stock_info:
-            logger.warning(f"銘柄コード {code}: 銘柄マスタにデータが見つかりませんでした。")
-            return None, None, None
+    # ------------------------------------------------------------------
+    # 公開メソッド: EDINET（後方互換として IndividualAnalyzer 経由で提供）
+    # ------------------------------------------------------------------
 
-        if not financial_data:
-            logger.warning(f"銘柄コード {code}: 財務データが取得できませんでした。")
-            return stock_info, None, None
-        
-        try:
-            annual_data = extract_annual_data(financial_data, include_2q=include_2q)
-        except Exception as e:
-            logger.error(f"銘柄コード {code}: 年度データ抽出中にエラーが発生しました - {e}", exc_info=True)
-            return stock_info, financial_data, None
-        
-        return stock_info, financial_data, annual_data
-    
-    def _fetch_prices(
-        self,
-        code: str,
-        annual_data: List[Dict[str, Any]],
-        analysis_years: int
-    ) -> Dict[str, float]:
-        """年度末株価を取得"""
-        prices = {}
-        subscription_start_date = datetime(2021, 1, 9)
-        dates_to_fetch = []
-        date_to_fy_end = {}
-        
-        fy_count = 0
-        for year_data in annual_data:
-            if fy_count >= analysis_years:
-                break
-            fy_end = year_data.get("CurFYEn")
-            if fy_end:
-                if len(fy_end) == DATE_LEN_COMPACT:
-                    fy_end_formatted = normalize_date_format(fy_end)
-                else:
-                    fy_end_formatted = fy_end[:10] if len(fy_end) >= 10 else fy_end
-
-                try:
-                    fy_end_date = datetime.strptime(fy_end, "%Y%m%d") if len(fy_end) == DATE_LEN_COMPACT else datetime.strptime(fy_end[:10], "%Y-%m-%d")
-                    if fy_end_date and fy_end_date < subscription_start_date:
-                        if year_data.get("CurPerType") == "FY":
-                            fy_count += 1
-                        continue
-
-                    dates_to_fetch.append(fy_end_formatted)
-                    date_to_fy_end[fy_end_formatted] = fy_end
-                except (ValueError, TypeError):
-                    pass
-            if year_data.get("CurPerType") == "FY":
-                fy_count += 1
-        
-        if dates_to_fetch:
-            try:
-                batch_prices = self.api_client.get_prices_at_dates(code, dates_to_fetch, use_nearest_trading_day=True)
-                for date_str, price in batch_prices.items():
-                    if price is not None:
-                        prices[date_str] = price
-                        original = date_to_fy_end.get(date_str)
-                        if original:
-                            prices[original] = price
-            except Exception as e:
-                logger.warning(f"バッチ株価取得に失敗、個別取得にフォールバック: {e}")
-                for date_str in dates_to_fetch:
-                    try:
-                        price = self.api_client.get_price_at_date(code, date_str, use_nearest_trading_day=True)
-                        if price:
-                            prices[date_str] = price
-                    except Exception as e:
-                        logger.warning(f"株価個別取得に失敗: {e}")
-        return prices
-    
-    def _calculate_metrics(
-        self,
-        code: str,
-        annual_data: List[Dict[str, Any]],
-        prices: Dict[str, float],
-        analysis_years: int
-    ) -> Optional[Dict[str, Any]]:
-        """指標を計算"""
-        try:
-            return calculate_metrics_flexible(annual_data, prices, analysis_years)
-        except Exception as e:
-            logger.error(f"銘柄コード {code}: 指標計算中にエラーが発生しました - {e}", exc_info=True)
-            return None
-    
-    
-    async def _fetch_edinet_data_async(
+    async def fetch_edinet_reports_stream(
         self,
         code: str,
         financial_data: List[Dict[str, Any]],
-        max_documents: int = 10,
+        max_documents: int = 20,
         edinet_code: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """EDINETデータを非同期で取得"""
-        if not self.edinet_client:
-            return {}
-        try:
-            if edinet_code is None:
-                master_data = await asyncio.to_thread(self.api_client.get_equity_master, code=code)
-                edinet_code = master_data[0].get("EdinetCode") if master_data else None
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """EDINET書類を取得し、準備ができた段階で順次yieldする"""
+        async for item in self._edinet_fetcher.fetch_edinet_reports_stream(
+            code, financial_data, max_documents, edinet_code
+        ):
+            yield item
 
-            results = {}
-            # 非同期ストリームを直接回す
-            async for data in self.fetch_edinet_reports_stream(code, financial_data, max_documents, edinet_code=edinet_code):
-                fy_key = data["fy_key"]
-                report = data["report"]
-                fy_key_str = str(fy_key)
-                if fy_key_str not in results:
-                    results[fy_key_str] = []
-                results[fy_key_str].append(report)
-                
-            return results
-        except Exception as e:
-            logger.error(f"EDINET非同期データ取得エラー: {code} - {e}", exc_info=True)
-            return {}
+    def fetch_edinet_reports(
+        self,
+        code: str,
+        years: List[int],
+        jquants_annual_data: Optional[List[Dict[str, Any]]] = None,
+        progress_callback: Optional[Callable] = None,
+        edinet_code: Optional[str] = None,
+        max_documents: int = 20,
+    ) -> Dict[int, List[Dict[str, Any]]]:
+        """指定年度の有価証券報告書を取得（同期互換用）"""
+        return self._edinet_fetcher.fetch_edinet_reports(
+            code, years, jquants_annual_data, progress_callback, edinet_code, max_documents
+        )
 
+    # ------------------------------------------------------------------
+    # 内部フロー
+    # ------------------------------------------------------------------
 
     async def _edinet_flow(
         self,
@@ -222,8 +113,10 @@ class IndividualAnalyzer:
     ) -> None:
         """EDINETフロー: 書類取得をストリーミングで result へ反映し queue へ通知"""
         try:
-            existing_indices: Dict[str, Dict[str, int]] = {}  # fy_key_str -> {docID -> index}
-            async for data in self.fetch_edinet_reports_stream(code, financial_data, edinet_code=edinet_code):
+            existing_indices: Dict[str, Dict[str, int]] = {}
+            async for data in self._edinet_fetcher.fetch_edinet_reports_stream(
+                code, financial_data, edinet_code=edinet_code
+            ):
                 fy_key = data["fy_key"]
                 report = data["report"]
 
@@ -239,7 +132,9 @@ class IndividualAnalyzer:
                 if doc_id in existing_indices.get(fy_key_str, {}):
                     result["edinet_data"][fy_key_str][existing_indices[fy_key_str][doc_id]] = report
                 else:
-                    existing_indices.setdefault(fy_key_str, {})[doc_id] = len(result["edinet_data"][fy_key_str])
+                    existing_indices.setdefault(fy_key_str, {})[doc_id] = len(
+                        result["edinet_data"][fy_key_str]
+                    )
                     result["edinet_data"][fy_key_str].append(report)
 
                 edinet_snapshot = {k: list(v) for k, v in result.get("edinet_data", {}).items()}
@@ -247,8 +142,7 @@ class IndividualAnalyzer:
         except Exception as e:
             logger.error(f"EDINETフローエラー: {e}", exc_info=True)
             edinet_snapshot = {k: list(v) for k, v in result.get("edinet_data", {}).items()}
-            await queue.put({**result, "edinet_data": edinet_snapshot})  # エラー時も現状のresultを通知
-            # EDINETのエラーはメインフローの妨げにしない
+            await queue.put({**result, "edinet_data": edinet_snapshot})
 
     async def _main_flow(
         self,
@@ -261,7 +155,7 @@ class IndividualAnalyzer:
         """メインフロー: 財務データ取得 -> 指標計算 -> 株価反映 -> EDINETを並列実行"""
         try:
             stock_info, financial_data, annual_data = await asyncio.to_thread(
-                self._fetch_financial_data, code, include_2q
+                self._financial_fetcher.fetch_financial_data, code, include_2q
             )
             if not stock_info or not financial_data or not annual_data:
                 await queue.put({"status": "error", "message": "財務データの取得に失敗しました"})
@@ -282,8 +176,12 @@ class IndividualAnalyzer:
             edinet_task = asyncio.create_task(
                 self._edinet_flow(code, financial_data, edinet_code, result, queue)
             )
-            prices = await asyncio.to_thread(self._fetch_prices, code, annual_data, analysis_years)
-            metrics = await asyncio.to_thread(self._calculate_metrics, code, annual_data, prices, analysis_years)
+            prices = await asyncio.to_thread(
+                self._financial_fetcher.fetch_prices, code, annual_data, analysis_years
+            )
+            metrics = await asyncio.to_thread(
+                self._financial_fetcher.calculate_metrics, code, annual_data, prices, analysis_years
+            )
 
             if metrics:
                 result["metrics"] = metrics
@@ -306,11 +204,14 @@ class IndividualAnalyzer:
             logger.error(f"メインフローエラー: {e}", exc_info=True)
             await queue.put({"status": "error", "message": str(e)})
 
+    # ------------------------------------------------------------------
+    # 公開API
+    # ------------------------------------------------------------------
+
     async def analyze_stock_stream(self, code: str) -> AsyncGenerator[Dict[str, Any], None]:
         """銘柄分析をストリーミング形式で実行（並列化版）"""
         cache_key = f"individual_analysis_{code}"
 
-        # 1. キャッシュチェック
         if self.use_cache and self.cache:
             cached_result = self.cache.get(cache_key)
             if cached_result is not None:
@@ -327,27 +228,22 @@ class IndividualAnalyzer:
         }
 
         queue: asyncio.Queue = asyncio.Queue()
-
-        # 実行開始
         main_task = asyncio.create_task(self._main_flow(code, cache_key, result, queue))
-        
+
         try:
-            # 初回通知
             yield result
 
             finished = False
             while not finished:
                 try:
-                    # タイムアウト付きでキューから取得（終了判定のため）
                     item = await asyncio.wait_for(queue.get(), timeout=1.0)
                     yield item
-                    
+
                     if item.get("status") in ["complete", "error"]:
                         finished = True
-                    
+
                 except asyncio.TimeoutError:
                     if main_task.done():
-                        # タスクが終了しているのにキューが空なら終了
                         if queue.empty():
                             finished = True
                     continue
@@ -355,7 +251,6 @@ class IndividualAnalyzer:
                     logger.error(f"配信ループエラー: {e}")
                     finished = True
         finally:
-            # 接続が切れた場合や終了した場合、実行中のタスクを確実にキャンセルする
             if not main_task.done():
                 logger.info(f"分析タスクをキャンセルします: {code}")
                 main_task.cancel()
@@ -366,7 +261,12 @@ class IndividualAnalyzer:
                 except Exception as e:
                     logger.error(f"タスクキャンセル中のエラー: {e}")
 
-    async def analyze_stock(self, code: str, progress_callback: Optional[Callable] = None, include_2q: bool = False) -> Optional[Dict[str, Any]]:
+    async def analyze_stock(
+        self,
+        code: str,
+        progress_callback: Optional[Callable] = None,
+        include_2q: bool = False,
+    ) -> Optional[Dict[str, Any]]:
         """個別銘柄を詳細分析"""
         cache_key = f"individual_analysis_{code}"
 
@@ -376,32 +276,32 @@ class IndividualAnalyzer:
                 return cached_result
 
         try:
-            # 1. 財務データ取得
             stock_info, financial_data, annual_data = await asyncio.to_thread(
-                self._fetch_financial_data, code, include_2q
+                self._financial_fetcher.fetch_financial_data, code, include_2q
             )
             if not stock_info or not financial_data or not annual_data:
                 return None
 
-            # 2. 指標計算とEDINET取得を並列実行
             available_years = sum(1 for d in annual_data if d.get("CurPerType") == "FY")
             max_years = settings_store.get_max_analysis_years()
             analysis_years = min(available_years, max_years)
 
-            # EDINET取得は財務データが揃った時点で開始し、prices/metrics計算と並列化する
             edinet_task = asyncio.create_task(
-                self._fetch_edinet_data_async(
+                self._edinet_fetcher.fetch_edinet_data_async(
                     code, financial_data, edinet_code=stock_info.get("EdinetCode")
                 )
             )
 
-            prices = await asyncio.to_thread(self._fetch_prices, code, annual_data, analysis_years)
-            metrics = await asyncio.to_thread(self._calculate_metrics, code, annual_data, prices, analysis_years)
+            prices = await asyncio.to_thread(
+                self._financial_fetcher.fetch_prices, code, annual_data, analysis_years
+            )
+            metrics = await asyncio.to_thread(
+                self._financial_fetcher.calculate_metrics, code, annual_data, prices, analysis_years
+            )
             if not metrics:
                 edinet_task.cancel()
                 return None
 
-            # 3. 結果の作成
             result = {
                 "code": code,
                 "name": stock_info.get("CoName"),
@@ -416,7 +316,6 @@ class IndividualAnalyzer:
             if edinet_data:
                 result["edinet_data"] = edinet_data
 
-            # 5. 保存とキャッシュ
             if self.cache:
                 self.cache.set(cache_key, result)
 
@@ -429,150 +328,42 @@ class IndividualAnalyzer:
         self,
         code: str,
         analysis_years: Optional[int] = None,
-        include_2q: bool = False
+        include_2q: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """
         指標データのみを返す公開API。
         上位層（CLI/MCP）は private メソッドへ依存せず、このメソッドを利用する。
         """
-        stock_info, _, annual_data = await asyncio.to_thread(self._fetch_financial_data, code, include_2q)
+        stock_info, _, annual_data = await asyncio.to_thread(
+            self._financial_fetcher.fetch_financial_data, code, include_2q
+        )
         if not stock_info or not annual_data:
             return None
 
         max_years = analysis_years or settings_store.get_max_analysis_years()
         fy_count = sum(1 for d in annual_data if d.get("CurPerType") == "FY")
         years = min(fy_count, max_years)
-        prices = await asyncio.to_thread(self._fetch_prices, code, annual_data, years)
-        return await asyncio.to_thread(self._calculate_metrics, code, annual_data, prices, years)
-
-    async def fetch_edinet_reports_stream(
-        self,
-        code: str,
-        financial_data: List[Dict[str, Any]],
-        max_documents: int = 20,
-        edinet_code: Optional[str] = None
-    ) -> AsyncGenerator[Dict[str, Any], None]:
-        """
-        EDINET書類を取得し、準備ができた段階で順次yieldする（PDF優先・要約後続）
-        """
-        if not self.edinet_client or not self.edinet_client.api_key:
-            logger.warning(f"EDINETクライアントが利用不可またはAPIキー未設定: code={code}")
-            return
-
-        try:
-            # 検索データの準備
-            if not edinet_code:
-                master_data = await asyncio.to_thread(self.api_client.get_equity_master, code=code)
-                edinet_code = master_data[0].get("EdinetCode") if master_data else None
-            
-            # 余裕を持って検索（ただし取得件数は max_documents で制限）
-            annual_data_idx, years_list = prepare_edinet_search_data(financial_data, max_records=max_documents * 3)
-            
-            # 1. 書類を検索・特定
-            all_docs = await asyncio.to_thread(
-                self.edinet_client.search_documents,
-                code,
-                years=years_list,
-                jquants_data=annual_data_idx,
-                edinet_code=edinet_code,
-                max_documents=max_documents
-            )
-            
-            if not all_docs:
-                logger.info(f"EDINET書類が見つかりませんでした: code={code}")
-                return
-
-            # 日付順（新しい順）にソート
-            all_docs.sort(key=lambda x: x.get("submitDateTime", ""), reverse=True)
-
-            # 2. 各書類の本体(PDF/XBRL)を順次ダウンロードして即座にyield
-            reports_with_paths = []
-            for doc in all_docs:
-                doc_id = doc["docID"]
-                dt = doc.get("docTypeCode")
-                label = "有価証券報告書" if dt == "120" else "半期報告書"
-                year = doc.get("fiscal_year")
-                fy_key = doc.get("jquants_fy_end") or str(year) # フォールバック
-
-                # レポート情報の準備（PDF/XBRLのローカルパスはレスポンスから除外）
-                report_info = {
-                    "docID": doc_id,
-                    "submitDate": doc.get("submitDateTime", "")[:10],
-                    "edinetCode": doc.get("edinetCode"),
-                    "docType": label,
-                    "docTypeCode": dt,
-                    "fiscal_year": year,
-                    "jquants_fy_end": fy_key
-                }
-                
-                # 準備ができた情報から即座に通知
-                yield {"year": year, "fy_key": fy_key, "report": report_info}
-
-        except Exception as e:
-            logger.error(f"EDINETストリーミング取得エラー: {code} - {e}", exc_info=True)
-
-    def fetch_edinet_reports(
-        self,
-        code: str,
-        years: List[int],
-        jquants_annual_data: Optional[List[Dict[str, Any]]] = None,
-        progress_callback: Optional[Callable] = None,
-        edinet_code: Optional[str] = None,
-        max_documents: int = 20
-    ) -> Dict[int, List[Dict[str, Any]]]:
-        """
-        指定年度の有価証券報告書を取得し、要約を生成（同期互換用）
-        """
-        # 注意: 非同期ジェネレータを同期的に回すためにイベントループを使用
-        # analyzerクラス内での同期呼び出し用
-        results = {}
-        
-        async def _run():
-            async for data in self.fetch_edinet_reports_stream(code, jquants_annual_data, max_documents):
-                fy_key = data["fy_key"]
-                report = data["report"]
-                # 互換性のために文字列キーを使用
-                fy_key_str = str(fy_key)
-                if fy_key_str not in results:
-                    results[fy_key_str] = []
-                
-                # 既存のレポートを更新または追加
-                found = False
-                for i, existing in enumerate(results[fy_key_str]):
-                    if existing["docID"] == report["docID"]:
-                        results[fy_key_str][i] = report
-                        found = True
-                        break
-                if not found:
-                    results[fy_key_str].append(report)
-        
-        import threading
-        def run_in_new_loop():
-            new_loop = asyncio.new_event_loop()
-            new_loop.run_until_complete(_run())
-            new_loop.close()
-        t = threading.Thread(target=run_in_new_loop)
-        t.start()
-        t.join()
-            
-        return results
-
-
+        prices = await asyncio.to_thread(
+            self._financial_fetcher.fetch_prices, code, annual_data, years
+        )
+        return await asyncio.to_thread(
+            self._financial_fetcher.calculate_metrics, code, annual_data, prices, years
+        )
 
     async def retry_edinet_fetch(self, code: str) -> AsyncGenerator[Dict[str, Any], None]:
         """EDINET書類取得のみを再試行"""
         cache_key = f"individual_analysis_{code}"
         result = self.cache.get(cache_key) if self.cache else None
-        
+
         if not result:
             yield {"status": "error", "message": "キャッシュデータが見つかりません。"}
             return
 
         try:
-            # 財務データが必要（EDINET検索用）
-            # 注意: analyzer._fetch_financial_data は asyncio.to_thread で呼ぶ必要がある
-            stock_info, financial_data, annual_data = await asyncio.to_thread(self._fetch_financial_data, code)
-            
+            stock_info, financial_data, annual_data = await asyncio.to_thread(
+                self._financial_fetcher.fetch_financial_data, code
+            )
+
             if not financial_data:
                 yield {"status": "error", "message": "EDINET検索に必要な財務情報が取得できませんでした。"}
                 return
@@ -581,10 +372,12 @@ class IndividualAnalyzer:
             result["message"] = "有価証券報告書を再取得中..."
             yield result.copy()
 
-            edinet_data = await self._fetch_edinet_data_async(code, financial_data, max_documents=10)
+            edinet_data = await self._edinet_fetcher.fetch_edinet_data_async(
+                code, financial_data, max_documents=10
+            )
             if edinet_data:
                 result["edinet_data"] = edinet_data
-            
+
             result["status"] = "complete"
             result["message"] = "EDINET取得完了"
             if self.cache:
@@ -594,58 +387,6 @@ class IndividualAnalyzer:
         except Exception as e:
             logger.error(f"EDINET再取得エラー: {e}", exc_info=True)
             yield {"status": "error", "message": str(e)}
-
-
-    async def _extract_ibd_by_year(
-        self,
-        code: str,
-        financial_data: List[Dict[str, Any]],
-        max_years: int,
-    ) -> Dict[str, dict]:
-        """年度別に有利子負債を抽出。Returns: { "YYYYMMDD": ibd_result_dict }"""
-        from mebuki.analysis.interest_bearing_debt import extract_interest_bearing_debt
-
-        if not self.edinet_client or not self.edinet_client.api_key:
-            return {}
-        docs = await asyncio.to_thread(
-            self.edinet_client.search_recent_reports,
-            code, financial_data, max_years, ["120"], max_years
-        )
-        logger.info(f"[IBD] {code}: {len(docs)}件のEDINET文書を検索")
-
-        async def _process_doc(doc: dict) -> tuple[str, dict | None]:
-            fy_end_8 = doc.get("jquants_fy_end", "").replace("-", "")
-            if not fy_end_8:
-                return "", None
-            try:
-                xbrl_dir = await asyncio.to_thread(
-                    self.edinet_client.download_document, doc["docID"], 1
-                )
-                if not xbrl_dir:
-                    logger.warning(f"[IBD] {code} {fy_end_8}: XBRLダウンロード失敗")
-                    return fy_end_8, None
-                ibd = await asyncio.to_thread(
-                    extract_interest_bearing_debt, Path(xbrl_dir)
-                )
-                logger.info(f"[IBD] {code} {fy_end_8}: current={ibd.get('current')}, method={ibd.get('method')}")
-                return fy_end_8, ibd
-            except Exception as e:
-                logger.warning(f"[IBD] {code} {fy_end_8}: 抽出エラー - {e}")
-                return fy_end_8, None
-
-        _t0 = time.perf_counter()
-        results = await asyncio.gather(*[_process_doc(doc) for doc in docs], return_exceptions=True)
-        ibd_by_year: dict = {}
-        for res in results:
-            if isinstance(res, Exception):
-                logger.warning(f"[IBD] {code} gather エラー: {res}")
-                continue
-            k, v = res
-            if k and v is not None:
-                ibd_by_year[k] = v
-        _elapsed = time.perf_counter() - _t0
-        logger.info(f"[IBD] {code}: IBD抽出完了 {len(ibd_by_year)}件 {_elapsed:.2f}s")
-        return ibd_by_year
 
     async def fetch_analysis_data(
         self,
@@ -659,7 +400,7 @@ class IndividualAnalyzer:
         data_service などの上位層が private メソッドを直接呼ばずに済むよう提供する。
         """
         stock_info, financial_data, annual_data = await asyncio.to_thread(
-            self._fetch_financial_data, code, include_2q
+            self._financial_fetcher.fetch_financial_data, code, include_2q
         )
         if not stock_info or not annual_data:
             return {}
@@ -668,19 +409,26 @@ class IndividualAnalyzer:
         max_years = analysis_years or settings_store.get_max_analysis_years()
         actual_years = min(available_years, max_years)
 
-        prices = await asyncio.to_thread(self._fetch_prices, code, annual_data, actual_years)
-        metrics = await asyncio.to_thread(self._calculate_metrics, code, annual_data, prices, actual_years)
+        prices = await asyncio.to_thread(
+            self._financial_fetcher.fetch_prices, code, annual_data, actual_years
+        )
+        metrics = await asyncio.to_thread(
+            self._financial_fetcher.calculate_metrics, code, annual_data, prices, actual_years
+        )
 
         edinet_data = {}
         if financial_data:
-            edinet_data = await self._fetch_edinet_data_async(code, financial_data, max_documents=max_documents)
+            edinet_data = await self._edinet_fetcher.fetch_edinet_data_async(
+                code, financial_data, max_documents=max_documents
+            )
 
-        # 有利子負債を年度別に抽出してmetricsにマージ
         if financial_data and metrics:
-            ibd_by_year = await self._extract_ibd_by_year(code, financial_data, actual_years)
+            ibd_by_year = await self._edinet_fetcher.extract_ibd_by_year(
+                code, financial_data, actual_years
+            )
             for year in metrics.get("years", []):
                 fy_end = year.get("fy_end", "")
-                fy_end_key = fy_end.replace("-", "")  # "2025-03-31" → "20250331"
+                fy_end_key = fy_end.replace("-", "")
                 ibd = ibd_by_year.get(fy_end_key)
                 if ibd and ibd.get("current") is not None:
                     ibd_m = ibd["current"] / MILLION_YEN
@@ -694,8 +442,9 @@ class IndividualAnalyzer:
                         }
                         for c in raw_comps
                     ]
-                    year["CalculatedData"]["IBDAccountingStandard"] = ibd.get("accounting_standard", "unknown")
-                    # ROIC = NP / (Eq + IBD)  ※OPがない場合はNP（当期純利益）を使用
+                    year["CalculatedData"]["IBDAccountingStandard"] = ibd.get(
+                        "accounting_standard", "unknown"
+                    )
                     np_ = year["CalculatedData"].get("NP")
                     eq = year["CalculatedData"].get("Eq")
                     if np_ is not None and eq is not None and (eq + ibd_m) != 0:
