@@ -99,6 +99,10 @@ AGGREGATE_IFRS_DEFINITIONS = [
         "tag": "LongTermDebtNCLIFRS",                 # 長期有利子負債（社債+借入金を集約）
         "covers": ["社債", "長期借入金"],
     },
+    {
+        "tag": "BondsAndBorrowingsNCLIFRS",            # 非流動負債 社債及び借入金（社債+借入金を集約）
+        "covers": ["社債", "長期借入金"],
+    },
 ]
 
 # XBRL解析で収集対象とするローカルタグ名のセット（不要要素のスキップに使用）
