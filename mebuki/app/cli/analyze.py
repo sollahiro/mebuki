@@ -51,7 +51,11 @@ async def cmd_analyze(args):
     """銘柄分析コマンド"""
     from mebuki.services.data_service import data_service
 
-    code = validate_stock_code(args.code)
+    try:
+        code = validate_stock_code(args.code)
+    except ValueError as e:
+        print(f"エラー: {e}")
+        return
 
     # --scope が指定された場合はスコープ別取得
     if getattr(args, "scope", None):
@@ -63,19 +67,18 @@ async def cmd_analyze(args):
             logger.exception(e)
         return
 
-    # 銘柄情報の確認
-    info = data_service.fetch_stock_basic_info(code)
-    if not info.get("name"):
-        print(f"エラー: 銘柄コード {code} が見つかりません。")
-        return
-
-    # 分析年数の決定
-    years_to_analyze = args.years or settings_store.analysis_years or 5
-
-    print(f"\n分析中: {code} {info['name']} ({info['market_name']}) ...")
-    print(f"分析対象期間: 直近 {years_to_analyze} 年分")
-
     try:
+        # 銘柄情報の確認
+        info = data_service.fetch_stock_basic_info(code)
+        if not info.get("name"):
+            print(f"エラー: 銘柄コード {code} が見つかりません。")
+            return
+
+        # 分析年数の決定
+        years_to_analyze = args.years or settings_store.analysis_years or 5
+
+        print(f"\n分析中: {code} {info['name']} ({info['market_name']}) ...")
+        print(f"分析対象期間: 直近 {years_to_analyze} 年分")
         # data_service を使って生の財務データを取得
         result = await data_service.get_raw_analysis_data(
             code, use_cache=not args.no_cache, analysis_years=years_to_analyze,
@@ -181,8 +184,8 @@ async def cmd_price(args):
     """株価データ取得コマンド"""
     from mebuki.services.data_service import data_service
 
-    code = validate_stock_code(args.code)
     try:
+        code = validate_stock_code(args.code)
         data = await data_service.get_price_data(code, days=args.days)
         if not data:
             print(f"株価データが見つかりませんでした: {code}")
@@ -218,8 +221,8 @@ async def cmd_filings(args):
     """EDINET書類一覧コマンド"""
     from mebuki.services.data_service import data_service
 
-    code = validate_stock_code(args.code)
     try:
+        code = validate_stock_code(args.code)
         docs = await data_service.search_filings(
             code,
             max_years=10,
@@ -253,10 +256,10 @@ async def cmd_filing(args):
     """EDINET書類抽出コマンド"""
     from mebuki.services.data_service import data_service
 
-    code = validate_stock_code(args.code)
-    doc_id = getattr(args, "doc_id", None)
-    sections = getattr(args, "sections", None) or []
     try:
+        code = validate_stock_code(args.code)
+        doc_id = getattr(args, "doc_id", None)
+        sections = getattr(args, "sections", None) or []
         result = await data_service.extract_filing_content(
             code,
             doc_id=doc_id or None,
@@ -291,8 +294,8 @@ async def cmd_visualize(args):
     """財務データ可視化コマンド"""
     from mebuki.services.data_service import data_service
 
-    code = validate_stock_code(args.code)
     try:
+        code = validate_stock_code(args.code)
         result = await data_service.visualize_financial_data(code)
         print(json.dumps(result, indent=2, ensure_ascii=False))
     except Exception as e:
