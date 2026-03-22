@@ -219,6 +219,7 @@ class DataService:
         """EDINET書類からセクションを抽出"""
         requested_sections = sections or ["all"]
 
+        meta: Dict[str, Any] = {}
         if not doc_id:
             docs = await self.search_filings(
                 code=code,
@@ -228,7 +229,13 @@ class DataService:
             )
             if not docs:
                 raise ValueError(f"No Securities Report found for {code}")
-            doc_id = docs[0]["docID"]
+            doc = docs[0]
+            doc_id = doc["docID"]
+            meta = {
+                "fiscal_year": doc.get("fiscal_year"),
+                "period_type": doc.get("period_type"),
+                "jquants_fy_end": doc.get("jquants_fy_end"),
+            }
 
         xbrl_dir = await asyncio.to_thread(self.edinet_client.download_document, doc_id, 1)
         if not xbrl_dir:
@@ -237,14 +244,15 @@ class DataService:
         parser = XBRLParser()
         all_sections = parser.extract_sections_by_type(xbrl_dir)
 
+        base = {"doc_id": doc_id, **meta}
         if "all" in requested_sections:
-            return {"sections": all_sections}
+            return {**base, "sections": all_sections}
 
         result = {}
         for section in requested_sections:
             if section in all_sections:
                 result[section] = all_sections[section]
-        return {"sections": result}
+        return {**base, "sections": result}
 
     async def visualize_financial_data(self, code: str) -> Dict[str, Any]:
         """可視化向けの財務データを返す。"""

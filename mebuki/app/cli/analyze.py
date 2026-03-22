@@ -264,6 +264,14 @@ async def cmd_filing(args):
         if args.format == "json":
             print(json.dumps(result, indent=2, ensure_ascii=False))
         else:
+            if result.get("doc_id"):
+                print(f"doc_id:      {result['doc_id']}")
+            if result.get("fiscal_year"):
+                print(f"fiscal_year: {result['fiscal_year']}")
+            if result.get("period_type"):
+                print(f"period_type: {result['period_type']}")
+            if result.get("jquants_fy_end"):
+                print(f"fy_end:      {result['jquants_fy_end']}")
             secs = result.get("sections", {})
             if not secs:
                 print("セクションデータが見つかりませんでした。")
