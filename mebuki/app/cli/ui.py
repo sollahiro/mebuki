@@ -3,6 +3,9 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# questionary 2.x では value=None を渡すとタイトル文字列が返るため sentinel を使用
+_CANCEL_SENTINEL = object()
+
 
 def select_stock_from_results(results: list[dict], prompt: str, cancel_text: str = "↩  戻る") -> dict | None:
     """検索結果リストから銘柄をインタラクティブに選択する。キャンセル時は None を返す。"""
@@ -11,8 +14,9 @@ def select_stock_from_results(results: list[dict], prompt: str, cancel_text: str
         {"name": f"{item['code']}  {item['name']}  ({item['market']})", "value": item}
         for item in results
     ]
-    choices.append({"name": cancel_text, "value": None})
-    return questionary.select(prompt, choices=choices).ask()
+    choices.append({"name": cancel_text, "value": _CANCEL_SENTINEL})
+    result = questionary.select(prompt, choices=choices).ask()
+    return None if (result is _CANCEL_SENTINEL or result is None) else result
 
 
 def print_banner():

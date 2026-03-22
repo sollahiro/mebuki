@@ -196,12 +196,12 @@ class EdinetAPIClient:
                 # 並列で日付一覧を取得（バッチ処理）
                 # 1つ見つかったらそこで中断したいが、並列実行中はバッチ単位で処理
                 BATCH_SIZE = MAX_WORKERS
-                for i in range(0, len(target_dates), BATCH_SIZE):
-                    batch = target_dates[i:i+BATCH_SIZE]
-                    
-                    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                    for i in range(0, len(target_dates), BATCH_SIZE):
+                        batch = target_dates[i:i+BATCH_SIZE]
+
                         future_to_date = {executor.submit(self._get_documents_for_date, d): d for d in batch}
-                        
+
                         # 完了した順にチェック（ただし日付の新しい順に処理したい場合は工夫が必要）
                         # ここでは完了順ではなく、batch内での順序を維持してチェックする
                         results_map = {}
@@ -212,26 +212,26 @@ class EdinetAPIClient:
                             except Exception as e:
                                 logger.error(f"Error fetching docs for {date_str}: {e}")
                                 results_map[date_str] = []
-                        
+
                         # バッチ内の日付を「新しい順」に走査してマッチング
                         for date_str in batch:
                             documents = results_map.get(date_str, [])
                             for doc in documents:
                                 current_edinet_code = doc.get("edinetCode")
                                 sec_code = str(doc.get("secCode", "")).strip()
-                                
+
                                 is_match = False
                                 if edinet_code and current_edinet_code == edinet_code:
                                     is_match = True
                                 elif sec_code.startswith(code_4digit):
                                     is_match = True
-                                    
+
                                 if is_match:
                                     dt = doc.get("docTypeCode", "")
                                     if not target_doc_types or dt in target_doc_types:
                                         desc = doc.get("docDescription", "")
                                         if desc and ("訂正" in desc or "補正" in desc): continue
-                                        
+
                                         logger.info(f"✨ [EDINET HIT] {sec_code}: {desc} ({date_str}) ID={doc.get('docID')}")
                                         doc["fiscal_year"] = fiscal_year
                                         doc["jquants_fy_end"] = fy_end
@@ -240,7 +240,7 @@ class EdinetAPIClient:
                                         found_for_this_record = True
                                         break
                             if found_for_this_record: break
-                    if found_for_this_record: break
+                        if found_for_this_record: break
                         
             except Exception as e:
                 logger.error(f"❌ [EDINET] Error processing record: {e}", exc_info=True)

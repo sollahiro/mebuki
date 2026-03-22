@@ -50,7 +50,7 @@ def cmd_interactive():
                 import asyncio
                 asyncio.run(cmd_analyze(argparse.Namespace(
                     code=code,
-                    years=int(years) if years.isdigit() else 5,
+                    years=int(years) if years and years.isdigit() else 5,
                     format="table",
                     no_cache=False,
                     scope=None,
@@ -74,6 +74,8 @@ def cmd_interactive():
                 cfg_args.key = questionary.select("変更する項目:", choices=[
                     "jquantsApiKey", "edinetApiKey", "analysisYears", "llmProvider"
                 ]).ask()
+                if not cfg_args.key:
+                    continue
                 cfg_args.value = questionary.text(f"{cfg_args.key} の新しい値:").ask()
 
             cmd_config(cfg_args, _DummyParser())

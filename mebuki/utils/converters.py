@@ -101,14 +101,6 @@ def is_nan(value: Any) -> bool:
     except (TypeError, ValueError):
         pass
     
-    # pandasのNaNチェック
-    try:
-        import pandas as pd
-        if pd.isna(value):
-            return True
-    except (ImportError, TypeError, AttributeError):
-        pass
-    
     # 文字列をfloatに変換してNaNチェック
     try:
         num_value = float(value)

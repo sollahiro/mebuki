@@ -2,9 +2,9 @@
 銘柄マスタ管理サービス
 """
 
+import csv
 import logging
 import os
-import pandas as pd
 import unicodedata
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -17,6 +17,7 @@ class MasterDataManager:
     
     def __init__(self):
         self._is_loaded = False
+        self._code_index: dict = {}
         
     def _normalize_name(self, name: str) -> str:
         """
@@ -73,10 +74,10 @@ class MasterDataManager:
             
         try:
             # 2. CSV読み込み（全て文字列として扱いコードの0落ちを防ぐ）
-            df = pd.read_csv(csv_path, dtype=str)
-            
-            # 3. 辞書リストに変換（iterrowsより高速）
-            raw_data = df.to_dict('records')
+            # utf-8-sig は BOM 有無両対応
+            with open(csv_path, encoding='utf-8-sig', newline='') as f:
+                reader = csv.DictReader(f)
+                raw_data = list(reader)
             
             # 4. 検索用データの事前処理
             # 許可する市場区分（個別株のみ）
@@ -108,6 +109,16 @@ class MasterDataManager:
                 })
             
             self._master_data = processed_data
+            # O(1) ルックアップ用インデックスを構築（4桁・5桁両方でアクセス可能に）
+            self._code_index = {}
+            for item in self._master_data:
+                code = item.get("Code", "")
+                if code:
+                    self._code_index[code] = item
+                    if len(code) == 4:
+                        self._code_index[code + "0"] = item
+                    elif len(code) == 5 and code.endswith("0"):
+                        self._code_index[code[:4]] = item
             self._is_loaded = True
             logger.info(f"銘柄マスタを更新しました: {len(self._master_data)} 件 (元データ {len(raw_data)} 件)")
             return True
@@ -157,33 +168,9 @@ class MasterDataManager:
     def get_by_code(self, code: str) -> Optional[Dict[str, Any]]:
         """コード指定で銘柄情報を取得"""
         self.load_if_needed()
-        
         if not code:
             return None
-            
-        target_code = str(code).strip()
-        
-        # 1. 直接一致
-        for item in self._master_data:
-            c = item.get("Code", "")
-            if c == target_code:
-                return item
-                
-        # 2. 5桁（末尾0）から4桁への正規化一致を試す
-        if len(target_code) == 5 and target_code.endswith("0"):
-            normalized = target_code[:4]
-            for item in self._master_data:
-                if item.get("Code") == normalized:
-                    return item
-        
-        # 3. 4桁から5桁（CSV側が5桁の場合）
-        if len(target_code) == 4:
-            normalized = target_code + "0"
-            for item in self._master_data:
-                if item.get("Code") == normalized:
-                    return item
-                    
-        return None
+        return self._code_index.get(str(code).strip())
 
 # シングルトン
 master_data_manager = MasterDataManager()

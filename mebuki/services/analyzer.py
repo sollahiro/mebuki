@@ -4,7 +4,6 @@
 個別銘柄の詳細分析を実行します。
 """
 
-import copy
 import json
 import logging
 import asyncio
@@ -23,6 +22,7 @@ from mebuki.utils.cache import CacheManager
 
 from mebuki.infrastructure.settings import settings_store
 from mebuki.constants.formats import DATE_LEN_COMPACT
+from mebuki.utils.fiscal_year import normalize_date_format
 from mebuki.constants.financial import PERCENT, MILLION_YEN
 
 logger = logging.getLogger(__name__)
@@ -128,7 +128,7 @@ class IndividualAnalyzer:
             fy_end = year_data.get("CurFYEn")
             if fy_end:
                 if len(fy_end) == DATE_LEN_COMPACT:
-                    fy_end_formatted = f"{fy_end[:4]}-{fy_end[4:6]}-{fy_end[6:8]}"
+                    fy_end_formatted = normalize_date_format(fy_end)
                 else:
                     fy_end_formatted = fy_end[:10] if len(fy_end) >= 10 else fy_end
 
@@ -242,10 +242,12 @@ class IndividualAnalyzer:
                     existing_indices.setdefault(fy_key_str, {})[doc_id] = len(result["edinet_data"][fy_key_str])
                     result["edinet_data"][fy_key_str].append(report)
 
-                await queue.put(copy.deepcopy(result))
+                edinet_snapshot = {k: list(v) for k, v in result.get("edinet_data", {}).items()}
+                await queue.put({**result, "edinet_data": edinet_snapshot})
         except Exception as e:
             logger.error(f"EDINETフローエラー: {e}", exc_info=True)
-            await queue.put(copy.deepcopy(result))  # エラー時も現状のresultを通知
+            edinet_snapshot = {k: list(v) for k, v in result.get("edinet_data", {}).items()}
+            await queue.put({**result, "edinet_data": edinet_snapshot})  # エラー時も現状のresultを通知
             # EDINETのエラーはメインフローの妨げにしない
 
     async def _main_flow(
@@ -287,7 +289,7 @@ class IndividualAnalyzer:
                 result["metrics"] = metrics
                 result["status"] = "fetching_edinet"
                 result["message"] = "有価証券報告書を取得中..."
-                await queue.put(copy.deepcopy(result))
+                await queue.put(dict(result))
             else:
                 await queue.put({"status": "error", "message": "株価反映後の指標計算に失敗しました"})
                 return
