@@ -77,9 +77,7 @@ class FinancialFetcher:
                 break
             fy_end = year_data.get("CurFYEn")
             if fy_end:
-                fy_end_formatted = normalize_date_format(fy_end) or (
-                    fy_end[:10] if len(fy_end) >= 10 else fy_end
-                )
+                fy_end_formatted = normalize_date_format(fy_end) or fy_end
                 try:
                     fy_end_date = parse_date_string(fy_end)
                     if fy_end_date and fy_end_date < subscription_start_date:

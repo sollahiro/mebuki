@@ -14,6 +14,7 @@ from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.analysis.xbrl_parser import XBRLParser
 from mebuki.infrastructure.settings import settings_store
 from mebuki.utils.cache import CacheManager
+from mebuki.utils.fiscal_year import parse_date_string
 
 from .analyzer import IndividualAnalyzer
 from .master_data import master_data_manager
@@ -24,10 +25,8 @@ _EARNINGS_CALENDAR_FQ_FILTER = {"本決算", "第２四半期"}
 
 
 def _parse_calendar_date(date_str: str) -> date:
-    try:
-        return datetime.strptime(date_str[:10], "%Y-%m-%d").date()
-    except ValueError:
-        return date(2000, 1, 1)
+    dt = parse_date_string(date_str)
+    return dt.date() if dt is not None else date(2000, 1, 1)
 
 
 class DataService:

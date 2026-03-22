@@ -350,30 +350,29 @@ def extract_quarterly_data(
             if fy_end:
                 q3_records_by_fy[fy_end] = record
     
+    def subtract_values(fy_val, q3_val):
+        """FY値から3Q値を引く（4Q単独の値を算出）"""
+        try:
+            fy_float = float(fy_val) if fy_val is not None else 0
+            q3_float = float(q3_val) if q3_val is not None else 0
+            result = fy_float - q3_float
+            return result if result != 0 else None
+        except (ValueError, TypeError):
+            return None
+
     # FYデータから4Qを算出（FY - 3Q = 4Q）
     fy_records = [r for r in quarterly_data if r.get("CurPerType") == "FY"]
     for fy_record in fy_records:
         fy_end = fy_record.get("CurFYEn", "")
         if fy_end:
             q3_record = q3_records_by_fy.get(fy_end)
-            
+
             # 4Qデータを作成
             q4_record = fy_record.copy()
             q4_record["CurPerType"] = "4Q"
-            
+
             # 3Qデータが存在する場合は、FYから3Qを引いて4Qを算出
             if q3_record:
-                # 数値フィールドを処理
-                def subtract_values(fy_val, q3_val):
-                    """FY値から3Q値を引く（4Q単独の値を算出）"""
-                    try:
-                        fy_float = float(fy_val) if fy_val is not None else 0
-                        q3_float = float(q3_val) if q3_val is not None else 0
-                        result = fy_float - q3_float
-                        return result if result != 0 else None
-                    except (ValueError, TypeError):
-                        return None
-                
                 # 主要な財務指標を計算
                 q4_record["Sales"] = subtract_values(fy_record.get("Sales"), q3_record.get("Sales"))
                 q4_record["OP"] = subtract_values(fy_record.get("OP"), q3_record.get("OP"))
@@ -407,8 +406,9 @@ def extract_quarterly_data(
                 record["_quarter_end_date"] = quarter_end_date
                 
                 # 未来の四半期データを除外
-                q_year = int(quarter_end_date[:4])
-                q_month = int(quarter_end_date[5:7])
+                q_year, q_month = extract_year_month(quarter_end_date)
+                if q_year is None or q_month is None:
+                    continue
                 if q_year > current_year or (q_year == current_year and q_month > current_month):
                     continue
         else:
