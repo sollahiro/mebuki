@@ -3,13 +3,11 @@
 """
 
 import logging
-import math
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 
 from .converters import to_float, is_valid_value, is_valid_financial_record
 from mebuki.constants.formats import DATE_LEN_COMPACT, DATE_LEN_HYPHENATED
-from mebuki.constants.financial import PERCENT
 
 logger = logging.getLogger(__name__)
 
@@ -146,142 +144,6 @@ def extract_annual_data(
 
     return unique_annual_data
 
-
-def calculate_metrics(
-    annual_data: List[Dict[str, Any]],
-    prices: Optional[Dict[str, float]] = None
-) -> Dict[str, Any]:
-    """
-    年度データから各種指標を計算（未来の年度データは除外済み）
-
-    Args:
-        annual_data: 年度データのリスト（新しい順、最大3年分、未来の年度は除外済み）
-        prices: 年度終了日をキーとした株価の辞書（YYYY-MM-DD形式）
-
-    Returns:
-        計算済み指標の辞書
-    """
-    if not annual_data:
-        return {}
-    
-    # 最新3年分のデータを取得（重複除去済みのデータから、年度終了日が異なる年度のみ）
-    # extract_annual_dataで既に重複除去されているので、そのまま使用
-    years_data = annual_data[:3]
-    
-    if len(years_data) < 1:
-        return {}
-    
-    # 最新年度のデータ
-    latest = years_data[0]
-    
-    # 指標計算用のデータを準備
-    metrics = {
-        "code": latest.get("Code"),
-        "latest_fy_end": latest.get("CurFYEn"),  # 最新年度終了日
-    }
-    
-    # 各年度の指標を計算
-    years_metrics = []
-    for i, year_data in enumerate(years_data):
-        fy_end = year_data.get("CurFYEn")
-        
-        # 基本財務データ（数値に変換、converters.pyのto_floatを使用）
-        sales = to_float(year_data.get("Sales"))
-        op = to_float(year_data.get("OP"))  # 営業利益
-        np = to_float(year_data.get("NP"))  # 当期純利益
-        eq = to_float(year_data.get("Eq"))  # 純資産
-        cfo = to_float(year_data.get("CFO"))  # 営業CF
-        cfi = to_float(year_data.get("CFI"))  # 投資CF
-        eps = to_float(year_data.get("EPS"))
-        bps = to_float(year_data.get("BPS"))
-        # 配当性向（APIからは小数で返ってくるので100倍してパーセント値に変換）
-        payout_ratio_raw = to_float(year_data.get("PayoutRatioAnn"))
-        payout_ratio = payout_ratio_raw * PERCENT if payout_ratio_raw is not None else None
-        # 配当金総額（円単位）
-        div_total = to_float(year_data.get("DivTotalAnn"))
-        
-        # FCF計算
-        fcf = None
-        if cfo is not None and cfi is not None:
-            fcf = cfo + cfi
-        
-        # ROE計算
-        roe = None
-        if np is not None and eq is not None:
-            try:
-                eq_float = float(eq) if not isinstance(eq, (int, float)) else eq
-                if eq_float != 0:
-                    np_float = float(np) if not isinstance(np, (int, float)) else np
-                    roe = (np_float / eq_float) * PERCENT
-            except (ValueError, TypeError, ZeroDivisionError):
-                roe = None
-        
-        # 株価取得
-        price = None
-        if prices and fy_end:
-            # 年度終了日の形式を確認（YYYY-MM-DD または YYYYMMDD）
-            price_key = fy_end
-            if price_key in prices:
-                price = prices[price_key]
-            else:
-                # YYYYMMDD形式で試す
-                price_key_alt = fy_end.replace("-", "")
-                if price_key_alt in prices:
-                    price = prices[price_key_alt]
-        
-        # PER計算
-        per = None
-        if price is not None and eps is not None:
-            try:
-                eps_float = float(eps) if not isinstance(eps, (int, float)) else eps
-                if eps_float > 0:
-                    per = float(price) / eps_float
-            except (ValueError, TypeError, ZeroDivisionError):
-                per = None
-        
-        # PBR計算
-        pbr = None
-        if price is not None and bps is not None:
-            try:
-                bps_float = float(bps) if not isinstance(bps, (int, float)) else bps
-                if bps_float > 0:
-                    pbr = float(price) / bps_float
-            except (ValueError, TypeError, ZeroDivisionError):
-                pbr = None
-        
-        year_metric = {
-            "fy_end": fy_end,
-            "sales": sales,
-            "op": op,
-            "np": np,
-            "eq": eq,
-            "cfo": cfo,
-            "cfi": cfi,
-            "fcf": fcf,
-            "roe": roe,
-            "eps": eps,
-            "bps": bps,
-            "price": price,
-            "per": per,
-            "pbr": pbr,
-            "payout_ratio": payout_ratio,  # 配当性向
-            "div_total": div_total,  # 配当金総額
-        }
-        years_metrics.append(year_metric)
-    
-    metrics["years"] = years_metrics
-    
-    # 最新年度の値をメトリクスに追加（表示用）
-    if years_metrics:
-        latest = years_metrics[0]
-        metrics["latest_fcf"] = latest.get("fcf")
-        metrics["latest_roe"] = latest.get("roe")
-        metrics["latest_eps"] = latest.get("eps")
-        metrics["latest_per"] = latest.get("per")
-        metrics["latest_pbr"] = latest.get("pbr")
-        metrics["latest_sales"] = latest.get("sales")
-    
-    return metrics
 
 
 def get_monthly_avg_stock_price(
