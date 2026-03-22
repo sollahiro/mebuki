@@ -1,5 +1,4 @@
 import os
-import sys
 import logging
 import keyring
 from pathlib import Path
@@ -23,11 +22,7 @@ class SettingsStore:
         if os.environ.get("MEBUKI_USER_DATA_PATH"):
             return Path(os.environ["MEBUKI_USER_DATA_PATH"])
         
-        # XDG規格に近い ~/.config/mebuki をデフォルトにします（macOS/Linux共通）
-        if sys.platform == "win32":
-            return Path(os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))) / "mebuki"
-        else:
-            return Path.home() / ".config" / "mebuki"
+        return Path.home() / ".config" / "mebuki"
 
     def __init__(self):
         # ユーザーデータパスの決定

@@ -291,7 +291,12 @@ class EdinetAPIClient:
             zip_path = save_dir / f"{doc_id}.zip"
             with open(zip_path, "wb") as f: f.write(response.content)
             dest.mkdir(parents=True, exist_ok=True)
-            with zipfile.ZipFile(zip_path, "r") as z: z.extractall(dest)
+            with zipfile.ZipFile(zip_path, "r") as z:
+                for member in z.namelist():
+                    member_path = (dest / member).resolve()
+                    if not str(member_path).startswith(str(dest.resolve())):
+                        raise ValueError(f"不正なZIPエントリ: {member}")
+                z.extractall(dest)
             zip_path.unlink()
             return dest
         except Exception as e:

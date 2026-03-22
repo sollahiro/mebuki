@@ -15,7 +15,9 @@ def validate_stock_code(code: str) -> str:
     Raises:
         ValueError: バリデーションエラー時
     """
-    if not code or len(code) < 4:
+    if not code or not code.isdigit():
+        raise ValueError("銘柄コードは数字のみで入力してください")
+    if len(code) < 4:
         raise ValueError("銘柄コードは4桁以上で入力してください")
     
     # 4桁の場合は0を追加して5桁にする

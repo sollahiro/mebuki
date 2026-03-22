@@ -40,14 +40,11 @@ def cmd_mcp(args, parser):
     elif args.mcp_subcommand == "install-claude":
         print("\nClaude Desktop への MCP サーバー登録を試みています...")
 
-        import os
         from pathlib import Path
 
         # 設定ファイルの特定
         if sys.platform == "darwin":
             config_path = Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
-        elif sys.platform == "win32":
-            config_path = Path(os.environ.get("APPDATA", "")) / "Claude" / "claude_desktop_config.json"
         else:
             print(f"OS {sys.platform} は自動インストールに対応していません。手動で設定してください。")
             return

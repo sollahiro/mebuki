@@ -122,7 +122,7 @@ def _collect_numeric_elements(
     """
     results: dict = {}
     try:
-        tree = ET.parse(xml_file)
+        tree = ET.parse(xml_file)  # Python 3.x ElementTree はデフォルトでXXEを無効化済み
         root = tree.getroot()
         for elem in root.iter():
             tag = elem.tag

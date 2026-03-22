@@ -93,11 +93,9 @@ class JQuantsAPIClient:
             if response.status_code == 401:
                 raise ValueError("APIキーが無効です。正しいAPIキーを設定してください。")
             elif response.status_code == 403:
-                error_msg = f"認証エラー (403): {response.text}"
+                error_msg = "認証エラー (403): APIキーが正しく設定されていない可能性があります。"
                 if "Missing Authentication Token" in response.text:
                     error_msg += "\nAPIキーが正しく送信されていない可能性があります。"
-                    error_msg += f"\n使用中のベースURL: {self.base_url}"
-                    error_msg += f"\nエンドポイント: {endpoint}"
                 raise ValueError(error_msg)
             elif response.status_code == 429:
                 # レート制限エラー
