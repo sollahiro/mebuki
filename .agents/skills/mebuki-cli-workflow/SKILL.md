@@ -39,13 +39,14 @@ mebuki config init
 社名や証券コードで銘柄を検索する。
 
 ```bash
-mebuki search <社名またはコード>
+mebuki search <社名またはコード> [--format table|json]
 ```
 
 例：
 ```bash
 mebuki search トヨタ
 mebuki search 7203
+mebuki search 7203 --format json
 ```
 
 ### ② 財務分析
@@ -53,7 +54,7 @@ mebuki search 7203
 銘柄の財務データを分析する。
 
 ```bash
-mebuki analyze <code> [--scope overview|metrics|raw] [--years N] [--format table|json] [--include-2q]
+mebuki analyze <code> [--scope overview|metrics|raw] [--years N] [--format table|json] [--include-2q] [--no-cache]
 ```
 
 - `--scope overview`: 財務サマリー + ROIC・有利子負債（デフォルト）
@@ -61,6 +62,7 @@ mebuki analyze <code> [--scope overview|metrics|raw] [--years N] [--format table
 - `--scope raw`: 生データ
 - `--years N`: 取得年数（デフォルト: 5）。**FY（通期）の件数**でカウントする
 - `--include-2q`: 2Q（中間期）データも含めて表示する（opt-in）。2Qの ROE/ROIC/PER/PBR は表示しない（6ヶ月分の値のため）
+- `--no-cache`: キャッシュを使用せず最新データを取得する
 
 例：
 ```bash
@@ -68,6 +70,7 @@ mebuki analyze 7203
 mebuki analyze 7203 --years 5
 mebuki analyze 7203 --scope metrics --format json
 mebuki analyze 7203 --years 5 --include-2q          # 通期5年 + 中間期を合わせて表示
+mebuki analyze 7203 --no-cache                       # キャッシュ無効化
 ```
 
 ### ③ 株価取得
@@ -95,6 +98,7 @@ mebuki filings <code> [--format table|json]
 例：
 ```bash
 mebuki filings 7203
+mebuki filings 7203 --format json
 ```
 
 ### ⑤ 財務データ可視化
@@ -115,7 +119,7 @@ mebuki visualize 7203
 有価証券報告書から特定セクションを抽出する。
 
 ```bash
-mebuki filing <code> [--doc-id DOC_ID] [--sections business_risks|mda|management_policy]
+mebuki filing <code> [--doc-id DOC_ID] [--sections business_risks|mda|management_policy] [--format table|json]
 ```
 
 - `--doc-id`: ④で取得したドキュメントID（省略時は最新）
@@ -129,6 +133,7 @@ mebuki filing <code> [--doc-id DOC_ID] [--sections business_risks|mda|management
 mebuki filing 7203
 mebuki filing 7203 --sections business_risks mda
 mebuki filing 7203 --doc-id S100XXXX --sections mda
+mebuki filing 7203 --format json
 ```
 
 ### ⑦ マクロ経済データ
@@ -136,7 +141,7 @@ mebuki filing 7203 --doc-id S100XXXX --sections mda
 為替・金融政策などのマクロ経済データを取得する。
 
 ```bash
-mebuki macro <fx|monetary> [--start YYYYMM] [--end YYYYMM]
+mebuki macro <fx|monetary> [--start YYYYMM] [--end YYYYMM] [--format table|json]
 ```
 
 - `fx`: 為替レート（日銀統計）
@@ -146,6 +151,7 @@ mebuki macro <fx|monetary> [--start YYYYMM] [--end YYYYMM]
 ```bash
 mebuki macro fx
 mebuki macro monetary --start 202001 --end 202512
+mebuki macro fx --format json
 ```
 
 ### ⑧ ウォッチリスト管理
@@ -153,15 +159,16 @@ mebuki macro monetary --start 202001 --end 202512
 注目銘柄のウォッチリストを管理する。
 
 ```bash
-mebuki watch add <code> [--name 備考]
-mebuki watch remove <code>
-mebuki watch list
+mebuki watch add <code> [--name 備考] [--format table|json]
+mebuki watch remove <code> [--format table|json]
+mebuki watch list [--format table|json]
 ```
 
 例：
 ```bash
 mebuki watch add 7203 --name "トヨタ自動車"
 mebuki watch list
+mebuki watch list --format json
 mebuki watch remove 7203
 ```
 
@@ -171,23 +178,26 @@ mebuki watch remove 7203
 
 ```bash
 # 買付
-mebuki portfolio add <code> <数量> <取得単価> [--broker 証券会社] [--account 特定|一般|NISA] [--date YYYY-MM-DD]
+mebuki portfolio add <code> <数量> <取得単価> [--broker 証券会社] [--account 特定|一般|NISA] [--date YYYY-MM-DD] [--name 銘柄名] [--format table|json]
 
 # 売却
-mebuki portfolio sell <code> <数量> [--broker 証券会社] [--account 特定|一般|NISA]
+mebuki portfolio sell <code> <数量> [--broker 証券会社] [--account 特定|一般|NISA] [--format table|json]
 
 # 銘柄削除
-mebuki portfolio remove <code>
+mebuki portfolio remove <code> [--broker 証券会社] [--account 特定|一般|NISA] [--format table|json]
 
 # 一覧表示
-mebuki portfolio list [--detail]
+mebuki portfolio list [--detail] [--format table|json]
 ```
 
 例：
 ```bash
 mebuki portfolio add 7203 100 2500 --broker SBI --account 特定
+mebuki portfolio add 7203 100 2500 --name "トヨタ自動車"   # 銘柄名を手動指定（省略時は自動取得）
 mebuki portfolio list --detail
+mebuki portfolio list --format json
 mebuki portfolio sell 7203 50
+mebuki portfolio remove 7203 --broker SBI --account 特定
 ```
 
 ## 典型ワークフロー
