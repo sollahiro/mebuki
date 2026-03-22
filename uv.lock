@@ -590,7 +590,7 @@ wheels = [
 
 [[package]]
 name = "mebuki"
-version = "2.3.8"
+version = "2.3.9"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
