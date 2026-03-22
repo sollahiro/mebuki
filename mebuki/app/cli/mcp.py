@@ -128,3 +128,40 @@ def cmd_mcp(args, parser):
             print(f"設定ファイル: {config_path}")
         except Exception as e:
             print(f"エラー: Goose への登録中に問題が発生しました: {e}")
+
+    elif args.mcp_subcommand == "install-lm-studio":
+        print("\nLM Studio への MCP サーバー登録を試みています...")
+        from pathlib import Path
+
+        config_path = Path.home() / ".lmstudio" / "mcp.json"
+        if not config_path.parent.exists():
+            print(f"LM Studio の設定ディレクトリが見つかりません: {config_path.parent}")
+            return
+
+        try:
+            executable, cmd_args = _get_mcp_command()
+
+            config_data = {"mcpServers": {}}
+            if config_path.exists():
+                with open(config_path, "r", encoding="utf-8") as f:
+                    config_data = json.load(f)
+
+            if "mcpServers" not in config_data:
+                config_data["mcpServers"] = {}
+
+            config_data["mcpServers"]["mebuki"] = {
+                "command": executable,
+                "args": cmd_args,
+                "env": {
+                    "MEBUKI_USER_DATA_PATH": str(settings_store.user_data_path)
+                }
+            }
+
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(config_data, f, indent=2, ensure_ascii=False)
+
+            print(f"成功: LM Studio に 'mebuki' MCP サーバーを登録しました。")
+            print(f"設定ファイル: {config_path}")
+            print("LM Studio を再起動して反映させてください。")
+        except Exception as e:
+            print(f"エラー: LM Studio への登録中に問題が発生しました: {e}")

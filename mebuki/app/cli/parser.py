@@ -68,6 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
     mcp_sub = mcp_parser.add_subparsers(dest="mcp_subcommand")
     mcp_sub.add_parser("install-claude", help="Claude Desktop に登録")
     mcp_sub.add_parser("install-goose", help="Goose に登録")
+    mcp_sub.add_parser("install-lm-studio", help="LM Studio に登録")
     mcp_sub.add_parser("start", help="MCPサーバーを起動 (STDIO)")
 
     # watch
