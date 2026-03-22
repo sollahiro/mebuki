@@ -104,16 +104,7 @@ class FinancialFetcher:
                         if original:
                             prices[original] = price
             except Exception as e:
-                logger.warning(f"バッチ株価取得に失敗、個別取得にフォールバック: {e}")
-                for date_str in dates_to_fetch:
-                    try:
-                        price = self.api_client.get_price_at_date(
-                            code, date_str, use_nearest_trading_day=True
-                        )
-                        if price:
-                            prices[date_str] = price
-                    except Exception as e:
-                        logger.warning(f"株価個別取得に失敗: {e}")
+                logger.warning(f"バッチ株価取得に失敗: {e}")
 
         return prices
 

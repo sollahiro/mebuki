@@ -180,52 +180,6 @@ class CacheManager:
                 metadata_path.unlink()
             self._metadata_cache = None
     
-    def get_by_code(self, code: str) -> Dict[str, Any]:
-        """
-        銘柄コードに関連するキャッシュを取得
-        
-        Args:
-            code: 銘柄コード
-            
-        Returns:
-            銘柄コードに関連するキャッシュの辞書（キー: キャッシュキー、値: キャッシュデータ）
-        """
-        result = {}
-        metadata = self._load_metadata()
-        
-        # メタデータから銘柄コードを含むキーを検索
-        for key in metadata.keys():
-            # キャッシュキーに銘柄コードが含まれているかチェック
-            # 一般的なパターン: "stock_{code}_*", "{code}_*", "*_{code}_*" など
-            if code in key:
-                cache_data = self.get(key)
-                if cache_data is not None:
-                    result[key] = cache_data
-        
-        return result
-    
-    def clear_by_code(self, code: str):
-        """
-        銘柄コードに関連するキャッシュを削除
-        
-        Args:
-            code: 銘柄コード（4桁または5桁）
-        """
-        metadata = self._load_metadata()
-        keys_to_delete = []
-        
-        # 4桁部分を取得（4桁と5桁の両方に対応するため）
-        code_prefix = code[:4]
-        
-        # メタデータから銘柄コードを含むキーを検索
-        for key in metadata.keys():
-            # キャッシュキーに銘柄コードの4桁部分が含まれているかチェック
-            if code_prefix in key:
-                keys_to_delete.append(key)
-        
-        # 見つかったキーを削除
-        for key in keys_to_delete:
-            self.clear(key)
 
 
 
