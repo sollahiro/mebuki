@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import requests
 from ..constants.api import JQUANTS_API_BASE_URL
 from mebuki.constants.formats import DATE_LEN_COMPACT
+from mebuki.utils.fiscal_year import normalize_date_format, parse_date_string
 
 logger = logging.getLogger(__name__)
 
@@ -331,15 +332,11 @@ class JQuantsAPIClient:
         date_objects = []
         
         for date_str in dates:
-            try:
-                if "-" in date_str:
-                    date_obj = datetime.strptime(date_str[:10], "%Y-%m-%d")
-                else:
-                    date_obj = datetime.strptime(date_str[:8], "%Y%m%d")
-                normalized_dates.append(date_str)
-                date_objects.append((date_str, date_obj))
-            except (ValueError, TypeError):
+            date_obj = parse_date_string(date_str)
+            if date_obj is None:
                 continue
+            normalized_dates.append(date_str)
+            date_objects.append((date_str, date_obj))
         
         if not date_objects:
             return {}
@@ -366,11 +363,9 @@ class JQuantsAPIClient:
                 bar_date = bar.get("Date", "")
                 if bar_date:
                     # 日付形式を正規化
-                    if len(bar_date) == DATE_LEN_COMPACT:
-                        normalized_bar_date = f"{bar_date[:4]}-{bar_date[4:6]}-{bar_date[6:8]}"
-                    else:
-                        normalized_bar_date = bar_date[:10] if len(bar_date) >= 10 else bar_date
-                    
+                    normalized_bar_date = normalize_date_format(bar_date) or (
+                        bar_date[:10] if len(bar_date) >= 10 else bar_date
+                    )
                     price = bar.get("AdjC") or bar.get("C")
                     if price is not None:
                         bars_by_date[normalized_bar_date] = price
@@ -379,11 +374,8 @@ class JQuantsAPIClient:
             # 各日付の株価を取得
             for date_str, date_obj in date_objects:
                 # 日付を正規化
-                if "-" in date_str:
-                    normalized_date = date_str[:10]
-                else:
-                    normalized_date = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
-                
+                normalized_date = normalize_date_format(date_str) or date_str[:10]
+
                 # まず指定日付で取得を試みる
                 price = bars_by_date.get(normalized_date) or bars_by_date.get(date_str)
                 
@@ -430,21 +422,17 @@ class JQuantsAPIClient:
                         for bar in all_bars:
                             bar_date = bar.get("Date", "")
                             if bar_date:
-                                if len(bar_date) == DATE_LEN_COMPACT:
-                                    normalized_bar_date = f"{bar_date[:4]}-{bar_date[4:6]}-{bar_date[6:8]}"
-                                else:
-                                    normalized_bar_date = bar_date[:10] if len(bar_date) >= 10 else bar_date
+                                normalized_bar_date = normalize_date_format(bar_date) or (
+                                    bar_date[:10] if len(bar_date) >= 10 else bar_date
+                                )
                                 price = bar.get("AdjC") or bar.get("C")
                                 if price is not None:
                                     bars_by_date[normalized_bar_date] = price
                                     bars_by_date[bar_date] = price
-                        
+
                         # 取得できた範囲で再構成
                         for date_str, date_obj in date_objects:
-                            if "-" in date_str:
-                                normalized_date = date_str[:10]
-                            else:
-                                normalized_date = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
+                            normalized_date = normalize_date_format(date_str) or date_str[:10]
                             
                             price = bars_by_date.get(normalized_date) or bars_by_date.get(date_str)
                             if price is None and use_nearest_trading_day:

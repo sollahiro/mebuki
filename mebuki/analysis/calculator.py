@@ -8,9 +8,10 @@ import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 
-from ..utils.converters import to_float, is_valid_value, is_valid_financial_record
+from ..utils.converters import to_float, is_valid_value, is_valid_financial_record, extract_year_month
 from ..infrastructure.settings import settings_store
 from mebuki.constants.formats import DATE_LEN_COMPACT, DATE_LEN_HYPHENATED
+from mebuki.utils.fiscal_year import normalize_date_format
 from mebuki.constants.financial import PERCENT, MILLION_YEN
 
 
@@ -103,13 +104,7 @@ def _filter_annual_data(annual_data: List[Dict[str, Any]], analysis_years: int) 
 
         # 未来の年度データを除外
         try:
-            if len(fy_end) == DATE_LEN_COMPACT:
-                y, m = int(fy_end[:4]), int(fy_end[4:6])
-            elif len(fy_end) == DATE_LEN_HYPHENATED:
-                y, m = int(fy_end[:4]), int(fy_end[5:7])
-            else:
-                y, m = None, None
-
+            y, m = extract_year_month(fy_end)
             if y is not None and (y > current_year or (y == current_year and m > current_month)):
                 continue
         except (ValueError, IndexError):
@@ -333,9 +328,7 @@ def calculate_quarterly_metrics(
         # 株価と市場指標
         price = None
         if prices and quarter_end:
-            date_key = quarter_end
-            if len(quarter_end) == DATE_LEN_COMPACT:
-                date_key = f"{quarter_end[:4]}-{quarter_end[4:6]}-{quarter_end[6:8]}"
+            date_key = normalize_date_format(quarter_end) or quarter_end
             price = prices.get(date_key) or prices.get(quarter_end)
 
         market_metrics = _calculate_market_metrics(price, eps, bps)

@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 from datetime import datetime
 
 from mebuki.constants.formats import DATE_LEN_COMPACT, DATE_LEN_HYPHENATED
+from mebuki.utils.fiscal_year import normalize_date_format, parse_date_string
 
 logger = logging.getLogger(__name__)
 
@@ -186,34 +187,25 @@ def is_valid_financial_record(record: Dict[str, Any]) -> bool:
 def normalize_date(date_str: str) -> Optional[str]:
     """
     日付文字列をYYYY-MM-DD形式に正規化
-    
+
     Args:
         date_str: 日付文字列（YYYYMMDD または YYYY-MM-DD形式）
-        
+
     Returns:
         YYYY-MM-DD形式の文字列。変換できない場合はNone
     """
     if not date_str:
         return None
-    
-    date_str = date_str.strip()
-    
-    # 既にYYYY-MM-DD形式の場合
-    if len(date_str) == DATE_LEN_HYPHENATED and date_str[4] == '-' and date_str[7] == '-':
-        return date_str
-
-    # YYYYMMDD形式の場合
-    if len(date_str) == DATE_LEN_COMPACT and date_str.isdigit():
-        return f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
-    
-    # その他の形式は変換を試みる
+    result = normalize_date_format(date_str.strip())
+    if result:
+        return result
+    # その他の形式（YYYY/MM/DD、ISO等）は parse_date 経由で変換を試みる
     try:
-        dt = parse_date(date_str)
+        dt = parse_date(date_str.strip())
         if dt:
             return format_date(dt)
     except Exception:
         pass
-    
     return None
 
 

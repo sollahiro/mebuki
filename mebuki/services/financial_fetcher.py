@@ -13,7 +13,7 @@ from mebuki.api.jquants_client import JQuantsAPIClient
 from mebuki.utils.financial_data import extract_annual_data
 from mebuki.analysis.calculator import calculate_metrics_flexible
 from mebuki.constants.formats import DATE_LEN_COMPACT
-from mebuki.utils.fiscal_year import normalize_date_format
+from mebuki.utils.fiscal_year import normalize_date_format, parse_date_string
 
 logger = logging.getLogger(__name__)
 
@@ -77,17 +77,11 @@ class FinancialFetcher:
                 break
             fy_end = year_data.get("CurFYEn")
             if fy_end:
-                if len(fy_end) == DATE_LEN_COMPACT:
-                    fy_end_formatted = normalize_date_format(fy_end)
-                else:
-                    fy_end_formatted = fy_end[:10] if len(fy_end) >= 10 else fy_end
-
+                fy_end_formatted = normalize_date_format(fy_end) or (
+                    fy_end[:10] if len(fy_end) >= 10 else fy_end
+                )
                 try:
-                    fy_end_date = (
-                        datetime.strptime(fy_end, "%Y%m%d")
-                        if len(fy_end) == DATE_LEN_COMPACT
-                        else datetime.strptime(fy_end[:10], "%Y-%m-%d")
-                    )
+                    fy_end_date = parse_date_string(fy_end)
                     if fy_end_date and fy_end_date < subscription_start_date:
                         if year_data.get("CurPerType") == "FY":
                             fy_count += 1

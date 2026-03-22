@@ -6,8 +6,9 @@ import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 
-from .converters import to_float, is_valid_value, is_valid_financial_record
+from .converters import to_float, is_valid_value, is_valid_financial_record, extract_year_month
 from mebuki.constants.formats import DATE_LEN_COMPACT, DATE_LEN_HYPHENATED
+from mebuki.utils.fiscal_year import normalize_date_format, parse_date_string
 
 logger = logging.getLogger(__name__)
 
@@ -50,14 +51,7 @@ def extract_annual_data(
         # 開示日が未来の場合は除外（開示日が存在する場合）
         if disc_date:
             try:
-                # YYYYMMDD形式またはYYYY-MM-DD形式を想定
-                if len(disc_date) == DATE_LEN_COMPACT:  # YYYYMMDD
-                    disc_date_obj = datetime.strptime(disc_date, "%Y%m%d")
-                elif len(disc_date) == DATE_LEN_HYPHENATED:  # YYYY-MM-DD
-                    disc_date_obj = datetime.strptime(disc_date, "%Y-%m-%d")
-                else:
-                    disc_date_obj = None
-                
+                disc_date_obj = parse_date_string(disc_date)
                 if disc_date_obj and disc_date_obj > today:
                     # 開示日が未来の場合は除外
                     continue
@@ -67,14 +61,8 @@ def extract_annual_data(
         
         # 年度終了日が未来の場合は除外
         if fy_end:
-            # YYYYMMDD形式またはYYYY-MM-DD形式を想定
-            if len(fy_end) == DATE_LEN_COMPACT:  # YYYYMMDD
-                year = int(fy_end[:4])
-                month = int(fy_end[4:6])
-            elif len(fy_end) == DATE_LEN_HYPHENATED:  # YYYY-MM-DD
-                year = int(fy_end[:4])
-                month = int(fy_end[5:7])
-            else:
+            year, month = extract_year_month(fy_end)
+            if year is None:
                 # 形式が不明な場合は含める
                 annual_data.append(record)
                 continue
@@ -82,12 +70,8 @@ def extract_annual_data(
             # 現在日付より未来の年度は除外
             # 例: 2026/03/07時点で2026/03/31のデータは除外
             try:
-                if len(fy_end) == DATE_LEN_COMPACT:
-                    fy_end_dt = datetime.strptime(fy_end, "%Y%m%d")
-                else:
-                    fy_end_dt = datetime.strptime(fy_end[:10], "%Y-%m-%d")
-                
-                if fy_end_dt > today:
+                fy_end_dt = parse_date_string(fy_end)
+                if fy_end_dt and fy_end_dt > today:
                     continue
             except (ValueError, TypeError):
                 # パース失敗時は念のため旧ロジックでフォールバック
@@ -233,11 +217,8 @@ def get_fiscal_year_end_price(
     """
     try:
         # 日付形式を統一（YYYY-MM-DD形式に変換）
-        if len(fiscal_year_end) == DATE_LEN_COMPACT:  # YYYYMMDD形式
-            date_str = f"{fiscal_year_end[:4]}-{fiscal_year_end[4:6]}-{fiscal_year_end[6:8]}"
-        elif len(fiscal_year_end) == DATE_LEN_HYPHENATED:  # YYYY-MM-DD形式
-            date_str = fiscal_year_end
-        else:
+        date_str = normalize_date_format(fiscal_year_end)
+        if date_str is None:
             return None
         
         # get_price_at_dateを使用（休日対応）
@@ -270,16 +251,12 @@ def _calculate_quarter_end_date(fy_end: str, per_type: str) -> Optional[str]:
     
     try:
         # 日付形式を統一
-        if len(fy_end) == DATE_LEN_COMPACT:  # YYYYMMDD
-            fy_year = int(fy_end[:4])
-            fy_month = int(fy_end[4:6])
-            fy_day = int(fy_end[6:8])
-        elif len(fy_end) == DATE_LEN_HYPHENATED:  # YYYY-MM-DD
-            fy_year = int(fy_end[:4])
-            fy_month = int(fy_end[5:7])
-            fy_day = int(fy_end[8:10])
-        else:
+        fy_end_dt = parse_date_string(fy_end)
+        if fy_end_dt is None:
             return None
+        fy_year = fy_end_dt.year
+        fy_month = fy_end_dt.month
+        fy_day = fy_end_dt.day
 
         # 四半期タイプを正規化（"1Q" -> 1, "Q1" -> 1）
         quarter_num = None
@@ -450,7 +427,7 @@ def extract_quarterly_data(
         quarter_end = record.get("_quarter_end_date", "")
         disc_date = record.get("DiscDate", "")
         if disc_date and len(disc_date) == DATE_LEN_COMPACT:
-            disc_date = f"{disc_date[:4]}-{disc_date[4:6]}-{disc_date[6:8]}"
+            disc_date = normalize_date_format(disc_date) or disc_date
         return (quarter_end, disc_date)
     
     quarterly_records.sort(key=get_sort_key_asc, reverse=False)
@@ -530,11 +507,8 @@ def get_quarter_end_price(
     """
     try:
         # 日付形式を統一（YYYY-MM-DD形式に変換）
-        if len(quarter_end) == DATE_LEN_COMPACT:  # YYYYMMDD形式
-            date_str = f"{quarter_end[:4]}-{quarter_end[4:6]}-{quarter_end[6:8]}"
-        elif len(quarter_end) == DATE_LEN_HYPHENATED:  # YYYY-MM-DD形式
-            date_str = quarter_end
-        else:
+        date_str = normalize_date_format(quarter_end)
+        if date_str is None:
             return None
         
         # get_price_at_dateを使用（休日対応）
