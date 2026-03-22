@@ -44,13 +44,22 @@ def cmd_interactive():
                 cmd_search(argparse.Namespace(query=query))
 
         elif action == "analyze":
-            code = questionary.text("銘柄コードを入力してください (例: 7203):").ask()
+            code = questionary.text("銘柄コードまたは銘柄名を入力してください (例: 7203 / トヨタ):").ask()
             if code:
-                years = questionary.text("分析年数:", default=str(settings_store.analysis_years or 5)).ask()
+                if not code.isdigit():
+                    results = master_data_manager.search(code)
+                    if not results:
+                        print(f"'{code}' に一致する銘柄は見つかりませんでした。")
+                        continue
+                    from .ui import select_stock_from_results
+                    selected = select_stock_from_results(results, "分析する銘柄を選択:", "↩  キャンセル")
+                    if not selected:
+                        continue
+                    code = selected["code"]
                 import asyncio
                 asyncio.run(cmd_analyze(argparse.Namespace(
                     code=code,
-                    years=int(years) if years and years.isdigit() else 5,
+                    years=None,
                     format="table",
                     no_cache=False,
                     scope=None,
