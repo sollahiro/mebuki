@@ -49,6 +49,12 @@ COMPONENT_DEFINITIONS: List[Dict[str, Any]] = [
         ],
     },
     {
+        "label": "短期社債",
+        "tags": [
+            "ShortTermBondsPayable",        # J-GAAP
+        ],
+    },
+    {
         "label": "1年内償還予定の社債",
         "tags": [
             "CurrentPortionOfBonds",                    # J-GAAP
