@@ -340,6 +340,8 @@ def _detect_accounting_standard(tag_elements: dict) -> str:
         "BorrowingsCLIFRS",
         "BondsPayableNCLIFRS",
         "BorrowingsNCLIFRS",
+        "BondsAndBorrowingsCLIFRS",
+        "BondsAndBorrowingsNCLIFRS",
     ]
     if any(t in tag_elements for t in ifrs_marker_tags):
         return "IFRS"
@@ -365,6 +367,8 @@ def _is_usgaap_xbrl(tag_elements: dict) -> bool:
         "BorrowingsCLIFRS",
         "BondsPayableNCLIFRS",
         "BorrowingsNCLIFRS",
+        "BondsAndBorrowingsCLIFRS",
+        "BondsAndBorrowingsNCLIFRS",
     ]
     if any(t in tag_elements for t in ifrs_marker_tags):
         return False
@@ -452,6 +456,9 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
         found_tag = None
         current = prior = None
         for tag in comp_def["tags"]:
+            # IFRS企業ではJ-GAAPタグ（IFRS識別子を含まないタグ）をスキップ
+            if accounting_standard == "IFRS" and "IFRS" not in tag:
+                continue
             c, p = _find_consolidated_value(tag_elements, tag)
             if c is not None or p is not None:
                 found_tag = tag
@@ -467,6 +474,14 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
     # 連結財務諸表が存在するか判定。
     # 1つでも連結値があれば連結財務諸表のみを使用し、単体値との混入を防ぐ。
     has_consolidated = any(c["current"] is not None or c["prior"] is not None for c in components)
+
+    # IFRS企業では集約タグが連結財務諸表の存在を示すため、Pass 2への落下を防ぐ
+    if not has_consolidated and accounting_standard == "IFRS":
+        for agg_def in AGGREGATE_IFRS_DEFINITIONS:
+            agg_c, agg_p = _find_consolidated_value(tag_elements, agg_def["tag"])
+            if agg_c is not None or agg_p is not None:
+                has_consolidated = True
+                break
 
     # Pass 2: 連結値が全くない場合のみ単体にフォールバック（単体のみ企業への対応）
     if not has_consolidated:

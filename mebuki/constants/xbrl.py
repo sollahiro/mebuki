@@ -97,6 +97,10 @@ AGGREGATE_IFRS_DEFINITIONS: List[Dict[str, Any]] = [
         "covers": ["社債", "長期借入金"],
     },
     {
+        "tag": "BondsAndBorrowingsCLIFRS",             # 流動負債 社債及び借入金（社債+借入金を集約）
+        "covers": ["1年内償還予定の社債", "1年内返済予定の長期借入金"],
+    },
+    {
         "tag": "BondsAndBorrowingsNCLIFRS",            # 非流動負債 社債及び借入金（社債+借入金を集約）
         "covers": ["社債", "長期借入金"],
     },
