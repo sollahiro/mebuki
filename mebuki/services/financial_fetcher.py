@@ -4,8 +4,8 @@
 J-QUANTS APIからの財務データ・株価データ取得と指標計算を担当。
 """
 
+import asyncio
 import logging
-from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
@@ -24,22 +24,20 @@ class FinancialFetcher:
     def __init__(self, api_client: JQuantsAPIClient):
         self.api_client = api_client
 
-    def fetch_financial_data(
+    async def fetch_financial_data(
         self,
         code: str,
         include_2q: bool = False,
     ) -> tuple[Optional[Dict[str, Any]], Optional[List[Dict[str, Any]]], Optional[List[Dict[str, Any]]]]:
         """財務データを取得"""
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            master_future = executor.submit(self.api_client.get_equity_master, code=code)
-            financial_future = executor.submit(
-                self.api_client.get_financial_summary,
+        master_data, financial_data = await asyncio.gather(
+            self.api_client.get_equity_master(code=code),
+            self.api_client.get_financial_summary(
                 code=code,
                 period_types=["FY", "2Q"],
                 include_fields=None,
-            )
-            master_data = master_future.result()
-            financial_data = financial_future.result()
+            ),
+        )
 
         stock_info = master_data[0] if master_data else {}
 
@@ -59,7 +57,7 @@ class FinancialFetcher:
 
         return stock_info, financial_data, annual_data
 
-    def fetch_prices(
+    async def fetch_prices(
         self,
         code: str,
         annual_data: List[Dict[str, Any]],
@@ -94,7 +92,7 @@ class FinancialFetcher:
 
         if dates_to_fetch:
             try:
-                batch_prices = self.api_client.get_prices_at_dates(
+                batch_prices = await self.api_client.get_prices_at_dates(
                     code, dates_to_fetch, use_nearest_trading_day=True
                 )
                 for date_str, price in batch_prices.items():
@@ -108,7 +106,7 @@ class FinancialFetcher:
 
         return prices
 
-    def calculate_metrics(
+    async def calculate_metrics(
         self,
         code: str,
         annual_data: List[Dict[str, Any]],

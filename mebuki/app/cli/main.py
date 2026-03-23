@@ -45,7 +45,8 @@ def main():
         import asyncio
         asyncio.run(cmd_filing(args))
     elif args.command == "macro":
-        cmd_macro(args)
+        import asyncio
+        asyncio.run(cmd_macro(args))
     elif args.command == "visualize":
         import asyncio
         asyncio.run(cmd_visualize(args))

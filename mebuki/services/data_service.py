@@ -3,7 +3,6 @@
 純粋なデータ取得・計算ロジック（LLM非依存）
 """
 
-import asyncio
 import logging
 from datetime import datetime, timedelta, date
 from pathlib import Path
@@ -52,7 +51,7 @@ class DataService:
             return
 
         try:
-            raw = await asyncio.to_thread(self.api_client.get_earnings_calendar)
+            raw = await self.api_client.get_earnings_calendar()
             valid_new = [
                 e for e in raw
                 if _parse_calendar_date(e.get("Date", "")) >= today
@@ -171,7 +170,7 @@ class DataService:
             return result
 
         if scope == "raw":
-            raw_data = await asyncio.to_thread(self.api_client.get_financial_summary, code=code)
+            raw_data = await self.api_client.get_financial_summary(code=code)
             cleaned_data = [
                 {k: v for k, v in record.items() if v is not None and v != ""}
                 for record in raw_data
@@ -184,8 +183,7 @@ class DataService:
         """株価履歴データを取得"""
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
-        return await asyncio.to_thread(
-            self.api_client.get_daily_bars,
+        return await self.api_client.get_daily_bars(
             code=code,
             from_date=start_date.strftime("%Y-%m-%d"),
             to_date=end_date.strftime("%Y-%m-%d"),
@@ -199,9 +197,8 @@ class DataService:
         max_documents: int = 10,
     ) -> List[Dict[str, Any]]:
         """EDINET書類を検索"""
-        fin_data = await asyncio.to_thread(self.api_client.get_financial_summary, code=code)
-        return await asyncio.to_thread(
-            self.edinet_client.search_recent_reports,
+        fin_data = await self.api_client.get_financial_summary(code=code)
+        return await self.edinet_client.search_recent_reports(
             code=code,
             jquants_data=fin_data,
             max_years=max_years,
@@ -236,7 +233,7 @@ class DataService:
                 "jquants_fy_end": doc.get("jquants_fy_end"),
             }
 
-        xbrl_dir = await asyncio.to_thread(self.edinet_client.download_document, doc_id, 1)
+        xbrl_dir = await self.edinet_client.download_document(doc_id, 1)
         if not xbrl_dir:
             raise ValueError("Document not found or download failed")
 

@@ -5,12 +5,12 @@ APIキー認証とデータ取得機能を提供します。
 データ取得期間を設定可能にしています。
 """
 
-import time
+import asyncio
 import logging
 from typing import Optional, Dict, List, Any
 from datetime import datetime, timedelta
 
-import requests
+import aiohttp
 from ..constants.api import JQUANTS_API_BASE_URL
 from mebuki.constants.formats import DATE_LEN_COMPACT
 from mebuki.utils.fiscal_year import normalize_date_format, parse_date_string
@@ -34,33 +34,29 @@ class JQuantsAPIClient:
             api_key: APIキー
             base_url: APIベースURL（Noneの場合はデフォルト値を使用）
         """
-        self.api_key = api_key
-        
-        # ベースURLを定数または引数から取得
+        self.api_key = api_key.strip() if api_key else api_key
         self.base_url = base_url or JQUANTS_API_BASE_URL
-        
-        # APIキーの前後の空白を削除
-        if self.api_key:
-            self.api_key = self.api_key.strip()
-
-        self.session = requests.Session()
-        if self.api_key:
-            self.session.headers.update({
-                "x-api-key": self.api_key
-            })
+        self._session: Optional[aiohttp.ClientSession] = None
 
     def update_api_key(self, api_key: str) -> None:
-        """APIキーを更新し、セッションヘッダーを更新します。"""
+        """APIキーを更新し、セッションを次回リクエスト時に再作成します。"""
         self.api_key = api_key.strip() if api_key else ""
-        self.session.headers.update({
-            "x-api-key": self.api_key
-        })
+        # セッションを破棄して次回アクセス時に新しいキーで再作成させる
+        self._session = None
 
-    def _request(
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """セッションを遅延作成して返す"""
+        if self._session is None or self._session.closed:
+            headers = {}
+            if self.api_key:
+                headers["x-api-key"] = self.api_key
+            self._session = aiohttp.ClientSession(headers=headers)
+        return self._session
+
+    async def _request(
         self,
         endpoint: str,
         params: Optional[Dict[str, Any]] = None,
-        retry_count: int = 0
     ) -> Dict[str, Any]:
         """
         APIリクエストを実行（リトライ機能付き）
@@ -68,13 +64,12 @@ class JQuantsAPIClient:
         Args:
             endpoint: エンドポイントパス（例: "/fins/summary"）
             params: クエリパラメータ
-            retry_count: 現在のリトライ回数
 
         Returns:
             APIレスポンスのJSONデータ
 
         Raises:
-            requests.RequestException: リクエストエラー
+            aiohttp.ClientError: リクエストエラー
             ValueError: APIキーが無効な場合
         """
         if not self.api_key:
@@ -82,64 +77,59 @@ class JQuantsAPIClient:
                 "J-QUANTS APIキーが設定されていません。"
                 "設定画面からAPIキーを入力してください。"
             )
-        
-        url = f"{self.base_url}{endpoint}"
-        
-        try:
-            response = self.session.get(url, params=params, timeout=30)
-            response.raise_for_status()
-            return response.json()
-        
-        except requests.exceptions.HTTPError as e:
-            if response.status_code == 401:
-                raise ValueError("APIキーが無効です。正しいAPIキーを設定してください。")
-            elif response.status_code == 403:
-                error_msg = "認証エラー (403): APIキーが正しく設定されていない可能性があります。"
-                if "Missing Authentication Token" in response.text:
-                    error_msg += "\nAPIキーが正しく送信されていない可能性があります。"
-                raise ValueError(error_msg)
-            elif response.status_code == 429:
-                # レート制限エラー
-                if retry_count < self.MAX_RETRIES:
-                    # レート制限時は長めに待機（指数バックオフ + 固定待機時間）
-                    wait_time = self.RETRY_DELAY * (2 ** retry_count) + self.RATE_LIMIT_WAIT
-                    print(f"⚠️  レート制限に達しました。{wait_time:.0f}秒待機してからリトライします...")
-                    time.sleep(wait_time)
-                    return self._request(endpoint, params, retry_count + 1)
-                else:
-                    raise requests.RequestException(
-                        f"レート制限に達しました。リトライ回数上限に達しました。"
-                        f"\nしばらく時間をおいてから再試行してください。"
-                        f"\n（無料プランには1日あたりのリクエスト数制限があります）"
-                    )
-            else:
-                # 400エラーの場合、サブスクリプション範囲外の可能性がある
-                if response.status_code == 400:
-                    try:
-                        error_data = response.json()
-                        msg = error_data.get("message", "")
-                    except Exception:
-                        msg = ""
-                    if "Your subscription covers" in msg:
-                        # サブスクリプションエラーとして識別可能な情報を付与して送出
-                        raise ValueError(f"SUBSCRIPTION_OUT_OF_RANGE: {msg}")
-                
-                raise requests.RequestException(
-                    f"APIリクエストエラー: {response.status_code} - {response.text}"
-                )
-        
-        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
-            # 一時的なネットワークエラー
-            if retry_count < self.MAX_RETRIES:
-                wait_time = self.RETRY_DELAY * (2 ** retry_count)
-                time.sleep(wait_time)
-                return self._request(endpoint, params, retry_count + 1)
-            else:
-                raise requests.RequestException(
-                    f"ネットワークエラー: {str(e)}"
-                )
 
-    def _get_all_pages(
+        url = f"{self.base_url}{endpoint}"
+        session = await self._get_session()
+        timeout = aiohttp.ClientTimeout(total=30)
+
+        for retry_count in range(self.MAX_RETRIES + 1):
+            try:
+                async with session.get(url, params=params, timeout=timeout) as response:
+                    if response.status == 401:
+                        raise ValueError("APIキーが無効です。正しいAPIキーを設定してください。")
+                    elif response.status == 403:
+                        text = await response.text()
+                        error_msg = "認証エラー (403): APIキーが正しく設定されていない可能性があります。"
+                        if "Missing Authentication Token" in text:
+                            error_msg += "\nAPIキーが正しく送信されていない可能性があります。"
+                        raise ValueError(error_msg)
+                    elif response.status == 429:
+                        if retry_count < self.MAX_RETRIES:
+                            wait_time = self.RETRY_DELAY * (2 ** retry_count) + self.RATE_LIMIT_WAIT
+                            print(f"⚠️  レート制限に達しました。{wait_time:.0f}秒待機してからリトライします...")
+                            await asyncio.sleep(wait_time)
+                            continue
+                        else:
+                            raise aiohttp.ClientError(
+                                f"レート制限に達しました。リトライ回数上限に達しました。"
+                                f"\nしばらく時間をおいてから再試行してください。"
+                                f"\n（無料プランには1日あたりのリクエスト数制限があります）"
+                            )
+                    elif response.status == 400:
+                        try:
+                            error_data = await response.json()
+                            msg = error_data.get("message", "")
+                        except Exception:
+                            msg = await response.text()
+                        if "Your subscription covers" in msg:
+                            raise ValueError(f"SUBSCRIPTION_OUT_OF_RANGE: {msg}")
+                        raise aiohttp.ClientError(
+                            f"APIリクエストエラー: {response.status} - {msg}"
+                        )
+
+                    response.raise_for_status()
+                    return await response.json()
+
+            except (aiohttp.ServerTimeoutError, aiohttp.ClientConnectorError) as e:
+                if retry_count < self.MAX_RETRIES:
+                    wait_time = self.RETRY_DELAY * (2 ** retry_count)
+                    await asyncio.sleep(wait_time)
+                    continue
+                raise aiohttp.ClientError(f"ネットワークエラー: {str(e)}")
+
+        raise aiohttp.ClientError("リトライ回数上限に達しました。")
+
+    async def _get_all_pages(
         self,
         endpoint: str,
         params: Optional[Dict[str, Any]] = None
@@ -161,13 +151,13 @@ class JQuantsAPIClient:
         while True:
             if pagination_key:
                 current_params["pagination_key"] = pagination_key
-            
-            response = self._request(endpoint, current_params)
-            
+
+            response = await self._request(endpoint, current_params)
+
             # レスポンス構造: {"data": [...], "pagination_key": "..."}
             if "data" in response:
                 all_data.extend(response["data"])
-            
+
             # ページネーションキーが存在する場合は次のページを取得
             pagination_key = response.get("pagination_key")
             if not pagination_key:
@@ -175,7 +165,7 @@ class JQuantsAPIClient:
 
         return all_data
 
-    def get_financial_summary(
+    async def get_financial_summary(
         self,
         code: Optional[str] = None,
         date: Optional[str] = None,
@@ -208,25 +198,15 @@ class JQuantsAPIClient:
         if date:
             params["date"] = date
 
-        # 全データを取得（フィルタリングは後で行う）
-        all_data = self._get_all_pages("/fins/summary", params)
-        
-        # period_typesでフィルタリング（API側でフィルタリングできないため、取得後にフィルタリング）
+        all_data = await self._get_all_pages("/fins/summary", params)
+
         if period_types:
-            all_data = [record for record in all_data 
+            all_data = [record for record in all_data
                        if record.get("CurPerType") in period_types]
-        
-        # include_fieldsはAPI側で指定できないため、取得後にフィールドの存在を確認
-        # 実際のフィールド名はAPIレスポンスに依存
-        # CashEqのフィールド名は確認が必要（例: "CashAndCashEquivalents", "CashEq"など）
-        
-        # max_yearsが指定されている場合、年度データを制限
-        # 注意: API側で年数制限はできないため、取得後にフィルタリング
-        # 実際の年数制限は extract_annual_data と calculate_metrics で行う
-        
+
         return all_data
 
-    def get_daily_bars(
+    async def get_daily_bars(
         self,
         code: Optional[str] = None,
         date: Optional[str] = None,
@@ -259,9 +239,9 @@ class JQuantsAPIClient:
         if to_date:
             params["to"] = to_date
 
-        return self._get_all_pages("/equities/bars/daily", params)
+        return await self._get_all_pages("/equities/bars/daily", params)
 
-    def get_equity_master(
+    async def get_equity_master(
         self,
         code: Optional[str] = None,
         date: Optional[str] = None
@@ -282,9 +262,9 @@ class JQuantsAPIClient:
         if date:
             params["date"] = date
 
-        return self._get_all_pages("/equities/master", params)
+        return await self._get_all_pages("/equities/master", params)
 
-    def get_earnings_calendar(self) -> List[Dict[str, Any]]:
+    async def get_earnings_calendar(self) -> List[Dict[str, Any]]:
         """
         決算発表予定日を取得
 
@@ -301,9 +281,9 @@ class JQuantsAPIClient:
                 - FQ: 決算種別
                 - Section: 市場区分
         """
-        return self._get_all_pages("/equities/earnings-calendar")
+        return await self._get_all_pages("/equities/earnings-calendar")
 
-    def get_prices_at_dates(
+    async def get_prices_at_dates(
         self,
         code: str,
         dates: List[str],
@@ -311,7 +291,7 @@ class JQuantsAPIClient:
     ) -> Dict[str, Optional[float]]:
         """
         複数の日付の終値を一括取得（バッチ処理）
-        
+
         指定日が休日の場合は、直前の営業日の終値を取得します。
 
         Args:
@@ -324,119 +304,80 @@ class JQuantsAPIClient:
         """
         if not dates:
             return {}
-        
+
         results = {}
-        
+
         # 日付を正規化して範囲を計算
-        normalized_dates = []
         date_objects = []
-        
+
         for date_str in dates:
             date_obj = parse_date_string(date_str)
             if date_obj is None:
                 continue
-            normalized_dates.append(date_str)
             date_objects.append((date_str, date_obj))
-        
+
         if not date_objects:
             return {}
-        
+
         # 最小日付と最大日付を計算（バッチ取得用）
         min_date = min(dt for _, dt in date_objects)
         max_date = max(dt for _, dt in date_objects)
-        
+
         # バッファを追加（休日対応のため前後10日）
         start_date = (min_date - timedelta(days=10)).strftime("%Y-%m-%d")
         end_date = (max_date + timedelta(days=10)).strftime("%Y-%m-%d")
-        
+
         # 一括で株価データを取得
         try:
-            all_bars = self.get_daily_bars(
+            all_bars = await self.get_daily_bars(
                 code=code,
                 from_date=start_date,
                 to_date=end_date
             )
-            
-            # 日付をキーとした辞書を作成
-            bars_by_date = {}
-            for bar in all_bars:
-                bar_date = bar.get("Date", "")
-                if bar_date:
-                    # 日付形式を正規化
-                    normalized_bar_date = normalize_date_format(bar_date) or (
-                        bar_date[:10] if len(bar_date) >= 10 else bar_date
-                    )
-                    price = bar.get("AdjC") or bar.get("C")
-                    if price is not None:
-                        bars_by_date[normalized_bar_date] = price
-                        bars_by_date[bar_date] = price  # 元の形式も保存
-            
-            # 各日付の株価を取得
-            for date_str, date_obj in date_objects:
-                # 日付を正規化
-                normalized_date = normalize_date_format(date_str) or date_str[:10]
 
-                # まず指定日付で取得を試みる
+            bars_by_date = self._build_bars_by_date(all_bars)
+
+            for date_str, date_obj in date_objects:
+                normalized_date = normalize_date_format(date_str) or date_str[:10]
                 price = bars_by_date.get(normalized_date) or bars_by_date.get(date_str)
-                
-                # 指定日が休日の場合、直前の営業日を探す
+
                 if price is None and use_nearest_trading_day:
-                    # 指定日より前の日付を探す（最大10営業日前まで）
                     for i in range(1, 11):
                         check_date = date_obj - timedelta(days=i)
                         check_date_str = check_date.strftime("%Y-%m-%d")
                         price = bars_by_date.get(check_date_str)
                         if price is not None:
                             break
-                
+
                 results[date_str] = price
-                results[normalized_date] = price  # 正規化形式も保存
-            
+                results[normalized_date] = price
+
         except Exception as e:
             error_str = str(e)
             if "SUBSCRIPTION_OUT_OF_RANGE" in error_str:
                 import re
-                # メッセージ例: Your subscription covers the following dates: 2021-02-21 ~ .
                 match = re.search(r"(\d{4}-\d{2}-\d{2})", error_str)
                 if match:
                     allowed_start = match.group(1)
                     logger.info(f"サブスク下限を検知: {allowed_start}。範囲を調整して再試行します。")
-                    
-                    # 開始日をサブスク下限まで切り詰める
+
                     new_start_dt = datetime.strptime(allowed_start, "%Y-%m-%d")
-                    # もし最大日付(max_date)すら下限より前の場合は、取得を諦める
                     if max_date < new_start_dt:
                         logger.warning(f"全リクエスト対象がサブスク範囲外です: {code}")
                         return {d: None for d in dates}
-                        
+
                     try:
-                        all_bars = self.get_daily_bars(
+                        all_bars = await self.get_daily_bars(
                             code=code,
                             from_date=allowed_start,
                             to_date=end_date
                         )
-                        # 以降の処理（bars_by_dateの作成等）を共通化するために、
-                        # 下記のロジックは本来共通メソッド化すべきですが、
-                        # ここではエラー回避を最優先に続行します。
-                        bars_by_date = {}
-                        for bar in all_bars:
-                            bar_date = bar.get("Date", "")
-                            if bar_date:
-                                normalized_bar_date = normalize_date_format(bar_date) or (
-                                    bar_date[:10] if len(bar_date) >= 10 else bar_date
-                                )
-                                price = bar.get("AdjC") or bar.get("C")
-                                if price is not None:
-                                    bars_by_date[normalized_bar_date] = price
-                                    bars_by_date[bar_date] = price
+                        bars_by_date = self._build_bars_by_date(all_bars)
 
-                        # 取得できた範囲で再構成
                         for date_str, date_obj in date_objects:
                             normalized_date = normalize_date_format(date_str) or date_str[:10]
-                            
                             price = bars_by_date.get(normalized_date) or bars_by_date.get(date_str)
                             if price is None and use_nearest_trading_day:
-                                # 下限（new_start_dt）を超えない範囲で探す
                                 for i in range(1, 11):
                                     check_date = date_obj - timedelta(days=i)
                                     if check_date < new_start_dt:
@@ -450,15 +391,30 @@ class JQuantsAPIClient:
                         return results
                     except Exception as retry_e:
                         logger.error(f"範囲調整後のリトライに失敗: {retry_e}")
-            
+
             logger.warning(f"バッチ株価取得エラー: {e}")
             # エラー時は個別取得にフォールバック
             for date_str in dates:
-                results[date_str] = self.get_price_at_date(code, date_str, use_nearest_trading_day)
-        
+                results[date_str] = await self.get_price_at_date(code, date_str, use_nearest_trading_day)
+
         return results
-    
-    def get_price_at_date(
+
+    def _build_bars_by_date(self, all_bars: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """株価データを日付→価格の辞書に変換"""
+        bars_by_date = {}
+        for bar in all_bars:
+            bar_date = bar.get("Date", "")
+            if bar_date:
+                normalized_bar_date = normalize_date_format(bar_date) or (
+                    bar_date[:10] if len(bar_date) >= 10 else bar_date
+                )
+                price = bar.get("AdjC") or bar.get("C")
+                if price is not None:
+                    bars_by_date[normalized_bar_date] = price
+                    bars_by_date[bar_date] = price
+        return bars_by_date
+
+    async def get_price_at_date(
         self,
         code: str,
         date: str,
@@ -466,7 +422,7 @@ class JQuantsAPIClient:
     ) -> Optional[float]:
         """
         指定日付の終値を取得（年度末株価取得用）
-        
+
         指定日が休日の場合は、直前の営業日の終値を取得します。
 
         Args:
@@ -478,6 +434,5 @@ class JQuantsAPIClient:
             終値（AdjC）。データが存在しない場合はNone
         """
         # バッチ処理を使用
-        results = self.get_prices_at_dates(code, [date], use_nearest_trading_day)
+        results = await self.get_prices_at_dates(code, [date], use_nearest_trading_day)
         return results.get(date)
-

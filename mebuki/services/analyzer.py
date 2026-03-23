@@ -154,9 +154,7 @@ class IndividualAnalyzer:
     ) -> None:
         """メインフロー: 財務データ取得 -> 指標計算 -> 株価反映 -> EDINETを並列実行"""
         try:
-            stock_info, financial_data, annual_data = await asyncio.to_thread(
-                self._financial_fetcher.fetch_financial_data, code, include_2q
-            )
+            stock_info, financial_data, annual_data = await self._financial_fetcher.fetch_financial_data(code, include_2q)
             if not stock_info or not financial_data or not annual_data:
                 await queue.put({"status": "error", "message": "財務データの取得に失敗しました"})
                 return
@@ -176,12 +174,8 @@ class IndividualAnalyzer:
             edinet_task = asyncio.create_task(
                 self._edinet_flow(code, financial_data, edinet_code, result, queue)
             )
-            prices = await asyncio.to_thread(
-                self._financial_fetcher.fetch_prices, code, annual_data, analysis_years
-            )
-            metrics = await asyncio.to_thread(
-                self._financial_fetcher.calculate_metrics, code, annual_data, prices, analysis_years
-            )
+            prices = await self._financial_fetcher.fetch_prices(code, annual_data, analysis_years)
+            metrics = await self._financial_fetcher.calculate_metrics(code, annual_data, prices, analysis_years)
 
             if metrics:
                 result["metrics"] = metrics
@@ -276,9 +270,7 @@ class IndividualAnalyzer:
                 return cached_result
 
         try:
-            stock_info, financial_data, annual_data = await asyncio.to_thread(
-                self._financial_fetcher.fetch_financial_data, code, include_2q
-            )
+            stock_info, financial_data, annual_data = await self._financial_fetcher.fetch_financial_data(code, include_2q)
             if not stock_info or not financial_data or not annual_data:
                 return None
 
@@ -292,12 +284,8 @@ class IndividualAnalyzer:
                 )
             )
 
-            prices = await asyncio.to_thread(
-                self._financial_fetcher.fetch_prices, code, annual_data, analysis_years
-            )
-            metrics = await asyncio.to_thread(
-                self._financial_fetcher.calculate_metrics, code, annual_data, prices, analysis_years
-            )
+            prices = await self._financial_fetcher.fetch_prices(code, annual_data, analysis_years)
+            metrics = await self._financial_fetcher.calculate_metrics(code, annual_data, prices, analysis_years)
             if not metrics:
                 edinet_task.cancel()
                 return None
@@ -334,21 +322,15 @@ class IndividualAnalyzer:
         指標データのみを返す公開API。
         上位層（CLI/MCP）は private メソッドへ依存せず、このメソッドを利用する。
         """
-        stock_info, _, annual_data = await asyncio.to_thread(
-            self._financial_fetcher.fetch_financial_data, code, include_2q
-        )
+        stock_info, _, annual_data = await self._financial_fetcher.fetch_financial_data(code, include_2q)
         if not stock_info or not annual_data:
             return None
 
         max_years = analysis_years or settings_store.get_max_analysis_years()
         fy_count = sum(1 for d in annual_data if d.get("CurPerType") == "FY")
         years = min(fy_count, max_years)
-        prices = await asyncio.to_thread(
-            self._financial_fetcher.fetch_prices, code, annual_data, years
-        )
-        return await asyncio.to_thread(
-            self._financial_fetcher.calculate_metrics, code, annual_data, prices, years
-        )
+        prices = await self._financial_fetcher.fetch_prices(code, annual_data, years)
+        return await self._financial_fetcher.calculate_metrics(code, annual_data, prices, years)
 
     async def retry_edinet_fetch(self, code: str) -> AsyncGenerator[Dict[str, Any], None]:
         """EDINET書類取得のみを再試行"""
@@ -360,9 +342,7 @@ class IndividualAnalyzer:
             return
 
         try:
-            stock_info, financial_data, annual_data = await asyncio.to_thread(
-                self._financial_fetcher.fetch_financial_data, code
-            )
+            stock_info, financial_data, annual_data = await self._financial_fetcher.fetch_financial_data(code)
 
             if not financial_data:
                 yield {"status": "error", "message": "EDINET検索に必要な財務情報が取得できませんでした。"}
@@ -399,9 +379,7 @@ class IndividualAnalyzer:
 
         data_service などの上位層が private メソッドを直接呼ばずに済むよう提供する。
         """
-        stock_info, financial_data, annual_data = await asyncio.to_thread(
-            self._financial_fetcher.fetch_financial_data, code, include_2q
-        )
+        stock_info, financial_data, annual_data = await self._financial_fetcher.fetch_financial_data(code, include_2q)
         if not stock_info or not annual_data:
             return {}
 
@@ -409,12 +387,8 @@ class IndividualAnalyzer:
         max_years = analysis_years or settings_store.get_max_analysis_years()
         actual_years = min(available_years, max_years)
 
-        prices = await asyncio.to_thread(
-            self._financial_fetcher.fetch_prices, code, annual_data, actual_years
-        )
-        metrics = await asyncio.to_thread(
-            self._financial_fetcher.calculate_metrics, code, annual_data, prices, actual_years
-        )
+        prices = await self._financial_fetcher.fetch_prices(code, annual_data, actual_years)
+        metrics = await self._financial_fetcher.calculate_metrics(code, annual_data, prices, actual_years)
 
         edinet_data = {}
         if financial_data:

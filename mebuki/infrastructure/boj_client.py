@@ -1,7 +1,10 @@
-import time
+import asyncio
 import logging
-import requests
+import time
 from typing import Dict, Any, List, Optional
+
+import aiohttp
+
 from mebuki.utils.cache import CacheManager
 
 logger = logging.getLogger(__name__)
@@ -11,26 +14,33 @@ class BOJClient:
     日銀API（v1/getDataCode）クライアント
     """
     BASE_URL = "https://www.stat-search.boj.or.jp/api/v1/getDataCode"
-    
+
     def __init__(self, cache: Optional[CacheManager] = None):
         self.cache = cache
-        self._last_request_time = 0
+        self._last_request_time = 0.0
         self.interval = 1.1
+        self._session: Optional[aiohttp.ClientSession] = None
 
-    def _wait_for_interval(self) -> None:
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """セッションを遅延作成して返す"""
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+        return self._session
+
+    async def _wait_for_interval(self) -> None:
         elapsed = time.time() - self._last_request_time
         if elapsed < self.interval:
-            time.sleep(self.interval - elapsed)
+            await asyncio.sleep(self.interval - elapsed)
         self._last_request_time = time.time()
 
     def _get_cache_key(self, db: str, code: str, params: Dict[str, Any]) -> str:
         param_str = "_".join(f"{k}_{v}" for k, v in sorted(params.items()))
         return f"boj_{db}_{code}_{param_str}"
 
-    def get_time_series(self, db: str, series_code: str, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_time_series(self, db: str, series_code: str, start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         時系列データを取得
-        
+
         Args:
             db: データベース名 (IR01, CO, FM08 etc.)
             series_code: 系列コード
@@ -40,7 +50,7 @@ class BOJClient:
         if start_date and len(start_date) == 4 and start_date.isdigit():
             logger.info(f"Normalizing start_date from {start_date} to {start_date}01")
             start_date = f"{start_date}01"
-            
+
         if end_date and len(end_date) == 4 and end_date.isdigit():
             logger.info(f"Normalizing end_date from {end_date} to {end_date}12")
             end_date = f"{end_date}12"
@@ -67,8 +77,8 @@ class BOJClient:
 
         while True:
             params["startPosition"] = start_position
-            
-            response_json = self._request_with_retry(params)
+
+            response_json = await self._request_with_retry(params)
             if not response_json:
                 break
 
@@ -76,13 +86,12 @@ class BOJClient:
             result_set = response_json.get("RESULTSET", [])
             if not result_set:
                 break
-                
+
             for series_obj in result_set:
                 values_dict = series_obj.get("VALUES", {})
                 dates = values_dict.get("SURVEY_DATES", [])
                 values = values_dict.get("VALUES", [])
-                
-                # 日付と値をzipして汎用形式にする
+
                 for d, v in zip(dates, values):
                     all_series_data.append({
                         "date": str(d),
@@ -101,46 +110,47 @@ class BOJClient:
 
         return all_series_data
 
-    def _request_with_retry(self, params: Dict[str, Any], max_retries: int = 3) -> Optional[Dict[str, Any]]:
-        for i in range(max_retries):
-            self._wait_for_interval()
-            
-            try:
-                headers = {
-                    "Accept-Encoding": "gzip",
-                    "User-Agent": "mebuki-mcp-server/1.1.0"
-                }
-                
-                logger.info(f"Fetching BOJ data: {params.get('db')}/{params.get('code')} (Retry: {i})")
-                response = requests.get(self.BASE_URL, params=params, headers=headers, timeout=30)
-                
-                if response.status_code != 200:
-                    logger.error(f"BOJ API HTTP Error: {response.status_code}")
-                    if response.status_code >= 500:
-                        continue
-                    return None
+    async def _request_with_retry(self, params: Dict[str, Any], max_retries: int = 3) -> Optional[Dict[str, Any]]:
+        session = await self._get_session()
+        headers = {
+            "Accept-Encoding": "gzip",
+            "User-Agent": "mebuki-mcp-server/1.1.0"
+        }
+        timeout = aiohttp.ClientTimeout(total=30)
 
-                data = response.json()
-                
-                # エラーコードの確認 (新APIでは STATUS, MESSAGEID として返ってくる場合がある)
-                status = data.get("STATUS")
-                if status and status != 200:
-                    msg = data.get("MESSAGE", "Unknown Error")
-                    msg_id = data.get("MESSAGEID")
-                    
-                    if msg_id in ["M181090S", "M181091S"]:
-                        logger.warning(f"BOJ API Server Error ({msg_id}): {msg}. Retrying...")
-                        continue
-                    else:
-                        logger.error(f"BOJ API Error ({msg_id}): {msg}")
+        for i in range(max_retries):
+            await self._wait_for_interval()
+
+            try:
+                logger.info(f"Fetching BOJ data: {params.get('db')}/{params.get('code')} (Retry: {i})")
+                async with session.get(self.BASE_URL, params=params, headers=headers, timeout=timeout) as response:
+                    if response.status != 200:
+                        logger.error(f"BOJ API HTTP Error: {response.status}")
+                        if response.status >= 500:
+                            continue
                         return None
-                
-                return data
+
+                    data = await response.json(content_type=None)
+
+                    # エラーコードの確認 (新APIでは STATUS, MESSAGEID として返ってくる場合がある)
+                    status = data.get("STATUS")
+                    if status and status != 200:
+                        msg = data.get("MESSAGE", "Unknown Error")
+                        msg_id = data.get("MESSAGEID")
+
+                        if msg_id in ["M181090S", "M181091S"]:
+                            logger.warning(f"BOJ API Server Error ({msg_id}): {msg}. Retrying...")
+                            continue
+                        else:
+                            logger.error(f"BOJ API Error ({msg_id}): {msg}")
+                            return None
+
+                    return data
 
             except Exception as e:
                 logger.error(f"BOJ API Request Exception: {e}")
                 if i < max_retries - 1:
                     continue
                 return None
-        
+
         return None

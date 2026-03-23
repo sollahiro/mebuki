@@ -4,7 +4,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def cmd_macro(args):
+async def cmd_macro(args):
     """マクロ経済データ取得コマンド"""
     from mebuki.services.macro_analyzer import macro_analyzer
 
@@ -12,9 +12,9 @@ def cmd_macro(args):
     end = getattr(args, "end", None)
     try:
         if args.category == "fx":
-            data = macro_analyzer.get_fx_environment(start, end)
+            data = await macro_analyzer.get_fx_environment(start, end)
         else:
-            data = macro_analyzer.get_monetary_policy_status(start, end)
+            data = await macro_analyzer.get_monetary_policy_status(start, end)
 
         if args.format == "json":
             print(json.dumps(data, indent=2, ensure_ascii=False))
