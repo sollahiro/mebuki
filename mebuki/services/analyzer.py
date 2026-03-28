@@ -424,6 +424,27 @@ class IndividualAnalyzer:
                     if np_ is not None and eq is not None and (eq + ibd_m) != 0:
                         year["CalculatedData"]["ROIC"] = np_ / (eq + ibd_m) * PERCENT
 
+            gp_by_year = await self._edinet_fetcher.extract_gross_profit_by_year(
+                code, financial_data, actual_years
+            )
+            for year in metrics.get("years", []):
+                fy_end_key = year.get("fy_end", "").replace("-", "")
+                gp = gp_by_year.get(fy_end_key)
+                if gp and gp.get("current") is not None:
+                    # Sales の直後に挿入するため dict を再構築
+                    gp_m = gp["current"] / MILLION_YEN
+                    old_cd = year["CalculatedData"]
+                    new_cd: dict = {}
+                    for k, v in old_cd.items():
+                        new_cd[k] = v
+                        if k == "Sales":
+                            new_cd["GrossProfit"] = gp_m
+                            new_cd["GrossProfitMethod"] = gp.get("method", "unknown")
+                    if "GrossProfit" not in new_cd:
+                        new_cd["GrossProfit"] = gp_m
+                        new_cd["GrossProfitMethod"] = gp.get("method", "unknown")
+                    year["CalculatedData"] = new_cd
+
         return {
             "stock_info": stock_info,
             "financial_data": financial_data,

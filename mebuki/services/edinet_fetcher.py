@@ -198,3 +198,55 @@ class EdinetFetcher:
         _elapsed = time.perf_counter() - _t0
         logger.info(f"[IBD] {code}: IBD抽出完了 {len(ibd_by_year)}件 {_elapsed:.2f}s")
         return ibd_by_year
+
+    async def extract_gross_profit_by_year(
+        self,
+        code: str,
+        financial_data: List[Dict[str, Any]],
+        max_years: int,
+    ) -> Dict[str, dict]:
+        """年度別に売上総利益を抽出。Returns: { "YYYYMMDD": gp_result_dict }"""
+        from mebuki.analysis.gross_profit import extract_gross_profit
+
+        if not self.edinet_client or not self.edinet_client.api_key:
+            return {}
+
+        docs = await self.edinet_client.search_recent_reports(
+            code, financial_data, max_years, ["120"], max_years,
+        )
+        logger.info(f"[GP] {code}: {len(docs)}件のEDINET文書を検索")
+
+        async def _process_doc(doc: dict) -> tuple[str, dict | None]:
+            fy_end_8 = doc.get("jquants_fy_end", "").replace("-", "")
+            if not fy_end_8:
+                return "", None
+            try:
+                xbrl_dir = await self.edinet_client.download_document(doc["docID"], 1)
+                if not xbrl_dir:
+                    logger.warning(f"[GP] {code} {fy_end_8}: XBRLダウンロード失敗")
+                    return fy_end_8, None
+                gp = extract_gross_profit(Path(xbrl_dir))
+                logger.info(
+                    f"[GP] {code} {fy_end_8}: current={gp.get('current')}, method={gp.get('method')}"
+                )
+                return fy_end_8, gp
+            except Exception as e:
+                logger.warning(f"[GP] {code} {fy_end_8}: 抽出エラー - {e}")
+                return fy_end_8, None
+
+        _t0 = time.perf_counter()
+        results = await asyncio.gather(
+            *[_process_doc(doc) for doc in docs], return_exceptions=True
+        )
+        gp_by_year: dict = {}
+        for res in results:
+            if isinstance(res, Exception):
+                logger.warning(f"[GP] {code} gather エラー: {res}")
+                continue
+            k, v = res
+            if k and v is not None:
+                gp_by_year[k] = v
+
+        _elapsed = time.perf_counter() - _t0
+        logger.info(f"[GP] {code}: GP抽出完了 {len(gp_by_year)}件 {_elapsed:.2f}s")
+        return gp_by_year

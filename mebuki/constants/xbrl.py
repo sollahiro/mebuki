@@ -85,6 +85,38 @@ COMPONENT_DEFINITIONS: List[Dict[str, Any]] = [
     },
 ]
 
+# 売上総利益（GP）タグ定義
+# analysis/gross_profit.py で使用
+
+# 売上総利益合計タグ（直接法）
+# EDINET XBRL では IFRS連結は "IFRS" サフィックス付き、J-GAAP連結はサフィックスなし
+GROSS_PROFIT_DIRECT_TAGS: List[str] = [
+    "GrossProfitIFRS",  # IFRS連結（例: 味の素, 日立）
+    "GrossProfit",      # J-GAAP連結（例: ニチレイ）
+]
+
+# 売上総利益 計算法コンポーネント（直接タグが存在しない場合のフォールバック）
+# 売上高 − 売上原価 で計算する
+GROSS_PROFIT_COMPONENT_DEFINITIONS: List[Dict[str, Any]] = [
+    {
+        "label": "売上高",
+        "tags": [
+            "NetSalesIFRS",     # IFRS連結
+            "NetSales",         # J-GAAP連結
+            "Revenue",          # IFRS代替
+            "Revenues",         # US-GAAP
+        ],
+    },
+    {
+        "label": "売上原価",
+        "tags": [
+            "CostOfSalesIFRS",  # IFRS連結
+            "CostOfSales",      # J-GAAP連結
+            "CostOfRevenue",    # US-GAAP
+        ],
+    },
+]
+
 # 複数の構成要素を集約したIFRSタグ。
 # 粒度別タグが存在しない場合に、カバーする個別コンポーネントを置き換える。
 AGGREGATE_IFRS_DEFINITIONS: List[Dict[str, Any]] = [
