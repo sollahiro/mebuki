@@ -22,13 +22,19 @@ class BOJClient:
         self._last_request_time = 0.0
         self.interval = 1.1
         self._session: Optional[aiohttp.ClientSession] = None
+        self._session_loop: Optional[asyncio.AbstractEventLoop] = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """セッションを遅延作成して返す"""
+        current_loop = asyncio.get_running_loop()
+        if self._session is not None and not self._session.closed and self._session_loop is not current_loop:
+            await self._session.close()
+            self._session = None
         if self._session is None or self._session.closed:
             ssl_context = ssl.create_default_context(cafile=certifi.where())
             connector = aiohttp.TCPConnector(ssl=ssl_context)
             self._session = aiohttp.ClientSession(connector=connector)
+            self._session_loop = current_loop
         return self._session
 
     async def _wait_for_interval(self) -> None:

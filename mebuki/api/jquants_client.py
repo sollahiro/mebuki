@@ -39,15 +39,21 @@ class JQuantsAPIClient:
         self.api_key = api_key.strip() if api_key else api_key
         self.base_url = base_url or JQUANTS_API_BASE_URL
         self._session: Optional[aiohttp.ClientSession] = None
+        self._session_loop: Optional[asyncio.AbstractEventLoop] = None
 
     def update_api_key(self, api_key: str) -> None:
         """APIキーを更新し、セッションを次回リクエスト時に再作成します。"""
         self.api_key = api_key.strip() if api_key else ""
         # セッションを破棄して次回アクセス時に新しいキーで再作成させる
         self._session = None
+        self._session_loop = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """セッションを遅延作成して返す"""
+        current_loop = asyncio.get_running_loop()
+        if self._session is not None and not self._session.closed and self._session_loop is not current_loop:
+            await self._session.close()
+            self._session = None
         if self._session is None or self._session.closed:
             headers = {}
             if self.api_key:
@@ -55,6 +61,7 @@ class JQuantsAPIClient:
             ssl_context = ssl.create_default_context(cafile=certifi.where())
             connector = aiohttp.TCPConnector(ssl=ssl_context)
             self._session = aiohttp.ClientSession(headers=headers, connector=connector)
+            self._session_loop = current_loop
         return self._session
 
     async def _request(

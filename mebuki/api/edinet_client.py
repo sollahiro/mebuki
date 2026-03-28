@@ -28,18 +28,25 @@ class EdinetAPIClient:
 
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._session: Optional[aiohttp.ClientSession] = None
+        self._session_loop: Optional[asyncio.AbstractEventLoop] = None
 
     def update_api_key(self, api_key: str) -> None:
         """APIキーを更新します。"""
         self.api_key = api_key.strip() if api_key else ""
         self._session = None
+        self._session_loop = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """セッションを遅延作成して返す"""
+        current_loop = asyncio.get_running_loop()
+        if self._session is not None and not self._session.closed and self._session_loop is not current_loop:
+            await self._session.close()
+            self._session = None
         if self._session is None or self._session.closed:
             ssl_context = ssl.create_default_context(cafile=certifi.where())
             connector = aiohttp.TCPConnector(ssl=ssl_context)
             self._session = aiohttp.ClientSession(connector=connector)
+            self._session_loop = current_loop
         return self._session
 
     async def _request(self, endpoint: str, params: Dict[str, Any] = None, max_retries: int = 3) -> Dict[str, Any]:
