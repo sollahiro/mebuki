@@ -75,6 +75,11 @@ class DataService:
         except Exception as e:
             logger.warning(f"決算カレンダーの更新に失敗（処理を続行）: {e}")
 
+    async def close(self) -> None:
+        """全APIクライアントのセッションをクローズする"""
+        await self.api_client.close()
+        await self.edinet_client.close()
+
     def reinitialize(self) -> None:
         """設定変更時に呼び出され、APIクライアントなどの設定を更新します。"""
         logger.info("再初期化中: APIクライアントの設定を更新します")

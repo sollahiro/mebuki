@@ -37,6 +37,13 @@ class BOJClient:
             self._session_loop = current_loop
         return self._session
 
+    async def close(self) -> None:
+        """セッションを明示的にクローズする"""
+        if self._session is not None and not self._session.closed:
+            await self._session.close()
+        self._session = None
+        self._session_loop = None
+
     async def _wait_for_interval(self) -> None:
         elapsed = time.time() - self._last_request_time
         if elapsed < self.interval:

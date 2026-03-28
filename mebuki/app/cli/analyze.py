@@ -65,6 +65,8 @@ async def cmd_analyze(args):
         except Exception as e:
             print(f"エラー: {e}")
             logger.exception(e)
+        finally:
+            await data_service.close()
         return
 
     try:
@@ -178,6 +180,8 @@ async def cmd_analyze(args):
     except Exception as e:
         print(f"エラー: 分析中に例外が発生しました: {e}")
         logger.exception(e)
+    finally:
+        await data_service.close()
 
 
 async def cmd_price(args):

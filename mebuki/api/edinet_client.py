@@ -49,6 +49,13 @@ class EdinetAPIClient:
             self._session_loop = current_loop
         return self._session
 
+    async def close(self) -> None:
+        """セッションを明示的にクローズする"""
+        if self._session is not None and not self._session.closed:
+            await self._session.close()
+        self._session = None
+        self._session_loop = None
+
     async def _request(self, endpoint: str, params: Dict[str, Any] = None, max_retries: int = 3) -> Dict[str, Any]:
         """リトライ機能付きAPIリクエスト実行（JSON応答）"""
         if not self.api_key:
