@@ -6,7 +6,8 @@ class Mebuki < Formula
   sha256 "0000000000000000000000000000000000000000000000000000000000000000" # Updated by CI
 
   def install
-    bin.install "mebuki"
+    libexec.install Dir["mebuki/*"]
+    bin.install_symlink libexec/"mebuki"
   end
 
   test do

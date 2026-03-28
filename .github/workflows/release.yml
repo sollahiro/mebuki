@@ -42,7 +42,7 @@ jobs:
       - name: Package Binary
         run: |
           mkdir -p release
-          cp dist/mebuki release/
+          cp -r dist/mebuki release/
           cd release
           tar -czvf mebuki-macos-arm64.tar.gz mebuki
         shell: bash
