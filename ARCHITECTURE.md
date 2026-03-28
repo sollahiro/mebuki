@@ -57,7 +57,6 @@ mebuki/
 │   │   ├── jquants_utils.py
 │   │   ├── sectors.py
 │   │   └── xbrl_compressor.py
-│   └── prompts.py         # LLM向けプロンプトテンプレート
 └── assets/                # 銘柄マスタ等
 ```
 
