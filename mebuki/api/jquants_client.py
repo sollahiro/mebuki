@@ -7,10 +7,12 @@ APIキー認証とデータ取得機能を提供します。
 
 import asyncio
 import logging
+import ssl
 from typing import Optional, Dict, List, Any
 from datetime import datetime, timedelta
 
 import aiohttp
+import certifi
 from ..constants.api import JQUANTS_API_BASE_URL
 from mebuki.constants.formats import DATE_LEN_COMPACT
 from mebuki.utils.fiscal_year import normalize_date_format, parse_date_string
@@ -50,7 +52,9 @@ class JQuantsAPIClient:
             headers = {}
             if self.api_key:
                 headers["x-api-key"] = self.api_key
-            self._session = aiohttp.ClientSession(headers=headers)
+            ssl_context = ssl.create_default_context(cafile=certifi.where())
+            connector = aiohttp.TCPConnector(ssl=ssl_context)
+            self._session = aiohttp.ClientSession(headers=headers, connector=connector)
         return self._session
 
     async def _request(
