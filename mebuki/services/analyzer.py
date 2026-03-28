@@ -440,9 +440,13 @@ class IndividualAnalyzer:
                         if k == "Sales":
                             new_cd["GrossProfit"] = gp_m
                             new_cd["GrossProfitMethod"] = gp.get("method", "unknown")
+                            sales = new_cd.get("Sales")
+                            new_cd["GrossProfitMargin"] = gp_m / sales * PERCENT if sales else None
                     if "GrossProfit" not in new_cd:
                         new_cd["GrossProfit"] = gp_m
                         new_cd["GrossProfitMethod"] = gp.get("method", "unknown")
+                        sales = new_cd.get("Sales")
+                        new_cd["GrossProfitMargin"] = gp_m / sales * PERCENT if sales else None
                     year["CalculatedData"] = new_cd
 
         return {

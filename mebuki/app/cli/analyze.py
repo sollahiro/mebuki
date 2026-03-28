@@ -132,6 +132,7 @@ async def cmd_analyze(args):
         metrics_to_show = [
             ("売上高 (百万)", lambda c: c.get("Sales")),
             ("売上総利益 (百万)", lambda c: c.get("GrossProfit")),
+            ("粗利率 (%)", lambda c: c.get("GrossProfitMargin")),
             ("営業利益 (百万)", lambda c: c.get("OP")),
             ("営業利益率 (%)", get_op_margin),
             ("ROE (%)", lambda c: c.get("ROE")),
