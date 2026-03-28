@@ -1,9 +1,11 @@
 import asyncio
 import logging
+import ssl
 import time
 from typing import Dict, Any, List, Optional
 
 import aiohttp
+import certifi
 
 from mebuki.utils.cache import CacheManager
 
@@ -24,7 +26,9 @@ class BOJClient:
     async def _get_session(self) -> aiohttp.ClientSession:
         """セッションを遅延作成して返す"""
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
+            ssl_context = ssl.create_default_context(cafile=certifi.where())
+            connector = aiohttp.TCPConnector(ssl=ssl_context)
+            self._session = aiohttp.ClientSession(connector=connector)
         return self._session
 
     async def _wait_for_interval(self) -> None:

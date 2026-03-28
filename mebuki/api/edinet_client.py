@@ -1,12 +1,14 @@
 import asyncio
 import logging
 import json
+import ssl
 import zipfile
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 
 import aiohttp
+import certifi
 
 from ..constants.api import EDINET_API_BASE_URL
 from ..utils.fiscal_year import normalize_date_format, parse_date_string
@@ -35,7 +37,9 @@ class EdinetAPIClient:
     async def _get_session(self) -> aiohttp.ClientSession:
         """セッションを遅延作成して返す"""
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
+            ssl_context = ssl.create_default_context(cafile=certifi.where())
+            connector = aiohttp.TCPConnector(ssl=ssl_context)
+            self._session = aiohttp.ClientSession(connector=connector)
         return self._session
 
     async def _request(self, endpoint: str, params: Dict[str, Any] = None, max_retries: int = 3) -> Dict[str, Any]:
