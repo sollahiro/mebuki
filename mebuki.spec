@@ -5,7 +5,7 @@ a = Analysis(
     ['mebuki/cli.py'],
     pathex=[],
     binaries=[],
-    datas=[('assets/data_j.csv', 'assets'), ('mebuki/prompts.py', 'mebuki')],
+    datas=[('assets/data_j.csv', 'assets')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
