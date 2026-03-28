@@ -169,8 +169,8 @@ async def cmd_analyze(args):
             import questionary
             from mebuki.services.portfolio_service import portfolio_service
             from mebuki.infrastructure.portfolio_store import portfolio_store as _ps
-            already = _ps.find(validate_stock_code(code), "", "")
-            if not already or already.get("status") != "watch":
+            all_entries = _ps.find_all_by_ticker(validate_stock_code(code))
+            if not any(e.get("status") in ("watch", "holding") for e in all_entries):
                 add_watch = await questionary.confirm(
                     f"{code} {info['name']} をウォッチリストに追加しますか？",
                     default=False,
