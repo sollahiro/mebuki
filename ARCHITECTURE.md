@@ -12,26 +12,22 @@ mebuki/
 │   │   │   ├── main.py        # エントリポイント・ディスパッチャ
 │   │   │   ├── parser.py      # argparse パーサー定義
 │   │   │   ├── analyze.py     # search/analyze/price/filings/filing/visualize コマンド
-│   │   │   ├── macro.py       # macro コマンド
 │   │   │   ├── config.py      # config コマンド
 │   │   │   ├── mcp.py         # mcp コマンド
 │   │   │   ├── portfolio.py   # watch/portfolio コマンド
 │   │   │   ├── interactive.py # 対話モード
 │   │   │   └── ui.py          # バナー・UI補助
-│   │   └── mcp_server.py  # MCP サーバー (全11ツール)
+│   │   └── mcp_server.py  # MCP サーバー (全10ツール)
 │   ├── cli.py             # 後方互換エントリポイント (deprecated shim)
 │   ├── mcp_server.py      # 後方互換エントリポイント (deprecated shim)
 │   ├── services/          # ユースケース層 (分析/検索/集約)
 │   │   ├── data_service.py
 │   │   ├── analyzer.py
-│   │   ├── macro_analyzer.py
-│   │   ├── macro_series_mapping.py
 │   │   ├── master_data.py
 │   │   └── portfolio_service.py  # ウォッチリスト・保有銘柄管理
 │   ├── infrastructure/    # 設定・外部APIアダプタ補助・永続化
 │   │   ├── settings.py
 │   │   ├── helpers.py
-│   │   ├── boj_client.py        # 日銀データクライアント
 │   │   └── portfolio_store.py   # ポートフォリオ永続化 (portfolio.json)
 │   ├── api/               # 外部APIクライアント (J-QUANTS/EDINET)
 │   │   ├── jquants_client.py

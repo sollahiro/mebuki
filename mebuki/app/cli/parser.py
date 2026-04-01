@@ -43,13 +43,6 @@ def build_parser() -> argparse.ArgumentParser:
     filing_parser.add_argument("--sections", nargs="+", help="抽出するセクション名 (複数指定可)")
     filing_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
 
-    # macro
-    macro_parser = subparsers.add_parser("macro", help="マクロ経済データを取得")
-    macro_parser.add_argument("category", choices=["fx", "monetary"], help="カテゴリ (fx: 為替, monetary: 金融政策)")
-    macro_parser.add_argument("--start", help="開始月 (YYYYMM)")
-    macro_parser.add_argument("--end", help="終了月 (YYYYMM)")
-    macro_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
-
     # visualize
     visualize_parser = subparsers.add_parser("visualize", help="財務データを可視化形式で取得")
     visualize_parser.add_argument("code", help="銘柄コード")

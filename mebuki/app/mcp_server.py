@@ -9,7 +9,6 @@ from mcp.types import TextContent, Tool
 
 from mebuki.infrastructure.helpers import validate_stock_code
 from mebuki.services.data_service import data_service
-from mebuki.services.macro_analyzer import macro_analyzer
 from mebuki.services.portfolio_service import portfolio_service
 
 logger = logging.getLogger("mebuki-mcp")
@@ -113,29 +112,6 @@ async def list_tools() -> List[Tool]:
                     },
                 },
                 "required": ["code"],
-            },
-        ),
-        Tool(
-            name="get_macro_economic_data",
-            description="Fetch macro economic indicators for Japan environment. 日本のマクロ経済指標（為替、金融政策）を取得します。",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "category": {
-                        "type": "string",
-                        "enum": ["fx", "monetary"],
-                        "description": "Category of macro data.",
-                    },
-                    "start_date": {
-                        "type": "string",
-                        "description": "Start date (Format: YYYYMM)",
-                    },
-                    "end_date": {
-                        "type": "string",
-                        "description": "End date (Format: YYYYMM)",
-                    },
-                },
-                "required": ["category"],
             },
         ),
         Tool(
@@ -286,18 +262,6 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             requested_sections = arguments.get("sections", ["all"])
             result = await data_service.extract_filing_content(code, doc_id, requested_sections)
             return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
-
-        if name == "get_macro_economic_data":
-            category = arguments["category"]
-            start = arguments.get("start_date")
-            end = arguments.get("end_date")
-            if category == "fx":
-                data = macro_analyzer.get_fx_environment(start, end)
-            elif category == "monetary":
-                data = macro_analyzer.get_monetary_policy_status(start, end)
-            else:
-                raise ValueError(f"Unknown macro category: {category}")
-            return [TextContent(type="text", text=json.dumps(data, indent=2, ensure_ascii=False))]
 
         if name == "visualize_financial_data":
             code = validate_stock_code(str(arguments["code"]))

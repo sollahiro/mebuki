@@ -51,8 +51,6 @@ pip install -e .
 mebuki
 ```
 
----
-
 ## アプリの使い方
 
 ### APIキーの設定
@@ -121,7 +119,6 @@ AIアシスタントがmebukiのツールを使用して、自動的に以下の
 - 銘柄情報の検索
 - 財務データの取得・推移分析
 - 有価証券報告書の取得とセクション抽出
-- マクロ経済環境の分析
 
 ### 利用可能なMCPツール
 
@@ -131,7 +128,6 @@ AIアシスタントがmebukiのツールを使用して、自動的に以下の
 - `get_japan_stock_price_data`: 日足株価履歴データの取得
 - `search_japan_stock_filings`: EDINET文書（有報等）の検索
 - `extract_japan_stock_filing_content`: 有報の特定セクションを抽出
-- `get_macro_economic_data`: マクロ経済指標（為替、金利等）を取得
 - `visualize_financial_data`: 財務可視化パネルの表示
 
 ## トラブルシューティング
