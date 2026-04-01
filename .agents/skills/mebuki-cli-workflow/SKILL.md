@@ -64,6 +64,23 @@ mebuki analyze <code> [--scope overview|metrics|raw] [--years N] [--format table
 - `--include-2q`: 2Q（中間期）データも含めて表示する（opt-in）。2Qの ROE/ROIC/PER/PBR は表示しない（6ヶ月分の値のため）
 - `--no-cache`: キャッシュを使用せず最新データを取得する
 
+デフォルト出力に含まれる主要財務指標（横並び年次推移）:
+
+| 項目 | 用途・ポイント |
+|---|---|
+| 売上高 | トップライン成長確認 |
+| 売上総利益 | 粗利の絶対額 |
+| **粗利率 (%)** | 製品競争力・価格支配力の指標 |
+| 営業利益 | 本業の稼ぎ |
+| **営業利益率 (%)** | 本業の収益性。粗利率との差 = 販管費率 |
+| ROE / ROIC | 資本効率 |
+| 営業CF / 投資CF / フリーCF | キャッシュフロー |
+| 配当性向 | 株主還元方針 |
+| PER / PBR / 年度末株価 | バリュエーション |
+| 有利子負債合計 / 投下資本 | 財務健全性・ROIC計算基盤 |
+
+> **分析ヒント**: 粗利率と営業利益率の差が大きい場合は販管費（人件費・広告費等）が重い構造。両者の推移を比較することで、コスト管理の効率改善・悪化を把握できる。
+
 例：
 ```bash
 mebuki analyze 7203
@@ -136,25 +153,7 @@ mebuki filing 7203 --doc-id S100XXXX --sections mda
 mebuki filing 7203 --format json
 ```
 
-### ⑦ マクロ経済データ
-
-為替・金融政策などのマクロ経済データを取得する。
-
-```bash
-mebuki macro <fx|monetary> [--start YYYYMM] [--end YYYYMM] [--format table|json]
-```
-
-- `fx`: 為替レート（日銀統計）
-- `monetary`: 金融政策・金利データ
-
-例：
-```bash
-mebuki macro fx
-mebuki macro monetary --start 202001 --end 202512
-mebuki macro fx --format json
-```
-
-### ⑧ ウォッチリスト管理
+### ⑦ ウォッチリスト管理
 
 注目銘柄のウォッチリストを管理する。
 
@@ -172,7 +171,7 @@ mebuki watch list --format json
 mebuki watch remove 7203
 ```
 
-### ⑨ ポートフォリオ管理
+### ⑧ ポートフォリオ管理
 
 保有銘柄のポートフォリオを管理する。
 
@@ -211,7 +210,6 @@ mebuki portfolio remove 7203 --broker SBI --account 特定
    - 中間期も確認したい場合: `--include-2q` を追加
 3. **書類一覧**: `mebuki filings <code>` でEDINET提出書類を確認
 4. **報告書抽出**: `mebuki filing <code> --sections business_risks mda` でリスクと経営状況を確認
-5. **マクロ確認**: `mebuki macro fx` / `mebuki macro monetary` で外部環境を把握
 
 ### 銘柄管理フロー
 
