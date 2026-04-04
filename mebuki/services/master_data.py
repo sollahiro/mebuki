@@ -44,7 +44,13 @@ class MasterDataManager:
         return True
 
     def reload(self) -> bool:
-        """銘柄マスタを強制的に再読み込み"""
+        """銘柄マスタを強制的に再読み込み
+
+        data_j.csv の入手先:
+            https://www.jpx.co.jp/markets/statistics-equities/misc/01.html
+            （東証上場銘柄一覧 → 「東証上場銘柄一覧（Excel）」をダウンロードし、
+              data_j.csv という名前で assets/ に配置する）
+        """
         # 1. パスの決定
         assets_dir = os.environ.get("MEBUKI_ASSETS_PATH")
         if assets_dir:
