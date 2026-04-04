@@ -203,7 +203,7 @@ class SettingsStore:
     def jquants_api_key(self) -> Optional[str]:
         """J-QUANTS APIキーを取得"""
         try:
-            value = keyring.get_password("mebuki", "jquantsApiKey")
+            value = keystore.get_password("mebuki", "jquantsApiKey")
             if value:
                 return value
         except Exception as e:
@@ -214,7 +214,7 @@ class SettingsStore:
     def edinet_api_key(self) -> Optional[str]:
         """EDINET APIキーを取得"""
         try:
-            value = keyring.get_password("mebuki", "edinetApiKey")
+            value = keystore.get_password("mebuki", "edinetApiKey")
             if value:
                 return value
         except Exception as e:
