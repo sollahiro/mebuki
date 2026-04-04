@@ -1,6 +1,6 @@
 ---
 name: mebuki-cli-workflow
-description: mebuki CLIを使って日本株の検索・財務分析・有価証券報告書抽出・マクロ分析・ウォッチリスト/ポートフォリオ管理を行う汎用ワークフロースキル
+description: mebuki CLIを使って日本株の検索・財務分析・有価証券報告書抽出・ウォッチリスト/ポートフォリオ管理を行う汎用ワークフロースキル
 ---
 
 # mebuki CLIワークフロー
@@ -118,20 +118,7 @@ mebuki filings 7203
 mebuki filings 7203 --format json
 ```
 
-### ⑤ 財務データ可視化
-
-財務データをLLM向け構造化JSON形式で取得する（グラフ描画・比較分析用途）。
-
-```bash
-mebuki visualize <code>
-```
-
-例：
-```bash
-mebuki visualize 7203
-```
-
-### ⑥ 有価証券報告書セクション抽出
+### ⑤ 有価証券報告書セクション抽出
 
 有価証券報告書から特定セクションを抽出する。
 
@@ -153,7 +140,7 @@ mebuki filing 7203 --doc-id S100XXXX --sections mda
 mebuki filing 7203 --format json
 ```
 
-### ⑦ ウォッチリスト管理
+### ⑥ ウォッチリスト管理
 
 注目銘柄のウォッチリストを管理する。
 
@@ -171,7 +158,7 @@ mebuki watch list --format json
 mebuki watch remove 7203
 ```
 
-### ⑧ ポートフォリオ管理
+### ⑦ ポートフォリオ管理
 
 保有銘柄のポートフォリオを管理する。
 
