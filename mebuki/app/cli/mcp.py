@@ -1,8 +1,142 @@
 import json
 import logging
 import sys
-import yaml
 from mebuki.infrastructure.settings import settings_store
+
+
+# ---------------------------------------------------------------------------
+# ミニ YAML パーサー / シリアライザ（標準ライブラリのみ）
+# ---------------------------------------------------------------------------
+
+def _yaml_scalar(s: str):
+    s = s.strip()
+    if s in ('true', 'True', 'yes', 'Yes'):
+        return True
+    if s in ('false', 'False', 'no', 'No'):
+        return False
+    if s in ('null', 'Null', '~', ''):
+        return None
+    if (s.startswith('"') and s.endswith('"')) or (s.startswith("'") and s.endswith("'")):
+        return s[1:-1]
+    try:
+        return int(s)
+    except ValueError:
+        pass
+    try:
+        return float(s)
+    except ValueError:
+        pass
+    return s
+
+
+def _yaml_parse_block(lines: list, start: int, base_indent: int):
+    """base_indent 以上のインデントを持つブロックを再帰的にパースする。"""
+    result = None
+    i = start
+    while i < len(lines):
+        raw = lines[i]
+        stripped = raw.lstrip()
+        if not stripped or stripped.startswith('#'):
+            i += 1
+            continue
+        indent = len(raw) - len(stripped)
+        if indent < base_indent:
+            break
+        if stripped.startswith('- '):
+            if result is None:
+                result = []
+            result.append(_yaml_scalar(stripped[2:]))
+            i += 1
+        elif stripped == '-':
+            if result is None:
+                result = []
+            i += 1
+            while i < len(lines) and (not lines[i].strip() or lines[i].strip().startswith('#')):
+                i += 1
+            if i < len(lines):
+                ni = len(lines[i]) - len(lines[i].lstrip())
+                sub, i = _yaml_parse_block(lines, i, ni)
+                result.append(sub)
+            else:
+                result.append(None)
+        elif ':' in stripped:
+            if result is None:
+                result = {}
+            colon = stripped.index(':')
+            key = stripped[:colon].strip()
+            rest = stripped[colon + 1:].strip()
+            if rest:
+                result[key] = _yaml_scalar(rest)
+                i += 1
+            else:
+                j = i + 1
+                while j < len(lines) and (not lines[j].strip() or lines[j].strip().startswith('#')):
+                    j += 1
+                if j < len(lines):
+                    ni = len(lines[j]) - len(lines[j].lstrip())
+                    if ni > indent:
+                        sub, i = _yaml_parse_block(lines, j, ni)
+                        result[key] = sub
+                    else:
+                        result[key] = None
+                        i = j
+                else:
+                    result[key] = None
+                    i = j
+        else:
+            i += 1
+    return result, i
+
+
+def _yaml_load(text: str) -> dict:
+    lines = text.splitlines()
+    result, _ = _yaml_parse_block(lines, 0, 0)
+    return result or {}
+
+
+def _yaml_scalar_str(v) -> str:
+    if isinstance(v, bool):
+        return 'true' if v else 'false'
+    if v is None:
+        return 'null'
+    if isinstance(v, (int, float)):
+        return str(v)
+    s = str(v)
+    needs_quote = (
+        not s
+        or any(c in s for c in ':#{}[]|>&*!,?@`\'"\\%')
+        or s[0] in ' \t'
+        or s[-1] in ' \t'
+        or s in ('true', 'false', 'null', 'yes', 'no', 'on', 'off',
+                 'True', 'False', 'Null', 'Yes', 'No', 'On', 'Off')
+    )
+    if needs_quote:
+        return '"' + s.replace('\\', '\\\\').replace('"', '\\"') + '"'
+    return s
+
+
+def _yaml_dump(obj, indent: int = 0) -> str:
+    pad = "  " * indent
+    lines = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if isinstance(v, (dict, list)):
+                lines.append(f"{pad}{k}:")
+                sub = _yaml_dump(v, indent + 1)
+                if sub:
+                    lines.append(sub)
+            else:
+                lines.append(f"{pad}{k}: {_yaml_scalar_str(v)}")
+    elif isinstance(obj, list):
+        for item in obj:
+            if isinstance(item, (dict, list)):
+                lines.append(f"{pad}-")
+                sub = _yaml_dump(item, indent + 1)
+                if sub:
+                    lines.append(sub)
+            else:
+                lines.append(f"{pad}- {_yaml_scalar_str(item)}")
+    return "\n".join(lines)
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +234,7 @@ def cmd_mcp(args, parser):
             config_data = {"extensions": {}}
             if config_path.exists():
                 with open(config_path, "r", encoding="utf-8") as f:
-                    config_data = yaml.safe_load(f) or {"extensions": {}}
+                    config_data = _yaml_load(f.read()) or {"extensions": {}}
 
             if "extensions" not in config_data:
                 config_data["extensions"] = {}
@@ -119,7 +253,7 @@ def cmd_mcp(args, parser):
             }
 
             with open(config_path, "w", encoding="utf-8") as f:
-                yaml.dump(config_data, f, sort_keys=False)
+                f.write(_yaml_dump(config_data) + "\n")
 
             print(f"成功: Goose に 'mebuki' 拡張を登録しました。")
             print(f"設定ファイル: {config_path}")

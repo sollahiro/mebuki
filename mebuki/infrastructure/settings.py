@@ -1,7 +1,7 @@
 import os
 import logging
-import keyring
 from pathlib import Path
+from mebuki.infrastructure import keystore
 from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
@@ -125,7 +125,7 @@ class SettingsStore:
         for key in ["jquantsApiKey", "edinetApiKey"]:
             if settings.get(key):
                 try:
-                    keyring.set_password("mebuki", key, settings[key])
+                    keystore.set_password("mebuki", key, settings[key])
                     # メモリ上の値は空にして、取得時にキーチェーンを参照させる
                     self._settings[key] = ""
                 except Exception as e:
@@ -151,7 +151,7 @@ class SettingsStore:
         # APIキーの場合はキーチェーンから取得を試みる
         if key in ["jquantsApiKey", "edinetApiKey"]:
             try:
-                val = keyring.get_password("mebuki", key)
+                val = keystore.get_password("mebuki", key)
                 if val:
                     return val
             except Exception as e:
@@ -171,7 +171,7 @@ class SettingsStore:
         # キーチェーンから値を上書き
         for key in ["jquantsApiKey", "edinetApiKey"]:
             try:
-                val = keyring.get_password("mebuki", key)
+                val = keystore.get_password("mebuki", key)
                 if val:
                     settings[key] = val
             except Exception as e:
