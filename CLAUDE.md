@@ -75,23 +75,30 @@ DATE_LEN_HYPHENATED = 10  # YYYY-MM-DD 形式
 
 ---
 
-## キャッシュバージョン管理
+## バージョン管理
 
-キャッシュには `_cache_version` フィールドを埋め込み、アプリバージョンの major.minor と照合することで、新機能追加時に古いキャッシュが返されるのを防ぐ。
+### 番号の付け方
 
-### ルール
+| 変更内容 | 上げる桁 | 理由 |
+|---|---|---|
+| 新機能追加・キャッシュ構造の変化 | **minor** | キャッシュの自動無効化が必要なため |
+| バグ修正・依存ライブラリの変更 | **patch** | キャッシュ構造に影響しないため |
 
-- キャッシュ保存時は必ず `_cache_version` を含めること
-- キャッシュ読み込み時は `_cache_version` が現在の major.minor と一致する場合のみ使用する
-- バージョン不一致のキャッシュはスキップし、再取得・上書きする（明示的な削除は不要）
-- **新機能追加でキャッシュ構造が変わった場合は `pyproject.toml` の minor バージョンを上げること**
+### リリース手順
 
-### 実装パターン（`mebuki/services/data_service.py`）
+1. `mebuki/__init__.py` と `pyproject.toml` の両方を更新する
+2. `poetry lock` を実行してコミット���含める
+3. **既存タグの付け直しは禁止**。必ず新しいバージョンに上げて新タグを切ること
+   - タグを付け直すと GitHub が tarball を再生成して SHA256 が変わり、Homebrew formula との checksum 不一致が発生する
+
+### キャッシュバージョンの埋め込み（`mebuki/services/data_service.py`）
+
+キャッシュには `_cache_version` フィールドを埋め込み、major.minor と照合することで古いキャッシュの混入を防ぐ。
 
 ```python
 from mebuki import __version__
 
-_CACHE_VERSION = ".".join(__version__.split(".")[:2])  # 例: "2.3"
+_CACHE_VERSION = ".".join(__version__.split(".")[:2])  # 例: "2.4"
 
 # 保存時
 formatted = {
