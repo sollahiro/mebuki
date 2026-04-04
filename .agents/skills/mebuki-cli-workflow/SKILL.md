@@ -218,3 +218,43 @@ mebuki portfolio remove 7203 --broker SBI --account 特定
 1. **ウォッチ登録**: `mebuki watch add <code> --name <備考>`
 2. **買付記録**: `mebuki portfolio add <code> <数量> <単価>`
 3. **保有確認**: `mebuki portfolio list --detail`
+
+### 複数銘柄比較フロー
+
+同セクター内の銘柄を横断比較する際の標準フロー。以下はメガバンク3社（三菱UFJ/8306・三井住友/8316・みずほ/8411）を例にしているが、他の業界にも同様に応用できる。
+
+```bash
+# 1. 銘柄コード確認（社名で検索）
+mebuki search <社名A>
+mebuki search <社名B>
+mebuki search <社名C>
+
+# 2. 財務サマリー（デフォルト: ROIC・有利子負債を含む）
+mebuki analyze <codeA> --years 5
+mebuki analyze <codeB> --years 5
+mebuki analyze <codeC> --years 5
+
+# 3. 財務指標（ROE/PER/PBRなど）を比較
+mebuki analyze <codeA> --scope metrics
+mebuki analyze <codeB> --scope metrics
+mebuki analyze <codeC> --scope metrics
+
+# 4. 有価証券報告書でリスクと経営方針を確認
+mebuki filing <codeA> --sections business_risks mda management_policy
+mebuki filing <codeB> --sections business_risks mda management_policy
+mebuki filing <codeC> --sections business_risks mda management_policy
+```
+
+**比較ポイント**:
+
+| 指標 | 着眼点 |
+|---|---|
+| 粗利率 (%) | 製品競争力・価格支配力。業界内で高いほど優位性がある |
+| 営業利益率 (%) | 本業の収益性。粗利率との差（販管費率）も業界横断で比較できる |
+| ROE | 自己資本に対する収益性。同業他社との比較で経営効率を判断 |
+| ROIC | 投下資本全体に対するリターン。資本効率の本質的な指標 |
+| PER / PBR | バリュエーション。割高・割安の相対比較に使う |
+| 配当性向 | 株主還元方針の違いを比較 |
+| 営業CF | 稼ぐ力の実態。利益と乖離する場合は収益の質を疑う |
+
+> **業界特性による読み替え**: 銀行・保険はROICの定義が事業会社と異なるためROEを主軸に。製造業は粗利率と営業利益率の差（販管費の重さ）が競争力の差に直結。SaaSなどのストック型ビジネスは営業CFの安定性・成長率を重視する。
