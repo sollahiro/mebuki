@@ -75,6 +75,39 @@ DATE_LEN_HYPHENATED = 10  # YYYY-MM-DD 形式
 
 ---
 
+## キャッシュバージョン管理
+
+キャッシュには `_cache_version` フィールドを埋め込み、アプリバージョンの major.minor と照合することで、新機能追加時に古いキャッシュが返されるのを防ぐ。
+
+### ルール
+
+- キャッシュ保存時は必ず `_cache_version` を含めること
+- キャッシュ読み込み時は `_cache_version` が現在の major.minor と一致する場合のみ使用する
+- バージョン不一致のキャッシュはスキップし、再取得・上書きする（明示的な削除は不要）
+- **新機能追加でキャッシュ構造が変わった場合は `pyproject.toml` の minor バージョンを上げること**
+
+### 実装パターン（`mebuki/services/data_service.py`）
+
+```python
+from mebuki import __version__
+
+_CACHE_VERSION = ".".join(__version__.split(".")[:2])  # 例: "2.3"
+
+# 保存時
+formatted = {
+    "_cache_version": _CACHE_VERSION,
+    ...
+}
+
+# 読み込み時
+cached = self.cache_manager.get(key)
+if cached and cached.get("_cache_version") == _CACHE_VERSION:
+    return cached
+# バージョン不一致 → フォールスルーして再取得・上書き
+```
+
+---
+
 ## アーキテクチャ依存ルール
 
 - `services/` は `mebuki.app` をインポートしてはならない

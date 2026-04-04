@@ -8,12 +8,15 @@ from datetime import datetime, timedelta, date
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
+from mebuki import __version__
 from mebuki.api.jquants_client import JQuantsAPIClient
 from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.analysis.xbrl_parser import XBRLParser
 from mebuki.infrastructure.settings import settings_store
 from mebuki.utils.cache import CacheManager
 from mebuki.utils.fiscal_year import parse_date_string
+
+_CACHE_VERSION = ".".join(__version__.split(".")[:2])
 
 from .analyzer import IndividualAnalyzer
 from .master_data import master_data_manager
@@ -268,7 +271,7 @@ class DataService:
 
         if use_cache:
             cached = self.cache_manager.get(f"individual_analysis_{code}")
-            if cached:
+            if cached and cached.get("_cache_version") == _CACHE_VERSION:
                 if "llm_financial_analysis" in cached:
                     del cached["llm_financial_analysis"]
                 return cached
@@ -278,6 +281,7 @@ class DataService:
             return {}
 
         formatted = {
+            "_cache_version": _CACHE_VERSION,
             "code": code,
             **self.fetch_stock_basic_info(code),
             "metrics": result["metrics"],
