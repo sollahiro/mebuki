@@ -1,7 +1,7 @@
 import sys
 import logging
 from .ui import print_banner
-from .analyze import cmd_search, cmd_analyze, cmd_price, cmd_filings, cmd_filing, cmd_visualize
+from .analyze import cmd_search, cmd_analyze, cmd_price, cmd_filings, cmd_filing
 from .config import cmd_config
 from .mcp import cmd_mcp
 from .portfolio import cmd_watch, cmd_portfolio
@@ -43,9 +43,6 @@ def main():
     elif args.command == "filing":
         import asyncio
         asyncio.run(cmd_filing(args))
-    elif args.command == "visualize":
-        import asyncio
-        asyncio.run(cmd_visualize(args))
     elif args.command == "watch":
         cmd_watch(args)
     elif args.command == "portfolio":

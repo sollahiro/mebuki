@@ -255,11 +255,6 @@ class DataService:
                 result[section] = all_sections[section]
         return {**base, "sections": result}
 
-    async def visualize_financial_data(self, code: str) -> Dict[str, Any]:
-        """可視化向けの財務データを返す。"""
-        analyzer = self.get_analyzer(use_cache=True)
-        return await analyzer.analyze_stock(code) or {}
-
     async def get_raw_analysis_data(
         self,
         code: str,

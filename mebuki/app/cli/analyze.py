@@ -296,14 +296,3 @@ async def cmd_filing(args):
         logger.exception(e)
 
 
-async def cmd_visualize(args):
-    """財務データ可視化コマンド"""
-    from mebuki.services.data_service import data_service
-
-    try:
-        code = validate_stock_code(args.code)
-        result = await data_service.visualize_financial_data(code)
-        print(json.dumps(result, indent=2, ensure_ascii=False))
-    except Exception as e:
-        print(f"エラー: {e}")
-        logger.exception(e)

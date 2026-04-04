@@ -43,10 +43,6 @@ def build_parser() -> argparse.ArgumentParser:
     filing_parser.add_argument("--sections", nargs="+", help="抽出するセクション名 (複数指定可)")
     filing_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
 
-    # visualize
-    visualize_parser = subparsers.add_parser("visualize", help="財務データを可視化形式で取得")
-    visualize_parser.add_argument("code", help="銘柄コード")
-
     # config
     config_parser = subparsers.add_parser("config", help="設定の表示・変更")
     config_sub = config_parser.add_subparsers(dest="config_subcommand", help="設定サブコマンド")
