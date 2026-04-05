@@ -169,7 +169,10 @@ class EdinetFetcher:
             if not fy_end_8:
                 return "", None
             try:
-                xbrl_dir = await self.edinet_client.download_document(doc["docID"], 1)
+                xbrl_dir = await asyncio.wait_for(
+                    self.edinet_client.download_document(doc["docID"], 1),
+                    timeout=30.0,
+                )
                 if not xbrl_dir:
                     logger.warning(f"[IBD] {code} {fy_end_8}: XBRLダウンロード失敗")
                     return fy_end_8, None
@@ -178,6 +181,9 @@ class EdinetFetcher:
                     f"[IBD] {code} {fy_end_8}: current={ibd.get('current')}, method={ibd.get('method')}"
                 )
                 return fy_end_8, ibd
+            except asyncio.TimeoutError:
+                logger.warning(f"[IBD] {code} {fy_end_8}: XBRLダウンロードタイムアウト(30s)")
+                return fy_end_8, None
             except Exception as e:
                 logger.warning(f"[IBD] {code} {fy_end_8}: 抽出エラー - {e}")
                 return fy_end_8, None
@@ -221,7 +227,10 @@ class EdinetFetcher:
             if not fy_end_8:
                 return "", None
             try:
-                xbrl_dir = await self.edinet_client.download_document(doc["docID"], 1)
+                xbrl_dir = await asyncio.wait_for(
+                    self.edinet_client.download_document(doc["docID"], 1),
+                    timeout=30.0,
+                )
                 if not xbrl_dir:
                     logger.warning(f"[GP] {code} {fy_end_8}: XBRLダウンロード失敗")
                     return fy_end_8, None
@@ -230,6 +239,9 @@ class EdinetFetcher:
                     f"[GP] {code} {fy_end_8}: current={gp.get('current')}, method={gp.get('method')}"
                 )
                 return fy_end_8, gp
+            except asyncio.TimeoutError:
+                logger.warning(f"[GP] {code} {fy_end_8}: XBRLダウンロードタイムアウト(30s)")
+                return fy_end_8, None
             except Exception as e:
                 logger.warning(f"[GP] {code} {fy_end_8}: 抽出エラー - {e}")
                 return fy_end_8, None

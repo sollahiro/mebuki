@@ -237,7 +237,16 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             scope = arguments.get("scope", "overview")
             use_cache = arguments.get("use_cache", True)
             include_2q = arguments.get("include_2q", False)
-            result = await data_service.get_financial_data(code, scope=scope, use_cache=use_cache, include_2q=include_2q)
+            try:
+                result = await asyncio.wait_for(
+                    data_service.get_financial_data(code, scope=scope, use_cache=use_cache, include_2q=include_2q),
+                    timeout=180.0,
+                )
+            except asyncio.TimeoutError:
+                return [TextContent(type="text", text=json.dumps(
+                    {"error": "timeout", "message": f"{code} のデータ取得がタイムアウトしました（180秒）。再試行するか scope='metrics' をお試しください。"},
+                    ensure_ascii=False,
+                ))]
             return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
 
         if name == "get_japan_stock_price_data":

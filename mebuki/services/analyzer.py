@@ -391,15 +391,24 @@ class IndividualAnalyzer:
         metrics = await self._financial_fetcher.calculate_metrics(code, annual_data, prices, actual_years)
 
         edinet_data = {}
+        ibd_by_year: Dict[str, dict] = {}
+        gp_by_year: Dict[str, dict] = {}
+
         if financial_data:
-            edinet_data = await self._edinet_fetcher.fetch_edinet_data_async(
+            edinet_coro = self._edinet_fetcher.fetch_edinet_data_async(
                 code, financial_data, max_documents=max_documents
+            )
+            ibd_coro = self._edinet_fetcher.extract_ibd_by_year(
+                code, financial_data, actual_years
+            )
+            gp_coro = self._edinet_fetcher.extract_gross_profit_by_year(
+                code, financial_data, actual_years
+            )
+            edinet_data, ibd_by_year, gp_by_year = await asyncio.gather(
+                edinet_coro, ibd_coro, gp_coro
             )
 
         if financial_data and metrics:
-            ibd_by_year = await self._edinet_fetcher.extract_ibd_by_year(
-                code, financial_data, actual_years
-            )
             for year in metrics.get("years", []):
                 fy_end = year.get("fy_end", "")
                 fy_end_key = fy_end.replace("-", "")
@@ -424,9 +433,6 @@ class IndividualAnalyzer:
                     if np_ is not None and eq is not None and (eq + ibd_m) != 0:
                         year["CalculatedData"]["ROIC"] = np_ / (eq + ibd_m) * PERCENT
 
-            gp_by_year = await self._edinet_fetcher.extract_gross_profit_by_year(
-                code, financial_data, actual_years
-            )
             for year in metrics.get("years", []):
                 fy_end_key = year.get("fy_end", "").replace("-", "")
                 gp = gp_by_year.get(fy_end_key)
