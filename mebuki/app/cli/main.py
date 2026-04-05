@@ -5,23 +5,19 @@ from .analyze import cmd_search, cmd_analyze, cmd_price, cmd_filings, cmd_filing
 from .config import cmd_config
 from .mcp import cmd_mcp
 from .portfolio import cmd_watch, cmd_portfolio
-from .interactive import cmd_interactive
 from .parser import build_parser
 
 logger = logging.getLogger(__name__)
 
 
 def main():
-    if len(sys.argv) == 1:
-        print_banner()
-        try:
-            cmd_interactive()
-        except KeyboardInterrupt:
-            print("\n終了します。")
-        return
-
     print_banner()
     parser = build_parser()
+
+    if len(sys.argv) == 1:
+        parser.print_help()
+        return
+
 
     args = parser.parse_args()
 

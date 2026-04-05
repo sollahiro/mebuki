@@ -166,16 +166,15 @@ async def cmd_analyze(args):
 
         # ウォッチリスト追加の確認（対話端末のみ）
         if args.format == "table" and sys.stdin.isatty():
-            import questionary
+            import asyncio
             from mebuki.services.portfolio_service import portfolio_service
             from mebuki.infrastructure.portfolio_store import portfolio_store as _ps
             all_entries = _ps.find_all_by_ticker(validate_stock_code(code))
             if not any(e.get("status") in ("watch", "holding") for e in all_entries):
-                add_watch = await questionary.confirm(
-                    f"{code} {info['name']} をウォッチリストに追加しますか？",
-                    default=False,
-                ).ask_async()
-                if add_watch:
+                raw = await asyncio.to_thread(
+                    input, f"{code} {info['name']} をウォッチリストに追加しますか？ (y/N): "
+                )
+                if raw.strip().lower() in ("y", "yes"):
                     portfolio_service.add_watch(code, name=info.get("name", ""))
                     print(f"ウォッチリストに追加しました: {code} {info['name']}")
 

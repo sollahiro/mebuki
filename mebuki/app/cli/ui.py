@@ -1,22 +1,46 @@
 import logging
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# questionary 2.x では value=None を渡すとタイトル文字列が返るため sentinel を使用
-_CANCEL_SENTINEL = object()
+_PAGE_SIZE = 10  # a-j
 
 
 def select_stock_from_results(results: list[dict], prompt: str, cancel_text: str = "↩  戻る") -> dict | None:
-    """検索結果リストから銘柄をインタラクティブに選択する。キャンセル時は None を返す。"""
-    import questionary
-    choices = [
-        {"name": f"{item['code']}  {item['name']}  ({item['market']})", "value": item}
-        for item in results
-    ]
-    choices.append({"name": cancel_text, "value": _CANCEL_SENTINEL})
-    result = questionary.select(prompt, choices=choices).ask()
-    return None if (result is _CANCEL_SENTINEL or result is None) else result
+    """検索結果リストから銘柄をアルファベット入力で選択する。キャンセル時は None を返す。"""
+    total = len(results)
+    total_pages = max(1, (total + _PAGE_SIZE - 1) // _PAGE_SIZE)
+    page = 0
+
+    while True:
+        start = page * _PAGE_SIZE
+        display = results[start:start + _PAGE_SIZE]
+
+        print(prompt)
+        if total_pages > 1:
+            print(f"  （{total}件中 {start + 1}–{start + len(display)}件  {page + 1}/{total_pages}ページ）")
+        for i, item in enumerate(display):
+            print(f"  {chr(ord('a') + i)}) {item['code']}  {item['name']}  ({item['market']})")
+        nav = []
+        if page > 0:
+            nav.append("p) 前ページ")
+        if page < total_pages - 1:
+            nav.append("n) 次ページ")
+        nav.append(f"q) {cancel_text}")
+        print("  " + "  ".join(nav))
+
+        raw = input("選択: ").strip().lower()
+        if raw == "q":
+            return None
+        if raw == "n" and page < total_pages - 1:
+            page += 1
+            continue
+        if raw == "p" and page > 0:
+            page -= 1
+            continue
+        if len(raw) == 1 and raw.isalpha():
+            idx = ord(raw) - ord("a")
+            if 0 <= idx < len(display):
+                return display[idx]
 
 
 def print_banner():

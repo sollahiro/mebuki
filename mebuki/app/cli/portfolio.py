@@ -1,7 +1,124 @@
+import argparse
 import json
 import logging
 
 logger = logging.getLogger(__name__)
+
+_BROKER_CHOICES = ["SBI", "楽天", "松井", "マネックス", "auカブコム", "その他"]
+_ACCOUNT_CHOICES = ["特定", "一般", "NISA"]
+
+
+def _ask_broker_and_account() -> tuple[str, str]:
+    """証券会社と口座種別をインタラクティブに尋ねて返す。"""
+    print("証券会社:")
+    for i, b in enumerate(_BROKER_CHOICES):
+        print(f"  {chr(ord('a') + i)}) {b}")
+    raw = input("選択 (a-f, または直接入力): ").strip()
+    if len(raw) == 1 and raw.isalpha():
+        idx = ord(raw.lower()) - ord("a")
+        broker = _BROKER_CHOICES[idx] if 0 <= idx < len(_BROKER_CHOICES) else raw
+    else:
+        broker = raw
+
+    print("口座種別:")
+    for i, a in enumerate(_ACCOUNT_CHOICES):
+        print(f"  {chr(ord('a') + i)}) {a}")
+    raw = input("選択 (a-c): ").strip()
+    if len(raw) == 1 and raw.isalpha():
+        idx = ord(raw.lower()) - ord("a")
+        account = _ACCOUNT_CHOICES[idx] if 0 <= idx < len(_ACCOUNT_CHOICES) else "特定"
+    else:
+        account = "特定"
+
+    return broker, account
+
+
+def cmd_portfolio_interactive() -> None:
+    """ポートフォリオ対話モード（mebuki portfolio サブコマンドなし時に起動）"""
+    while True:
+        print("\nポートフォリオアクション:")
+        print("  a) 保有追加")
+        print("  b) 売却")
+        print("  c) ポジション削除")
+        print("  d) 銘柄一覧")
+        print("  e) 保有明細")
+        print("  q) 終了")
+        raw = input("選択: ").strip().lower()
+
+        if raw == "q":
+            break
+
+        if raw == "a":
+            code = input("銘柄コード: ").strip()
+            qty_str = input("数量: ").strip()
+            price_str = input("取得単価 (円): ").strip()
+            broker, account = _ask_broker_and_account()
+            date = input("取得日 (YYYY-MM-DD, 省略可): ").strip()
+            name = input("銘柄名 (省略で自動取得): ").strip()
+            if code and qty_str and price_str:
+                try:
+                    cmd_portfolio(argparse.Namespace(
+                        portfolio_subcommand="add",
+                        code=code,
+                        quantity=int(qty_str),
+                        cost_price=float(price_str),
+                        broker=broker,
+                        account=account,
+                        date=date or "",
+                        name=name or "",
+                        format="table",
+                    ))
+                except ValueError:
+                    print("エラー: 数量・単価は数値で入力してください")
+            else:
+                print("エラー: 銘柄コード・数量・単価は必須です")
+
+        elif raw == "b":
+            code = input("銘柄コード: ").strip()
+            qty_str = input("売却数量: ").strip()
+            broker, account = _ask_broker_and_account()
+            if code and qty_str:
+                try:
+                    cmd_portfolio(argparse.Namespace(
+                        portfolio_subcommand="sell",
+                        code=code,
+                        quantity=int(qty_str),
+                        broker=broker,
+                        account=account,
+                        format="table",
+                    ))
+                except ValueError:
+                    print("エラー: 数量は整数で入力してください")
+            else:
+                print("エラー: 銘柄コード・数量は必須です")
+
+        elif raw == "c":
+            code = input("銘柄コード: ").strip()
+            broker, account = _ask_broker_and_account()
+            if code:
+                cmd_portfolio(argparse.Namespace(
+                    portfolio_subcommand="remove",
+                    code=code,
+                    broker=broker,
+                    account=account,
+                    format="table",
+                ))
+            else:
+                print("エラー: 銘柄コードは必須です")
+
+        elif raw == "d":
+            cmd_portfolio(argparse.Namespace(
+                portfolio_subcommand="list",
+                detail=False,
+                format="table",
+            ))
+
+        elif raw == "e":
+            cmd_portfolio(argparse.Namespace(
+                portfolio_subcommand="list",
+                detail=True,
+                format="table",
+            ))
 
 
 def cmd_watch(args):
@@ -62,6 +179,10 @@ def cmd_portfolio(args):
     from mebuki.services.portfolio_service import portfolio_service
 
     sub = args.portfolio_subcommand
+    if sub is None:
+        cmd_portfolio_interactive()
+        return
+
     fmt = getattr(args, 'format', 'table')
 
     if sub == "add":

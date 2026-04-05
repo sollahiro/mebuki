@@ -7,7 +7,6 @@ from mebuki.app.cli import (  # noqa: F401
     build_parser,
     cmd_analyze,
     cmd_config,
-    cmd_interactive,
     cmd_mcp,
     cmd_search,
     main,
