@@ -69,8 +69,9 @@ class CacheManager:
         if metadata_path.exists():
             try:
                 with open(metadata_path, "r", encoding="utf-8") as f:
-                    self._metadata_cache = json.load(f)
-                    return self._metadata_cache
+                    data: Dict[str, str] = json.load(f)
+                    self._metadata_cache = data
+                    return data
             except (json.JSONDecodeError, IOError):
                 pass
         self._metadata_cache = {}

@@ -78,7 +78,7 @@ def extract_annual_data(
         # 年度終了日が未来の場合は除外
         if fy_end:
             year, month = extract_year_month(fy_end)
-            if year is None:
+            if year is None or month is None:
                 # 形式が不明な場合は含める
                 annual_data.append(record)
                 continue
