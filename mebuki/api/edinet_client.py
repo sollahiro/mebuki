@@ -179,7 +179,6 @@ class EdinetAPIClient:
         years: Optional[List[int]] = None,
         doc_type_code: Optional[str] = None,
         jquants_data: Optional[List[Dict[str, Any]]] = None,
-        edinet_code: Optional[str] = None,
         max_documents: int = 2
     ) -> List[Dict[str, Any]]:
         """
@@ -276,14 +275,9 @@ class EdinetAPIClient:
                     for date_str in batch:
                         documents = results_map.get(date_str, [])
                         for doc in documents:
-                            current_edinet_code = doc.get("edinetCode")
                             sec_code = str(doc.get("secCode", "")).strip()
 
-                            is_match = False
-                            if edinet_code and current_edinet_code == edinet_code:
-                                is_match = True
-                            elif sec_code.startswith(code_4digit):
-                                is_match = True
+                            is_match = sec_code.startswith(code_4digit)
 
                             if is_match:
                                 dt = doc.get("docTypeCode", "")

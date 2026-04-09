@@ -220,6 +220,8 @@ async def cmd_price(args):
     except Exception as e:
         print(f"エラー: {e}")
         logger.exception(e)
+    finally:
+        await data_service.close()
 
 
 async def cmd_filings(args):
@@ -255,6 +257,8 @@ async def cmd_filings(args):
     except Exception as e:
         print(f"エラー: {e}")
         logger.exception(e)
+    finally:
+        await data_service.close()
 
 
 async def cmd_filing(args):
@@ -293,5 +297,7 @@ async def cmd_filing(args):
     except Exception as e:
         print(f"エラー: {e}")
         logger.exception(e)
+    finally:
+        await data_service.close()
 
 

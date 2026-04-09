@@ -77,11 +77,10 @@ class IndividualAnalyzer:
         code: str,
         financial_data: List[Dict[str, Any]],
         max_documents: int = 20,
-        edinet_code: Optional[str] = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """EDINET書類を取得し、準備ができた段階で順次yieldする"""
         async for item in self._edinet_fetcher.fetch_edinet_reports_stream(
-            code, financial_data, max_documents, edinet_code
+            code, financial_data, max_documents
         ):
             yield item
 
@@ -91,12 +90,11 @@ class IndividualAnalyzer:
         years: List[int],
         jquants_annual_data: Optional[List[Dict[str, Any]]] = None,
         progress_callback: Optional[Callable] = None,
-        edinet_code: Optional[str] = None,
         max_documents: int = 20,
     ) -> Dict[int, List[Dict[str, Any]]]:
         """指定年度の有価証券報告書を取得（同期互換用）"""
         return self._edinet_fetcher.fetch_edinet_reports(
-            code, years, jquants_annual_data, progress_callback, edinet_code, max_documents
+            code, years, jquants_annual_data, progress_callback, max_documents
         )
 
     # ------------------------------------------------------------------
@@ -107,7 +105,6 @@ class IndividualAnalyzer:
         self,
         code: str,
         financial_data: List[Dict[str, Any]],
-        edinet_code: Optional[str],
         result: Dict[str, Any],
         queue: asyncio.Queue,
     ) -> None:
@@ -115,7 +112,7 @@ class IndividualAnalyzer:
         try:
             existing_indices: Dict[str, Dict[str, int]] = {}
             async for data in self._edinet_fetcher.fetch_edinet_reports_stream(
-                code, financial_data, edinet_code=edinet_code
+                code, financial_data
             ):
                 fy_key = data["fy_key"]
                 report = data["report"]
@@ -170,9 +167,8 @@ class IndividualAnalyzer:
             max_years = settings_store.get_max_analysis_years()
             analysis_years = min(available_years, max_years)
 
-            edinet_code = stock_info.get("EdinetCode")
             edinet_task = asyncio.create_task(
-                self._edinet_flow(code, financial_data, edinet_code, result, queue)
+                self._edinet_flow(code, financial_data, result, queue)
             )
             prices = await self._financial_fetcher.fetch_prices(code, annual_data, analysis_years)
             metrics = await self._financial_fetcher.calculate_metrics(code, annual_data, prices, analysis_years)
@@ -280,7 +276,7 @@ class IndividualAnalyzer:
 
             edinet_task = asyncio.create_task(
                 self._edinet_fetcher.fetch_edinet_data_async(
-                    code, financial_data, edinet_code=stock_info.get("EdinetCode")
+                    code, financial_data
                 )
             )
 

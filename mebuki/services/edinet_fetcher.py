@@ -33,19 +33,14 @@ class EdinetFetcher:
         code: str,
         financial_data: List[Dict[str, Any]],
         max_documents: int = 10,
-        edinet_code: Optional[str] = None,
     ) -> Dict[str, Any]:
         """EDINETデータを非同期で取得"""
         if not self.edinet_client:
             return {}
         try:
-            if edinet_code is None:
-                master_data = await self.api_client.get_equity_master(code=code)
-                edinet_code = master_data[0].get("EdinetCode") if master_data else None
-
             results = {}
             async for data in self.fetch_edinet_reports_stream(
-                code, financial_data, max_documents, edinet_code=edinet_code
+                code, financial_data, max_documents
             ):
                 fy_key = data["fy_key"]
                 report = data["report"]
@@ -64,7 +59,6 @@ class EdinetFetcher:
         code: str,
         financial_data: List[Dict[str, Any]],
         max_documents: int = 20,
-        edinet_code: Optional[str] = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """EDINET書類を取得し、準備ができた段階で順次yieldする"""
         if not self.edinet_client or not self.edinet_client.api_key:
@@ -72,10 +66,6 @@ class EdinetFetcher:
             return
 
         try:
-            if not edinet_code:
-                master_data = await self.api_client.get_equity_master(code=code)
-                edinet_code = master_data[0].get("EdinetCode") if master_data else None
-
             annual_data_idx, years_list = prepare_edinet_search_data(
                 financial_data, max_records=max_documents * 3
             )
@@ -84,7 +74,6 @@ class EdinetFetcher:
                 code,
                 years=years_list,
                 jquants_data=annual_data_idx,
-                edinet_code=edinet_code,
                 max_documents=max_documents,
             )
 
@@ -104,7 +93,6 @@ class EdinetFetcher:
                 report_info = {
                     "docID": doc_id,
                     "submitDate": doc.get("submitDateTime", "")[:10],
-                    "edinetCode": doc.get("edinetCode"),
                     "docType": label,
                     "docTypeCode": dt,
                     "fiscal_year": year,
@@ -122,7 +110,6 @@ class EdinetFetcher:
         years: List[int],
         jquants_annual_data: Optional[List[Dict[str, Any]]] = None,
         progress_callback: Optional[Callable] = None,
-        edinet_code: Optional[str] = None,
         max_documents: int = 20,
     ) -> Dict[int, List[Dict[str, Any]]]:
         """指定年度の有価証券報告書を取得"""
