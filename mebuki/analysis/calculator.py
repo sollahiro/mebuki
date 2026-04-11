@@ -113,6 +113,17 @@ def _filter_annual_data(annual_data: List[Dict[str, Any]], analysis_years: int) 
         if not is_valid_financial_record(year_data):
             continue
 
+        # FYレコードは財務実績データ必須
+        # 業績予想修正（EarnForecastRevision）などの空レコードが
+        # CurFYEn+DiscDateの緩和条件で通過するのを防ぐ
+        if per_type == "FY" and not (
+            is_valid_value(year_data.get("Sales"))
+            or is_valid_value(year_data.get("OP"))
+            or is_valid_value(year_data.get("NP"))
+            or is_valid_value(year_data.get("Eq"))
+        ):
+            continue
+
         years_data.append(year_data)
         seen_entries.add(dedup_key)
         if per_type == "FY":
