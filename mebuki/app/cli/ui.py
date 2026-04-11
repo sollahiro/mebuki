@@ -1,6 +1,31 @@
 import logging
+import sys
+import termios
+import tty
 
 logger = logging.getLogger(__name__)
+
+
+def getch() -> str:
+    """1文字だけ読み取って返す（Enter不要）。TTY以外では通常のinput()にフォールバック。"""
+    if not sys.stdin.isatty():
+        return input().strip()[:1]
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    return ch
+
+
+def confirm(prompt: str) -> bool:
+    """y/N プロンプトを表示し、1文字入力で即座に判定して返す。"""
+    print(prompt, end="", flush=True)
+    ch = getch()
+    print(ch)  # 入力文字をエコー
+    return ch.lower() == "y"
 
 _PAGE_SIZE = 10  # a-j
 
@@ -28,7 +53,7 @@ def select_stock_from_results(results: list[dict], prompt: str, cancel_text: str
         nav.append(f"q) {cancel_text}")
         print("  " + "  ".join(nav))
 
-        raw = input("選択: ").strip().lower()
+        raw = getch().strip().lower()
         if raw == "q":
             return None
         if raw == "n" and page < total_pages - 1:
