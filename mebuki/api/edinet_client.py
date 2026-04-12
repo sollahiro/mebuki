@@ -233,12 +233,6 @@ class EdinetAPIClient:
                 search_start = disc_date_obj
                 search_end = min(period_end_date + timedelta(days=97), now)
 
-                # DiscDateが期末+97日より遅い場合、ウィンドウが空になる
-                # → 法定上限120日 + 余裕7日 = 127日でフォールバック
-                if search_start > search_end:
-                    search_start = disc_date_obj
-                    search_end = min(period_end_date + timedelta(days=127), now)
-
                 target_doc_types = [doc_type_code] if doc_type_code else (
                     ["120"] if period_type == "FY" else (
                         ["140", "160"] if period_type in ["2Q", "Q2"] else []
@@ -248,61 +242,59 @@ class EdinetAPIClient:
                 if not target_doc_types:
                     continue
 
-                logger.info(f"🔍 [EDINET] Searching period={period_type}, fiscal_year={fiscal_year}, target={search_end.strftime('%Y-%m-%d')} back to {search_start.strftime('%Y-%m-%d')}")
+                async def _search_dates(start: datetime, end: datetime) -> bool:
+                    """start〜end の日付範囲を後方探索し、マッチした場合 True を返す"""
+                    if start > end:
+                        return False
+                    dates = []
+                    curr = end
+                    while curr >= start:
+                        dates.append(curr.strftime("%Y-%m-%d"))
+                        curr -= timedelta(days=1)
 
-                # 検索対象の日付リストを「新しい順（後方）」に生成
-                target_dates = []
-                curr = search_end
-                while curr >= search_start:
-                    target_dates.append(curr.strftime("%Y-%m-%d"))
-                    curr -= timedelta(days=1)
+                    logger.info(f"🔍 [EDINET] Searching period={period_type}, fiscal_year={fiscal_year}, target={end.strftime('%Y-%m-%d')} back to {start.strftime('%Y-%m-%d')}")
 
-                found_for_this_record = False
+                    for i in range(0, len(dates), MAX_WORKERS):
+                        batch = dates[i:i + MAX_WORKERS]
+                        batch_results = await asyncio.gather(
+                            *[self._get_documents_for_date(d) for d in batch],
+                            return_exceptions=True,
+                        )
+                        results_map: Dict[str, List[Dict[str, Any]]] = {}
+                        for date_str, result in zip(batch, batch_results):
+                            if isinstance(result, Exception):
+                                logger.error(f"Error fetching docs for {date_str}: {result}")
+                                results_map[date_str] = []
+                            else:
+                                results_map[date_str] = result
 
-                # 並列で日付一覧を取得（バッチ処理）
-                BATCH_SIZE = MAX_WORKERS
-                for i in range(0, len(target_dates), BATCH_SIZE):
-                    batch = target_dates[i:i + BATCH_SIZE]
-
-                    batch_results = await asyncio.gather(
-                        *[self._get_documents_for_date(d) for d in batch],
-                        return_exceptions=True,
-                    )
-
-                    results_map: Dict[str, List[Dict[str, Any]]] = {}
-                    for date_str, result in zip(batch, batch_results):
-                        if isinstance(result, Exception):
-                            logger.error(f"Error fetching docs for {date_str}: {result}")
-                            results_map[date_str] = []
-                        else:
-                            results_map[date_str] = result
-
-                    # バッチ内の日付を「新しい順」に走査してマッチング
-                    for date_str in batch:
-                        documents = results_map.get(date_str, [])
-                        for doc in documents:
-                            sec_code = str(doc.get("secCode", "")).strip()
-
-                            is_match = sec_code.startswith(code_4digit)
-
-                            if is_match:
+                        for date_str in batch:
+                            for doc in results_map.get(date_str, []):
+                                sec_code = str(doc.get("secCode", "")).strip()
+                                if not sec_code.startswith(code_4digit):
+                                    continue
                                 dt = doc.get("docTypeCode", "")
-                                if not target_doc_types or dt in target_doc_types:
-                                    desc = doc.get("docDescription", "")
-                                    if desc and ("訂正" in desc or "補正" in desc):
-                                        continue
+                                if target_doc_types and dt not in target_doc_types:
+                                    continue
+                                desc = doc.get("docDescription", "")
+                                if desc and ("訂正" in desc or "補正" in desc):
+                                    continue
+                                logger.info(f"✨ [EDINET HIT] {sec_code}: {desc} ({date_str}) ID={doc.get('docID')}")
+                                doc["fiscal_year"] = fiscal_year
+                                doc["jquants_fy_end"] = fy_end
+                                doc["period_type"] = period_type
+                                all_documents.append(doc)
+                                return True
+                    return False
 
-                                    logger.info(f"✨ [EDINET HIT] {sec_code}: {desc} ({date_str}) ID={doc.get('docID')}")
-                                    doc["fiscal_year"] = fiscal_year
-                                    doc["jquants_fy_end"] = fy_end
-                                    doc["period_type"] = period_type
-                                    all_documents.append(doc)
-                                    found_for_this_record = True
-                                    break
-                        if found_for_this_record:
-                            break
-                    if found_for_this_record:
-                        break
+                found_for_this_record = await _search_dates(search_start, search_end)
+
+                # 通常ウィンドウ（97日）で見つからない場合、法定上限127日まで延長して差分を再検索
+                if not found_for_this_record:
+                    extended_end = min(period_end_date + timedelta(days=127), now)
+                    if extended_end > search_end:
+                        logger.info(f"🔁 [EDINET] Fallback search: {(search_end + timedelta(days=1)).strftime('%Y-%m-%d')} to {extended_end.strftime('%Y-%m-%d')}")
+                        found_for_this_record = await _search_dates(search_end + timedelta(days=1), extended_end)
 
             except Exception as e:
                 logger.error(f"❌ [EDINET] Error processing record: {e}", exc_info=True)
