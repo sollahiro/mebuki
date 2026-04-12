@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['mebuki/cli.py'],
+    ['mebuki/__main__.py'],
     pathex=[],
     binaries=[],
     datas=[('assets/data_j.csv', 'assets')],
