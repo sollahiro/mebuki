@@ -307,8 +307,7 @@ class DataService:
             "edinet_data": result["edinet_data"],
             "analyzed_at": datetime.now().isoformat(),
         }
-        if use_cache:
-            self.cache_manager.set(f"individual_analysis_{code}", formatted)
+        self.cache_manager.set(f"individual_analysis_{code}", formatted)
         return formatted
 
 
