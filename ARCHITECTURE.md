@@ -7,19 +7,17 @@
 ```
 mebuki/
 ├── mebuki/
+│   ├── __main__.py        # python -m mebuki エントリポイント
 │   ├── app/               # エントリポイント層 (CLI/MCP)
 │   │   ├── cli/           # CLI サブパッケージ
 │   │   │   ├── main.py        # エントリポイント・ディスパッチャ
 │   │   │   ├── parser.py      # argparse パーサー定義
-│   │   │   ├── analyze.py     # search/analyze/price/filings/filing/visualize コマンド
+│   │   │   ├── analyze.py     # search/analyze/price/filings/filing コマンド
 │   │   │   ├── config.py      # config コマンド
 │   │   │   ├── mcp.py         # mcp コマンド
 │   │   │   ├── portfolio.py   # watch/portfolio コマンド
-│   │   │   ├── interactive.py # 対話モード
 │   │   │   └── ui.py          # バナー・UI補助
-│   │   └── mcp_server.py  # MCP サーバー (全10ツール)
-│   ├── cli.py             # 後方互換エントリポイント (deprecated shim)
-│   ├── mcp_server.py      # 後方互換エントリポイント (deprecated shim)
+│   │   └── mcp_server.py  # MCP サーバー (全9ツール)
 │   ├── services/          # ユースケース層 (分析/検索/集約)
 │   │   ├── data_service.py
 │   │   ├── analyzer.py

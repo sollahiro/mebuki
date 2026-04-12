@@ -148,7 +148,7 @@ def _get_mcp_command():
         symlink = shutil.which("mebuki")
         executable = symlink if symlink else sys.executable
         return executable, ["mcp", "start"]
-    return sys.executable, ["-m", "mebuki.cli", "mcp", "start"]
+    return sys.executable, ["-m", "mebuki", "mcp", "start"]
 
 
 def cmd_mcp(args, parser):
