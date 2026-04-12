@@ -154,12 +154,13 @@ class DataService:
         scope: str = "overview",
         use_cache: bool = True,
         include_2q: bool = False,
+        analysis_years: Optional[int] = None,
     ) -> Any:
         """財務データ取得の統一公開API。"""
         analyzer = self.get_analyzer(use_cache=use_cache)
 
         if scope == "overview":
-            result = await self.get_raw_analysis_data(code, use_cache=use_cache, include_2q=include_2q)
+            result = await self.get_raw_analysis_data(code, use_cache=use_cache, include_2q=include_2q, analysis_years=analysis_years)
             try:
                 await self._refresh_earnings_calendar_if_needed()
                 self._attach_upcoming_earnings(result, code)
@@ -168,7 +169,7 @@ class DataService:
             return result
 
         if scope == "metrics":
-            metrics = await analyzer.get_metrics(code, include_2q=include_2q)
+            metrics = await analyzer.get_metrics(code, analysis_years=analysis_years, include_2q=include_2q)
             result = metrics or {}
             try:
                 await self._refresh_earnings_calendar_if_needed()

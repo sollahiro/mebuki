@@ -235,7 +235,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                     )
                 else:
                     result = await asyncio.wait_for(
-                        data_service.get_financial_data(code, scope=scope or "overview", use_cache=use_cache),
+                        data_service.get_financial_data(code, scope=scope or "overview", use_cache=use_cache, analysis_years=years),
                         timeout=180.0,
                     )
             except asyncio.TimeoutError:
