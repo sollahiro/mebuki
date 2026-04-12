@@ -62,6 +62,9 @@ def _yaml_parse_block(lines: list, start: int, base_indent: int):
         elif ':' in stripped:
             if result is None:
                 result = {}
+            elif isinstance(result, list):
+                # リスト解析中に mapping キーが現れたら親ブロックへ戻る
+                break
             colon = stripped.index(':')
             key = stripped[:colon].strip()
             rest = stripped[colon + 1:].strip()
@@ -74,7 +77,10 @@ def _yaml_parse_block(lines: list, start: int, base_indent: int):
                     j += 1
                 if j < len(lines):
                     ni = len(lines[j]) - len(lines[j].lstrip())
-                    if ni > indent:
+                    next_stripped = lines[j].lstrip()
+                    # ni > indent: 通常の深いブロック
+                    # ni == indent かつ次行がリスト項目: YAML の同インデント block sequence
+                    if ni > indent or (ni == indent and (next_stripped.startswith('- ') or next_stripped == '-')):
                         sub, i = _yaml_parse_block(lines, j, ni)
                         result[key] = sub
                     else:
