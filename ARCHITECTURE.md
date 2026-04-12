@@ -17,7 +17,7 @@ mebuki/
 │   │   │   ├── mcp.py         # mcp コマンド
 │   │   │   ├── portfolio.py   # watch/portfolio コマンド
 │   │   │   └── ui.py          # バナー・UI補助
-│   │   └── mcp_server.py  # MCP サーバー (全9ツール)
+│   │   └── mcp_server.py  # MCP サーバー (全9ツール: 検索・財務・株価・有報・ウォッチリスト・ポートフォリオ)
 │   ├── services/          # ユースケース層 (分析/検索/集約)
 │   │   ├── data_service.py
 │   │   ├── analyzer.py
