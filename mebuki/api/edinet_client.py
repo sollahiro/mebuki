@@ -233,6 +233,12 @@ class EdinetAPIClient:
                 search_start = disc_date_obj
                 search_end = min(period_end_date + timedelta(days=97), now)
 
+                # DiscDateが期末+97日より遅い場合、ウィンドウが空になる
+                # → 法定上限120日 + 余裕7日 = 127日でフォールバック
+                if search_start > search_end:
+                    search_start = disc_date_obj
+                    search_end = min(period_end_date + timedelta(days=127), now)
+
                 target_doc_types = [doc_type_code] if doc_type_code else (
                     ["120"] if period_type == "FY" else (
                         ["140", "160"] if period_type in ["2Q", "Q2"] else []
