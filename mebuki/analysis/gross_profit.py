@@ -45,14 +45,19 @@ _GP_RELEVANT_TAGS: frozenset[str] = frozenset(
 )
 
 # 損益計算書（Duration）コンテキストパターン
+# 年次: CurrentYearDuration / 新形式半期: InterimDuration / 旧形式半期・四半期: CurrentYTDDuration
 DURATION_CONTEXT_PATTERNS = [
     "CurrentYearDuration",
     "FilingDateDuration",
+    "InterimDuration",
+    "CurrentYTDDuration",
 ]
 
 PRIOR_DURATION_CONTEXT_PATTERNS = [
     "Prior1YearDuration",
     "PriorYearDuration",
+    "Prior1InterimDuration",
+    "Prior1YTDDuration",
 ]
 
 

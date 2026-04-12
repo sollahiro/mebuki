@@ -101,13 +101,15 @@ async def cmd_analyze(args):
             print(sep)
 
             half_metrics_to_show = [
-                ("売上高 (百万)",    lambda d: d.get("Sales")),
-                ("営業利益 (百万)",  lambda d: d.get("OP")),
-                ("営業利益率 (%)",   lambda d: d.get("OperatingMargin")),
-                ("純利益 (百万)",    lambda d: d.get("NP")),
-                ("営業CF (百万)",    lambda d: d.get("CFO")),
-                ("投資CF (百万)",    lambda d: d.get("CFI")),
-                ("フリーCF (百万)",  lambda d: d.get("FreeCF")),
+                ("売上高 (百万)",      lambda d: d.get("Sales")),
+                ("売上総利益 (百万)",  lambda d: d.get("GrossProfit")),
+                ("粗利率 (%)",         lambda d: d.get("GrossProfitMargin")),
+                ("営業利益 (百万)",    lambda d: d.get("OP")),
+                ("営業利益率 (%)",     lambda d: d.get("OperatingMargin")),
+                ("純利益 (百万)",      lambda d: d.get("NP")),
+                ("営業CF (百万)",      lambda d: d.get("CFO")),
+                ("投資CF (百万)",      lambda d: d.get("CFI")),
+                ("フリーCF (百万)",    lambda d: d.get("FreeCF")),
             ]
 
             for label, func in half_metrics_to_show:

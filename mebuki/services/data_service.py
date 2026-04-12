@@ -3,6 +3,7 @@
 純粋なデータ取得・計算ロジック（LLM非依存）
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, date
 from pathlib import Path
@@ -196,6 +197,15 @@ class DataService:
     ) -> List[Dict[str, Any]]:
         """H1/H2 の半期財務データを返す。"""
         from mebuki.utils.financial_data import build_half_year_periods
+        from mebuki.services.edinet_fetcher import EdinetFetcher
+        from mebuki.utils.converters import to_float
+        from mebuki.constants.financial import MILLION_YEN
+
+        cache_key = f"half_year_periods_{code}_{years}"
+        if use_cache:
+            cached = self.cache_manager.get(cache_key)
+            if cached and cached.get("_cache_version") == _CACHE_VERSION:
+                return cached["periods"]
 
         financial_data = await self.api_client.get_financial_summary(
             code=code,
@@ -204,7 +214,120 @@ class DataService:
         )
         if not financial_data:
             return []
-        return build_half_year_periods(financial_data, years=years)
+
+        base_periods = build_half_year_periods(financial_data, years=years)
+        if not base_periods:
+            return base_periods
+
+        # EDINET からの補完（GrossProfit + CFO/CFI for H1）
+        # 表示中の FY 数だけ 2Q EDINET を取得（26H1 等の extra 分も含む）
+        unique_fy_ends = len(set(p["fy_end"] for p in base_periods))
+        edinet_fetcher = EdinetFetcher(self.api_client, self.edinet_client)
+        try:
+            half_edinet, fy_gp = await asyncio.gather(
+                edinet_fetcher.extract_half_year_edinet_data(code, financial_data, max_years=unique_fy_ends),
+                edinet_fetcher.extract_gross_profit_by_year(code, financial_data, max_years=years),
+            )
+        except Exception as e:
+            logger.warning(f"[HALF] {code}: EDINET補完スキップ - {e}")
+            return base_periods
+
+        # FY J-Quants レコードを fy_end → record で引けるようにしておく
+        fy_by_end: Dict[str, Dict] = {}
+        for r in financial_data:
+            if r.get("CurPerType") == "FY":
+                fy_end_8 = r.get("CurFYEn", "").replace("-", "")
+                if fy_end_8:
+                    fy_by_end[fy_end_8] = r
+
+        # H1 期間で確定した EDINET CF 値を H2 計算に引き継ぐ
+        h1_edinet_by_fy: Dict[str, Dict] = {}
+
+        for period in base_periods:
+            fy_end_8 = period["fy_end"].replace("-", "")
+            half = period["half"]
+            data = period["data"]
+
+            if half == "H1":
+                edinet_q2 = half_edinet.get(fy_end_8, {})
+                gp_result = edinet_q2.get("gp")
+                cf_result = edinet_q2.get("cf")
+
+                # GrossProfit（H1 = 2Q XBRL の current 値）
+                h1_gp_m = None
+                if gp_result and gp_result.get("current") is not None:
+                    h1_gp_m = gp_result["current"] / MILLION_YEN
+                    sales = data.get("Sales")
+                    data["GrossProfit"] = h1_gp_m
+                    data["GrossProfitMargin"] = h1_gp_m / sales * 100 if sales else None
+
+                # CFO/CFI（H1 = 2Q XBRL の current 値）
+                h1_cfo_m = h1_cfi_m = None
+                if cf_result:
+                    cfo_raw = cf_result["cfo"].get("current")
+                    cfi_raw = cf_result["cfi"].get("current")
+                    if cfo_raw is not None:
+                        h1_cfo_m = cfo_raw / MILLION_YEN
+                        data["CFO"] = h1_cfo_m
+                    if cfi_raw is not None:
+                        h1_cfi_m = cfi_raw / MILLION_YEN
+                        data["CFI"] = h1_cfi_m
+                    if h1_cfo_m is not None and h1_cfi_m is not None:
+                        data["FreeCF"] = h1_cfo_m + h1_cfi_m
+
+                h1_edinet_by_fy[fy_end_8] = {
+                    "gp_m": h1_gp_m,
+                    "cfo_m": h1_cfo_m,
+                    "cfi_m": h1_cfi_m,
+                }
+
+            elif half == "H2":
+                h1 = h1_edinet_by_fy.get(fy_end_8, {})
+                fy_rec = fy_by_end.get(fy_end_8, {})
+
+                # H2 CFO/CFI = FY（J-Quants）- H1（EDINET 2Q）
+                fy_cfo = to_float(fy_rec.get("CFO"))
+                fy_cfi = to_float(fy_rec.get("CFI"))
+                fy_cfo_m = fy_cfo / MILLION_YEN if fy_cfo is not None else None
+                fy_cfi_m = fy_cfi / MILLION_YEN if fy_cfi is not None else None
+
+                h1_cfo_m = h1.get("cfo_m")
+                h1_cfi_m = h1.get("cfi_m")
+
+                if fy_cfo_m is not None and h1_cfo_m is not None:
+                    data["CFO"] = fy_cfo_m - h1_cfo_m
+                if fy_cfi_m is not None and h1_cfi_m is not None:
+                    data["CFI"] = fy_cfi_m - h1_cfi_m
+                cfo = data.get("CFO")
+                cfi = data.get("CFI")
+                if cfo is not None and cfi is not None:
+                    data["FreeCF"] = cfo + cfi
+
+                # H2 GP = FY EDINET GP - H1 EDINET 2Q GP
+                fy_gp_result = fy_gp.get(fy_end_8)
+                h1_gp_m = h1.get("gp_m")
+                if fy_gp_result and fy_gp_result.get("current") is not None:
+                    fy_gp_m = fy_gp_result["current"] / MILLION_YEN
+                    if h1_gp_m is not None:
+                        h2_gp_m = fy_gp_m - h1_gp_m
+                        sales = data.get("Sales")
+                        data["GrossProfit"] = h2_gp_m
+                        data["GrossProfitMargin"] = h2_gp_m / sales * 100 if sales else None
+
+            else:
+                # FY のみ（2Q データなし）: EDINET FY GP を付与
+                fy_gp_result = fy_gp.get(fy_end_8)
+                if fy_gp_result and fy_gp_result.get("current") is not None:
+                    gp_m = fy_gp_result["current"] / MILLION_YEN
+                    sales = data.get("Sales")
+                    data["GrossProfit"] = gp_m
+                    data["GrossProfitMargin"] = gp_m / sales * 100 if sales else None
+
+        self.cache_manager.set(cache_key, {
+            "_cache_version": _CACHE_VERSION,
+            "periods": base_periods,
+        })
+        return base_periods
 
     async def get_price_data(self, code: str, days: int = 365) -> List[Dict[str, Any]]:
         """株価履歴データを取得"""

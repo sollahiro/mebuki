@@ -119,6 +119,27 @@ GROSS_PROFIT_COMPONENT_DEFINITIONS: List[Dict[str, Any]] = [
 
 # 複数の構成要素を集約したIFRSタグ。
 # 粒度別タグが存在しない場合に、カバーする個別コンポーネントを置き換える。
+# キャッシュフロー（CF）タグ定義
+# analysis/cash_flow.py で使用
+
+# 営業活動によるキャッシュフロー
+CF_OPERATING_TAGS: List[str] = [
+    "NetCashProvidedByUsedInOperatingActivities",                       # J-GAAP 連結（CF計算書）
+    "NetCashProvidedByUsedInOperatingActivitiesSummaryOfBusinessResults", # J-GAAP 連結（決算短信）
+    "CashFlowsFromUsedInOperationsIFRS",                                # IFRS（間接法）
+    "CashFlowsFromUsedInOperatingActivitiesIFRS",                       # IFRS（直接法）
+    "CashFlowsFromUsedInOperatingActivitiesIFRSSummaryOfBusinessResults", # IFRS（決算短信）
+]
+
+# 投資活動によるキャッシュフロー
+CF_INVESTING_TAGS: List[str] = [
+    "NetCashProvidedByUsedInInvestingActivities",                       # J-GAAP 連結（CF計算書）
+    "NetCashProvidedByUsedInInvestingActivitiesSummaryOfBusinessResults", # J-GAAP 連結（決算短信）
+    "CashFlowsUsedInInvestingActivitiesIFRS",                           # IFRS
+    "CashFlowsFromUsedInInvestingActivitiesIFRS",                       # IFRS（代替）
+    "CashFlowsFromUsedInInvestingActivitiesIFRSSummaryOfBusinessResults", # IFRS（決算短信）
+]
+
 AGGREGATE_IFRS_DEFINITIONS: List[Dict[str, Any]] = [
     {
         "tag": "CurrentPortionOfLongTermDebtCLIFRS",  # 1年内長期有利子負債（社債+借入金を集約）

@@ -202,7 +202,14 @@ def build_half_year_periods(
             if not existing or record.get("DiscDate", "") >= existing.get("DiscDate", ""):
                 q2_by_end[fy_end] = record
 
-    fy_ends_selected = sorted(fy_by_end.keys(), reverse=True)[:years]
+    # FY レコードが存在する期間を最新 years 件取得
+    fy_ends_with_fy = sorted(fy_by_end.keys(), reverse=True)[:years]
+
+    # FY 未開示だが 2Q が存在する最新期間を追加（例: 当期 FY 開示前の H1）
+    newest_fy = fy_ends_with_fy[0] if fy_ends_with_fy else ""
+    extra_q2_only = [e for e in q2_by_end if e > newest_fy]
+
+    fy_ends_selected = sorted(set(fy_ends_with_fy) | set(extra_q2_only), reverse=True)
 
     def _m(value: Any) -> Optional[float]:
         v = to_float(value)
@@ -238,9 +245,26 @@ def build_half_year_periods(
 
     periods: List[Dict[str, Any]] = []
     for fy_end in sorted(fy_ends_selected):  # 古い順
-        fy_rec = fy_by_end[fy_end]
+        fy_rec = fy_by_end.get(fy_end)
         q2_rec = q2_by_end.get(fy_end)
         yr = _label_year(fy_end)
+
+        # FY レコード未開示（当期進行中）: H1 のみ表示
+        if fy_rec is None:
+            if q2_rec and is_valid_financial_record(q2_rec):
+                periods.append({
+                    "label": f"{yr}H1",
+                    "half": "H1",
+                    "fy_end": fy_end,
+                    "data": _make_data(
+                        _m(q2_rec.get("Sales")),
+                        _m(q2_rec.get("OP")),
+                        _m(q2_rec.get("NP")),
+                        _m(q2_rec.get("CFO")),
+                        _m(q2_rec.get("CFI")),
+                    ),
+                })
+            continue
 
         if q2_rec and is_valid_financial_record(q2_rec):
             periods.append({

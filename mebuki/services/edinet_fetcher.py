@@ -192,6 +192,93 @@ class EdinetFetcher:
         logger.info(f"[IBD] {code}: IBD抽出完了 {len(ibd_by_year)}件 {_elapsed:.2f}s")
         return ibd_by_year
 
+    async def extract_half_year_edinet_data(
+        self,
+        code: str,
+        financial_data: List[Dict[str, Any]],
+        max_years: int,
+    ) -> Dict[str, dict]:
+        """2Q期間のEDINETデータ（GrossProfit + CF）を年度別に抽出。
+
+        Returns: { "YYYYMMDD": {"gp": gp_result_dict, "cf": cf_result_dict} }
+        """
+        from mebuki.analysis.gross_profit import extract_gross_profit
+        from mebuki.analysis.cash_flow import extract_cash_flow
+
+        if not self.edinet_client or not self.edinet_client.api_key:
+            return {}
+
+        # 2Qレコードのみ抽出（未来の開示日を除外して最新max_years件）
+        today = time.time()
+        from datetime import datetime as _dt
+        now = _dt.now()
+
+        q2_records = []
+        for r in financial_data:
+            if r.get("CurPerType") != "2Q":
+                continue
+            disc_date = r.get("DiscDate", "")
+            if disc_date:
+                from mebuki.utils.fiscal_year import parse_date_string as _parse
+                dt = _parse(disc_date)
+                if dt and dt > now:
+                    continue
+            q2_records.append(r)
+
+        q2_records = sorted(q2_records, key=lambda x: x.get("CurFYEn", ""), reverse=True)[:max_years]
+        if not q2_records:
+            return {}
+
+        docs = await self.edinet_client.search_documents(
+            code=code,
+            jquants_data=q2_records,
+            max_documents=max_years,
+        )
+        logger.info(f"[HALF-EDINET] {code}: {len(docs)}件の2Q文書を検索")
+
+        async def _process_doc(doc: dict) -> tuple[str, dict | None]:
+            fy_end_8 = doc.get("jquants_fy_end", "").replace("-", "")
+            if not fy_end_8:
+                return "", None
+            try:
+                xbrl_dir = await asyncio.wait_for(
+                    self.edinet_client.download_document(doc["docID"], 1),
+                    timeout=30.0,
+                )
+                if not xbrl_dir:
+                    logger.warning(f"[HALF-EDINET] {code} {fy_end_8}: XBRLダウンロード失敗")
+                    return fy_end_8, None
+                gp = extract_gross_profit(Path(xbrl_dir))
+                cf = extract_cash_flow(Path(xbrl_dir))
+                logger.info(
+                    f"[HALF-EDINET] {code} {fy_end_8}: "
+                    f"gp={gp.get('current')}, cfo={cf['cfo'].get('current')}, cfi={cf['cfi'].get('current')}"
+                )
+                return fy_end_8, {"gp": gp, "cf": cf}
+            except asyncio.TimeoutError:
+                logger.warning(f"[HALF-EDINET] {code} {fy_end_8}: XBRLダウンロードタイムアウト(30s)")
+                return fy_end_8, None
+            except Exception as e:
+                logger.warning(f"[HALF-EDINET] {code} {fy_end_8}: 抽出エラー - {e}")
+                return fy_end_8, None
+
+        _t0 = time.perf_counter()
+        results = await asyncio.gather(
+            *[_process_doc(doc) for doc in docs], return_exceptions=True
+        )
+        half_data: dict = {}
+        for res in results:
+            if isinstance(res, Exception):
+                logger.warning(f"[HALF-EDINET] {code} gather エラー: {res}")
+                continue
+            k, v = res
+            if k and v is not None:
+                half_data[k] = v
+
+        _elapsed = time.perf_counter() - _t0
+        logger.info(f"[HALF-EDINET] {code}: 半期EDINETデータ抽出完了 {len(half_data)}件 {_elapsed:.2f}s")
+        return half_data
+
     async def extract_gross_profit_by_year(
         self,
         code: str,
