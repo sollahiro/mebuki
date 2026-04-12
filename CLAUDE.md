@@ -87,7 +87,7 @@ DATE_LEN_HYPHENATED = 10  # YYYY-MM-DD 形式
 ### リリース手順
 
 1. `mebuki/__init__.py` と `pyproject.toml` の両方を更新する
-2. `poetry lock` を実行してコミット���含める
+2. `poetry lock` を実行してコミットに含める
 3. **既存タグの付け直しは禁止**。必ず新しいバージョンに上げて新タグを切ること
    - タグを付け直すと GitHub が tarball を再生成して SHA256 が変わり、Homebrew formula との checksum 不一致が発生する
 
