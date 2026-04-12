@@ -135,10 +135,11 @@ async def cmd_analyze(args):
             return
 
         # 分析年数の決定
-        years_to_analyze = args.years or settings_store.analysis_years or 5
+        years_to_analyze = args.years or settings_store.analysis_years
 
         print(f"\n分析中: {code} {info['name']} ({info['market_name']}) ...")
-        print(f"分析対象期間: 直近 {years_to_analyze} 年分")
+        years_label = f"直近 {years_to_analyze} 年分" if years_to_analyze else "全期間"
+        print(f"分析対象期間: {years_label}")
         # data_service を使って生の財務データを取得
         result = await data_service.get_raw_analysis_data(
             code, use_cache=not args.no_cache, analysis_years=years_to_analyze,

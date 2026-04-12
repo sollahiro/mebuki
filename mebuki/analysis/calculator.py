@@ -9,7 +9,6 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 
 from ..utils.converters import to_float, is_valid_value, is_valid_financial_record, extract_year_month
-from ..infrastructure.settings import settings_store
 from mebuki.constants.formats import DATE_LEN_COMPACT, DATE_LEN_HYPHENATED
 from mebuki.utils.fiscal_year import normalize_date_format
 from mebuki.constants.financial import PERCENT, MILLION_YEN
@@ -273,7 +272,7 @@ def calculate_metrics_flexible(
         return {}
 
     if analysis_years is None:
-        analysis_years = min(len(annual_data), settings_store.get_max_analysis_years())
+        analysis_years = len(annual_data)
 
     years_data = _filter_annual_data(annual_data, analysis_years)
     if not years_data:

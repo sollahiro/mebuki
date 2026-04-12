@@ -235,10 +235,6 @@ class SettingsStore:
         """J-QUANTSプランを取得"""
         return self._settings.get("jquantsPlan", "free")
 
-    def get_max_analysis_years(self) -> int:
-        """プランに応じた最大分析年数を取得"""
-        return 10 # 全プラン共通で10年に統一 (src/config.pyの仕様)
-
     @property
     def cache_dir(self) -> str:
         return self._settings.get("cacheDir", "cache")

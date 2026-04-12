@@ -94,13 +94,11 @@ class DataService:
         self.cache_manager.enabled = settings_store.cache_enabled
         self.cache_manager.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def get_analyzer(self, use_cache: bool = True) -> IndividualAnalyzer:
+    def get_analyzer(self) -> IndividualAnalyzer:
         """IndividualAnalyzerのインスタンスを取得"""
         return IndividualAnalyzer(
             api_client=self.api_client,
             edinet_client=self.edinet_client,
-            cache=self.cache_manager,
-            use_cache=use_cache,
         )
 
     async def search_companies(self, query: str) -> List[Dict[str, Any]]:
@@ -152,42 +150,26 @@ class DataService:
     async def get_financial_data(
         self,
         code: str,
-        scope: str = "overview",
+        scope: Optional[str] = None,
         use_cache: bool = True,
         include_2q: bool = False,
         analysis_years: Optional[int] = None,
     ) -> Any:
-        """財務データ取得の統一公開API。"""
-        analyzer = self.get_analyzer(use_cache=use_cache)
-
-        if scope == "overview":
-            result = await self.get_raw_analysis_data(code, use_cache=use_cache, include_2q=include_2q, analysis_years=analysis_years)
-            try:
-                await self._refresh_earnings_calendar_if_needed()
-                self._attach_upcoming_earnings(result, code)
-            except Exception:
-                pass
-            return result
-
-        if scope == "metrics":
-            metrics = await analyzer.get_metrics(code, analysis_years=analysis_years, include_2q=include_2q)
-            result = metrics or {}
-            try:
-                await self._refresh_earnings_calendar_if_needed()
-                self._attach_upcoming_earnings(result, code)
-            except Exception:
-                pass
-            return result
-
+        """財務データ取得の統一公開API。scope=None で財務サマリー、scope="raw" で生データ。"""
         if scope == "raw":
             raw_data = await self.api_client.get_financial_summary(code=code)
-            cleaned_data = [
+            return [
                 {k: v for k, v in record.items() if v is not None and v != ""}
                 for record in raw_data
             ]
-            return cleaned_data
 
-        raise ValueError(f"Invalid scope: {scope}")
+        result = await self.get_raw_analysis_data(code, use_cache=use_cache, include_2q=include_2q, analysis_years=analysis_years)
+        try:
+            await self._refresh_earnings_calendar_if_needed()
+            self._attach_upcoming_earnings(result, code)
+        except Exception:
+            pass
+        return result
 
     async def get_half_year_periods(
         self,
@@ -409,14 +391,13 @@ class DataService:
         include_2q: bool = False,
     ) -> Dict[str, Any]:
         """AI分析抜きの純粋な分析データを取得（財務指標 + 有報テキスト）"""
-        analyzer = self.get_analyzer(use_cache=use_cache)
+        cache_key = f"individual_analysis_{code}"
+        analyzer = self.get_analyzer()
 
         if use_cache:
-            cached = self.cache_manager.get(f"individual_analysis_{code}")
+            cached = self.cache_manager.get(cache_key)
             if cached and cached.get("_cache_version") == _CACHE_VERSION:
-                if "llm_financial_analysis" in cached:
-                    del cached["llm_financial_analysis"]
-                return cached
+                return {k: v for k, v in cached.items() if k != "_cache_version" and k != "llm_financial_analysis"}
 
         result = await analyzer.fetch_analysis_data(code, analysis_years, max_documents, include_2q=include_2q)
         if not result:
@@ -430,8 +411,8 @@ class DataService:
             "edinet_data": result["edinet_data"],
             "analyzed_at": datetime.now().isoformat(),
         }
-        self.cache_manager.set(f"individual_analysis_{code}", formatted)
-        return formatted
+        self.cache_manager.set(cache_key, formatted)
+        return {k: v for k, v in formatted.items() if k != "_cache_version"}
 
 
 # シングルトンインスタンス

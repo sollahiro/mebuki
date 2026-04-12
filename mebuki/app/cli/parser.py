@@ -16,7 +16,7 @@ def build_parser() -> argparse.ArgumentParser:
     # analyze
     analyze_parser = subparsers.add_parser("analyze", help="銘柄を分析")
     analyze_parser.add_argument("code", help="銘柄コード")
-    analyze_parser.add_argument("--scope", choices=["overview", "metrics", "raw"], default=None, help="取得スコープ")
+    analyze_parser.add_argument("--scope", choices=["raw"], default=None, help="取得スコープ（raw: J-QUANTS生データ）")
     analyze_parser.add_argument("--years", type=int, help="分析年数")
     analyze_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
     analyze_parser.add_argument("--no-cache", action="store_true", help="キャッシュを使用しない")
