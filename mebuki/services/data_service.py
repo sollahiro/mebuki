@@ -187,6 +187,24 @@ class DataService:
 
         raise ValueError(f"Invalid scope: {scope}")
 
+    async def get_half_year_periods(
+        self,
+        code: str,
+        years: int = 3,
+        use_cache: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """H1/H2 の半期財務データを返す。"""
+        from mebuki.utils.financial_data import build_half_year_periods
+
+        financial_data = await self.api_client.get_financial_summary(
+            code=code,
+            period_types=["FY", "2Q"],
+            include_fields=None,
+        )
+        if not financial_data:
+            return []
+        return build_half_year_periods(financial_data, years=years)
+
     async def get_price_data(self, code: str, days: int = 365) -> List[Dict[str, Any]]:
         """株価履歴データを取得"""
         end_date = datetime.now()

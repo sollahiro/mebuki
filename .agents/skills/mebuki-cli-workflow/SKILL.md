@@ -54,14 +54,12 @@ mebuki search 7203 --format json
 銘柄の財務データを分析する。
 
 ```bash
-mebuki analyze <code> [--scope overview|metrics|raw] [--years N] [--format table|json] [--include-2q] [--no-cache]
+mebuki analyze <code> [--years N] [--format table|json] [--half] [--no-cache] [--scope raw]
 ```
 
-- `--scope overview`: 財務サマリー + ROIC・有利子負債（デフォルト）
-- `--scope metrics`: 財務指標（ROE/PER/PBRなど）
-- `--scope raw`: 生データ
-- `--years N`: 取得年数（デフォルト: 5）。**FY（通期）の件数**でカウントする
-- `--include-2q`: 2Q（中間期）データも含めて表示する（opt-in）。2Qの ROE/ROIC/PER/PBR は表示しない（6ヶ月分の値のため）
+- `--years N`: 取得年数（デフォルト: 5、`--half` 時は 3）。**FY（通期）の件数**でカウントする
+- `--half`: 上半期(H1)・下半期(H2)の半期推移を表示する（seasonalityの確認に有用）
+- `--scope raw`: 生データをJSON取得したい場合のみ指定
 - `--no-cache`: キャッシュを使用せず最新データを取得する
 
 デフォルト出力に含まれる主要財務指標（横並び年次推移）:
@@ -85,8 +83,8 @@ mebuki analyze <code> [--scope overview|metrics|raw] [--years N] [--format table
 ```bash
 mebuki analyze 7203
 mebuki analyze 7203 --years 5
-mebuki analyze 7203 --scope metrics --format json
-mebuki analyze 7203 --years 5 --include-2q          # 通期5年 + 中間期を合わせて表示
+mebuki analyze 7203 --half                           # 上半期・下半期の推移を表示（デフォルト3年）
+mebuki analyze 7203 --half --years 5                 # 5年分の半期推移
 mebuki analyze 7203 --no-cache                       # キャッシュ無効化
 ```
 
@@ -221,12 +219,7 @@ mebuki analyze <codeA> --years 5
 mebuki analyze <codeB> --years 5
 mebuki analyze <codeC> --years 5
 
-# 3. 財務指標（ROE/PER/PBRなど）を比較
-mebuki analyze <codeA> --scope metrics
-mebuki analyze <codeB> --scope metrics
-mebuki analyze <codeC> --scope metrics
-
-# 4. 有価証券報告書でリスクと経営方針を確認
+# 3. 有価証券報告書でリスクと経営方針を確認
 mebuki filing <codeA> --sections business_risks mda management_policy
 mebuki filing <codeB> --sections business_risks mda management_policy
 mebuki filing <codeC> --sections business_risks mda management_policy

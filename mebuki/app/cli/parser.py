@@ -21,8 +21,8 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
     analyze_parser.add_argument("--no-cache", action="store_true", help="キャッシュを使用しない")
     analyze_parser.add_argument(
-        "--include-2q", action="store_true", dest="include_2q",
-        help="2Q（中間）データも含めて集計する"
+        "--half", action="store_true",
+        help="上半期(H1)・下半期(H2)の半期推移を表示する"
     )
 
     # price

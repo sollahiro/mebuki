@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from .converters import to_float, is_valid_value, is_valid_financial_record, extract_year_month
 from mebuki.constants.formats import DATE_LEN_COMPACT, DATE_LEN_HYPHENATED
 from mebuki.utils.fiscal_year import normalize_date_format, parse_date_string
+from mebuki.constants.financial import MILLION_YEN
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +131,157 @@ def extract_annual_data(
 
     return unique_annual_data
 
+
+
+def build_half_year_periods(
+    financial_data: List[Dict[str, Any]],
+    years: int = 3,
+) -> List[Dict[str, Any]]:
+    """
+    FY と 2Q レコードを対応付けて H1/H2 の半期データリストを返す。
+
+    - H1 = 2Q レコードのフロー値（上半期累計）
+    - H2 = FY レコード − 2Q レコード（下半期単独）
+    - 2Q データのない年は FY のみ（half=None, label="NNfy"）
+
+    Args:
+        financial_data: J-QUANTS fin-summary の生レコードリスト
+        years: 対象 FY 件数（デフォルト 3）
+
+    Returns:
+        古い順に並んだ半期データリスト。各要素::
+
+            {
+                "label": "24H1",       # 列ヘッダー用
+                "half": "H1",          # "H1" / "H2" / None (FY のみ)
+                "fy_end": "20240331",
+                "data": {
+                    "Sales": float | None,          # 百万円
+                    "OP": float | None,
+                    "OperatingMargin": float | None, # %
+                    "NP": float | None,
+                    "CFO": float | None,
+                    "CFI": float | None,
+                    "FreeCF": float | None,
+                }
+            }
+    """
+    today = datetime.now()
+
+    fy_by_end: Dict[str, Dict[str, Any]] = {}
+    q2_by_end: Dict[str, Dict[str, Any]] = {}
+
+    for record in financial_data:
+        per_type = record.get("CurPerType")
+        fy_end = record.get("CurFYEn", "")
+        if not fy_end:
+            continue
+
+        disc_date = record.get("DiscDate", "")
+        if disc_date:
+            try:
+                disc_dt = parse_date_string(disc_date)
+                if disc_dt and disc_dt > today:
+                    continue
+            except (ValueError, TypeError):
+                pass
+
+        try:
+            fy_end_dt = parse_date_string(fy_end)
+            if fy_end_dt and fy_end_dt > today:
+                continue
+        except (ValueError, TypeError):
+            pass
+
+        if per_type == "FY":
+            existing = fy_by_end.get(fy_end)
+            if not existing or record.get("DiscDate", "") >= existing.get("DiscDate", ""):
+                fy_by_end[fy_end] = record
+        elif per_type == "2Q":
+            existing = q2_by_end.get(fy_end)
+            if not existing or record.get("DiscDate", "") >= existing.get("DiscDate", ""):
+                q2_by_end[fy_end] = record
+
+    fy_ends_selected = sorted(fy_by_end.keys(), reverse=True)[:years]
+
+    def _m(value: Any) -> Optional[float]:
+        v = to_float(value)
+        return v / MILLION_YEN if v is not None else None
+
+    def _diff_m(fy_rec: Dict, q2_rec: Dict, field: str) -> Optional[float]:
+        fy_v = to_float(fy_rec.get(field))
+        q2_v = to_float(q2_rec.get(field))
+        if fy_v is None or q2_v is None:
+            return None
+        return (fy_v - q2_v) / MILLION_YEN
+
+    def _make_data(
+        sales: Optional[float],
+        op: Optional[float],
+        np_: Optional[float],
+        cfo: Optional[float],
+        cfi: Optional[float],
+    ) -> Dict[str, Optional[float]]:
+        return {
+            "Sales": sales,
+            "OP": op,
+            "OperatingMargin": op / sales * 100 if op is not None and sales else None,
+            "NP": np_,
+            "CFO": cfo,
+            "CFI": cfi,
+            "FreeCF": (cfo + cfi) if cfo is not None and cfi is not None else None,
+        }
+
+    def _label_year(fy_end: str) -> str:
+        s = fy_end.replace("-", "")
+        return s[2:4] if len(s) >= 4 else s[:2]
+
+    periods: List[Dict[str, Any]] = []
+    for fy_end in sorted(fy_ends_selected):  # 古い順
+        fy_rec = fy_by_end[fy_end]
+        q2_rec = q2_by_end.get(fy_end)
+        yr = _label_year(fy_end)
+
+        if q2_rec and is_valid_financial_record(q2_rec):
+            periods.append({
+                "label": f"{yr}H1",
+                "half": "H1",
+                "fy_end": fy_end,
+                "data": _make_data(
+                    _m(q2_rec.get("Sales")),
+                    _m(q2_rec.get("OP")),
+                    _m(q2_rec.get("NP")),
+                    _m(q2_rec.get("CFO")),
+                    _m(q2_rec.get("CFI")),
+                ),
+            })
+            periods.append({
+                "label": f"{yr}H2",
+                "half": "H2",
+                "fy_end": fy_end,
+                "data": _make_data(
+                    _diff_m(fy_rec, q2_rec, "Sales"),
+                    _diff_m(fy_rec, q2_rec, "OP"),
+                    _diff_m(fy_rec, q2_rec, "NP"),
+                    _diff_m(fy_rec, q2_rec, "CFO"),
+                    _diff_m(fy_rec, q2_rec, "CFI"),
+                ),
+            })
+        else:
+            periods.append({
+                "label": f"{yr}FY",
+                "half": None,
+                "fy_end": fy_end,
+                "data": _make_data(
+                    _m(fy_rec.get("Sales")),
+                    _m(fy_rec.get("OP")),
+                    _m(fy_rec.get("NP")),
+                    _m(fy_rec.get("CFO")),
+                    _m(fy_rec.get("CFI")),
+                ),
+            })
+
+    return periods
 
 
 def get_monthly_avg_stock_price(

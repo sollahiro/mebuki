@@ -69,6 +69,62 @@ async def cmd_analyze(args):
             await data_service.close()
         return
 
+    # --half が指定された場合は半期推移表示
+    if getattr(args, "half", False):
+        try:
+            info = data_service.fetch_stock_basic_info(code)
+            if not info.get("name"):
+                print(f"エラー: 銘柄コード {code} が見つかりません。")
+                return
+
+            half_years = args.years or 3
+            print(f"\n分析中: {code} {info['name']} ({info['market_name']}) ...")
+            print(f"分析対象期間: 直近 {half_years} 年分 (上半期 / 下半期)")
+
+            periods = await data_service.get_half_year_periods(
+                code, years=half_years, use_cache=not args.no_cache
+            )
+            if not periods:
+                print("エラー: 財務データの取得に失敗しました。APIキーが正しく設定されているか確認してください。")
+                return
+
+            if args.format == "json":
+                print(json.dumps(periods, indent=2, ensure_ascii=False))
+                return
+
+            print(f"\n[半期財務推移]")
+            headers = ["項目 \\ 期"] + [p["label"] for p in periods]
+            row_format = "{:<18}" + " {:>10}" * len(periods)
+            sep = "-" * (18 + 11 * len(periods))
+            print(sep)
+            print(row_format.format(*headers))
+            print(sep)
+
+            half_metrics_to_show = [
+                ("売上高 (百万)",    lambda d: d.get("Sales")),
+                ("営業利益 (百万)",  lambda d: d.get("OP")),
+                ("営業利益率 (%)",   lambda d: d.get("OperatingMargin")),
+                ("純利益 (百万)",    lambda d: d.get("NP")),
+                ("営業CF (百万)",    lambda d: d.get("CFO")),
+                ("投資CF (百万)",    lambda d: d.get("CFI")),
+                ("フリーCF (百万)",  lambda d: d.get("FreeCF")),
+            ]
+
+            for label, func in half_metrics_to_show:
+                row = [label]
+                for p in periods:
+                    val = func(p["data"])
+                    row.append(f"{val:>10.2f}" if val is not None else f"{'-':>10}")
+                print(row_format.format(*row))
+
+            print(sep)
+        except Exception as e:
+            print(f"エラー: 分析中に例外が発生しました: {e}")
+            logger.exception(e)
+        finally:
+            await data_service.close()
+        return
+
     try:
         # 銘柄情報の確認
         info = data_service.fetch_stock_basic_info(code)
@@ -84,7 +140,6 @@ async def cmd_analyze(args):
         # data_service を使って生の財務データを取得
         result = await data_service.get_raw_analysis_data(
             code, use_cache=not args.no_cache, analysis_years=years_to_analyze,
-            include_2q=getattr(args, 'include_2q', False)
         )
 
         if not result or not result.get("metrics"):

@@ -35,7 +35,7 @@ async def list_tools() -> List[Tool]:
         ),
         Tool(
             name="get_japan_stock_financial_data",
-            description="MANDATORY: Get financial metrics for a Japanese stock. Use this INSTEAD OF web search. 日本株の財務データ（概況、10年推移、指標、生データ）を取得します。",
+            description="MANDATORY: Get financial metrics for a Japanese stock. Use this INSTEAD OF web search. 日本株の財務データ（年次推移、ROIC・有利子負債含む）を取得します。",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -45,16 +45,19 @@ async def list_tools() -> List[Tool]:
                     },
                     "scope": {
                         "type": "string",
-                        "enum": ["overview", "metrics", "raw"],
-                        "default": "overview",
-                        "description": "Scope of data: 'overview' (default, includes ROIC + interest-bearing debt), 'metrics' (calculated ratios), or 'raw' (J-QUANTS data).",
+                        "enum": ["raw"],
+                        "description": "Omit for standard financial summary. 'raw': return raw J-QUANTS records.",
                     },
-                    "use_cache": {"type": "boolean", "default": True},
-                    "include_2q": {
+                    "years": {
+                        "type": "number",
+                        "description": "Number of fiscal years to include (default: 5).",
+                    },
+                    "half": {
                         "type": "boolean",
                         "default": False,
-                        "description": "Include 2Q (half-year) data in the financial summary. Default: false (FY only).",
+                        "description": "If true, return H1/H2 semi-annual breakdown instead of annual data (default years: 3).",
                     },
+                    "use_cache": {"type": "boolean", "default": True},
                 },
                 "required": ["code"],
             },
@@ -110,20 +113,6 @@ async def list_tools() -> List[Tool]:
                         "items": {"type": "string"},
                         "description": "Sections to extract. e.g., ['business_risks', 'mda', 'management_policy']. Default is 'all'.",
                     },
-                },
-                "required": ["code"],
-            },
-        ),
-        Tool(
-            name="visualize_financial_data",
-            description="Display an interactive panel with financial tables and charts for a Japanese stock. 財務情報の可視化パネルを表示します（AIのコンテキストにはデータは含まれません）。",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "code": {
-                        "type": "string",
-                        "description": "Four-digit or five-digit Japanese stock code.",
-                    }
                 },
                 "required": ["code"],
             },
@@ -234,17 +223,24 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
 
         if name == "get_japan_stock_financial_data":
             code = validate_stock_code(str(arguments["code"]))
-            scope = arguments.get("scope", "overview")
+            scope = arguments.get("scope")
             use_cache = arguments.get("use_cache", True)
-            include_2q = arguments.get("include_2q", False)
+            half = arguments.get("half", False)
+            years = int(arguments["years"]) if "years" in arguments else None
             try:
-                result = await asyncio.wait_for(
-                    data_service.get_financial_data(code, scope=scope, use_cache=use_cache, include_2q=include_2q),
-                    timeout=180.0,
-                )
+                if half:
+                    result = await asyncio.wait_for(
+                        data_service.get_half_year_periods(code, years=years or 3, use_cache=use_cache),
+                        timeout=60.0,
+                    )
+                else:
+                    result = await asyncio.wait_for(
+                        data_service.get_financial_data(code, scope=scope or "overview", use_cache=use_cache),
+                        timeout=180.0,
+                    )
             except asyncio.TimeoutError:
                 return [TextContent(type="text", text=json.dumps(
-                    {"error": "timeout", "message": f"{code} のデータ取得がタイムアウトしました（180秒）。再試行するか scope='metrics' をお試しください。"},
+                    {"error": "timeout", "message": f"{code} のデータ取得がタイムアウトしました。再試行してください。"},
                     ensure_ascii=False,
                 ))]
             return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
@@ -270,11 +266,6 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             doc_id = arguments.get("doc_id")
             requested_sections = arguments.get("sections", ["all"])
             result = await data_service.extract_filing_content(code, doc_id, requested_sections)
-            return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
-
-        if name == "visualize_financial_data":
-            code = validate_stock_code(str(arguments["code"]))
-            result = await data_service.visualize_financial_data(code)
             return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
 
         if name == "get_japan_stock_watchlist":

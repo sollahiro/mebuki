@@ -115,6 +115,38 @@ if cached and cached.get("_cache_version") == _CACHE_VERSION:
 
 ---
 
+## MCP ツールと CLI の対応原則
+
+`mebuki/app/mcp_server.py` の MCP ツール群は、CLI（`mebuki analyze` 等）の機能・パラメーターに揃えること。
+
+- CLI で廃止した機能・オプションは MCP からも削除する
+- CLI で追加した機能は MCP にも追加する
+- CLI に存在しない MCP 専用機能は原則として追加しない
+
+### 現在の対応表
+
+| MCP ツール | CLI コマンド |
+|---|---|
+| `find_japan_stock_code` | `mebuki search` |
+| `get_japan_stock_financial_data` | `mebuki analyze` |
+| `get_japan_stock_price_data` | `mebuki price` |
+| `search_japan_stock_filings` | `mebuki filings` |
+| `extract_japan_stock_filing_content` | `mebuki filing` |
+| `get_japan_stock_watchlist` | `mebuki watch list` |
+| `manage_japan_stock_watchlist` | `mebuki watch add/remove` |
+| `get_japan_stock_portfolio` | `mebuki portfolio list` |
+| `manage_japan_stock_portfolio` | `mebuki portfolio add/sell/remove` |
+
+### `get_japan_stock_financial_data` のパラメーター対応
+
+| MCP パラメーター | CLI オプション | 備考 |
+|---|---|---|
+| `years` | `--years N` | デフォルト 5（`half=true` 時は 3） |
+| `half: true` | `--half` | H1/H2 半期推移 |
+| `scope: "raw"` | `--scope raw` | 生データ取得時のみ指定 |
+
+---
+
 ## アーキテクチャ依存ルール
 
 - `services/` は `mebuki.app` をインポートしてはならない
