@@ -8,17 +8,16 @@
 mebuki/
 ├── mebuki/
 │   ├── __main__.py        # python -m mebuki エントリポイント
-
 │   ├── app/               # エントリポイント層 (CLI/MCP)
 │   │   ├── cli/           # CLI サブパッケージ
 │   │   │   ├── main.py        # エントリポイント・ディスパッチャ
 │   │   │   ├── parser.py      # argparse パーサー定義
-│   │   │   ├── analyze.py     # search/analyze/price/filings/filing コマンド
+│   │   │   ├── analyze.py     # search/analyze/filings/filing コマンド
 │   │   │   ├── config.py      # config コマンド
 │   │   │   ├── mcp.py         # mcp コマンド
 │   │   │   ├── portfolio.py   # watch/portfolio コマンド
 │   │   │   └── ui.py          # バナー・UI補助
-│   │   └── mcp_server.py  # MCP サーバー (全9ツール: 検索・財務・株価・有報・ウォッチリスト・ポートフォリオ)
+│   │   └── mcp_server.py  # MCP サーバー (全8ツール: 検索・財務・有報・ウォッチリスト・ポートフォリオ)
 │   ├── services/          # ユースケース層 (分析/検索/集約)
 │   │   ├── data_service.py
 │   │   ├── analyzer.py
@@ -89,7 +88,7 @@ MCP include_2q パラメータ
 
 **設計上の制約:**
 
-- 2QのEPS/BPSは6ヶ月分のため、**PER/PBR/ROE/ROICは`None`**（誤値防止）
+- 2QのEPS/BPSは6ヶ月分のため、**ROE/ROICは`None`**（誤値防止）
 - `analysis_years` はFY件数でカウントする（2Qはカウント外）
 - `extract_annual_data` の重複除去キーは `(CurFYEn, CurPerType)` ペアを使用（同一FY末日のFYと2Qを別エントリとして保持）
 - `calculate_metrics_flexible` の重複除去も同様に `(fy_end, per_type)` ペアを使用
