@@ -66,8 +66,7 @@ class IndividualAnalyzer:
         available_years = sum(1 for d in annual_data if d.get("CurPerType") == "FY")
         actual_years = min(available_years, analysis_years) if analysis_years else available_years
 
-        prices = await self._financial_fetcher.fetch_prices(code, annual_data, actual_years)
-        metrics = await self._financial_fetcher.calculate_metrics(code, annual_data, prices, actual_years)
+        metrics = await self._financial_fetcher.calculate_metrics(code, annual_data, actual_years)
 
         edinet_data = {}
         ibd_by_year: Dict[str, dict] = {}

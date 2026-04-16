@@ -8,6 +8,7 @@
 mebuki/
 ├── mebuki/
 │   ├── __main__.py        # python -m mebuki エントリポイント
+
 │   ├── app/               # エントリポイント層 (CLI/MCP)
 │   │   ├── cli/           # CLI サブパッケージ
 │   │   │   ├── main.py        # エントリポイント・ディスパッチャ

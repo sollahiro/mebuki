@@ -25,12 +25,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="上半期(H1)・下半期(H2)の半期推移を表示する"
     )
 
-    # price
-    price_parser = subparsers.add_parser("price", help="株価データを取得")
-    price_parser.add_argument("code", help="銘柄コード")
-    price_parser.add_argument("--days", type=int, default=30, help="取得日数 (デフォルト: 30)")
-    price_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
-
     # filings
     filings_parser = subparsers.add_parser("filings", help="EDINET書類一覧を取得")
     filings_parser.add_argument("code", help="銘柄コード")

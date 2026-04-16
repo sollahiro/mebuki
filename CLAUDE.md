@@ -129,7 +129,6 @@ if cached and cached.get("_cache_version") == _CACHE_VERSION:
 |---|---|
 | `find_japan_stock_code` | `mebuki search` |
 | `get_japan_stock_financial_data` | `mebuki analyze` |
-| `get_japan_stock_price_data` | `mebuki price` |
 | `search_japan_stock_filings` | `mebuki filings` |
 | `extract_japan_stock_filing_content` | `mebuki filing` |
 | `get_japan_stock_watchlist` | `mebuki watch list` |

@@ -5,7 +5,7 @@
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, date
+from datetime import datetime, date
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
@@ -310,16 +310,6 @@ class DataService:
             "periods": base_periods,
         })
         return base_periods
-
-    async def get_price_data(self, code: str, days: int = 365) -> List[Dict[str, Any]]:
-        """株価履歴データを取得"""
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=days)
-        return await self.api_client.get_daily_bars(
-            code=code,
-            from_date=start_date.strftime("%Y-%m-%d"),
-            to_date=end_date.strftime("%Y-%m-%d"),
-        )
 
     async def search_filings(
         self,

@@ -10,7 +10,6 @@ from datetime import datetime
 
 from ..utils.converters import to_float, is_valid_value, is_valid_financial_record, extract_year_month
 from mebuki.constants.formats import DATE_LEN_COMPACT, DATE_LEN_HYPHENATED
-from mebuki.utils.fiscal_year import normalize_date_format
 from mebuki.constants.financial import PERCENT, MILLION_YEN
 
 
@@ -52,22 +51,6 @@ def _calculate_profitability_metrics(np: Optional[float], op: Optional[float], e
     return {
         "roe": roe,
         "cf_conversion_rate": cf_conversion_rate
-    }
-
-
-def _calculate_market_metrics(price: Optional[float], adjusted_eps: Optional[float], adjusted_bps: Optional[float]) -> Dict[str, Optional[float]]:
-    """市場指標（PER, PBR）の計算"""
-    per = None
-    if price is not None and adjusted_eps is not None and adjusted_eps > 0:
-        per = float(price) / adjusted_eps
-
-    pbr = None
-    if price is not None and adjusted_bps is not None and adjusted_bps > 0:
-        pbr = float(price) / adjusted_bps
-
-    return {
-        "per": per,
-        "pbr": pbr
     }
 
 
@@ -188,7 +171,6 @@ def _format_financial_period(fy_end: str, per_type: str) -> str:
 def _build_year_entry(
     year_data: Dict[str, Any],
     latest_avg_sh: Optional[float],
-    prices: Optional[Dict[str, float]]
 ) -> Dict[str, Any]:
     """1年分の指標エントリを組み立てる"""
     fy_end = year_data.get("CurFYEn")
@@ -214,20 +196,9 @@ def _build_year_entry(
         'AdjustedBPS': apply_adjustment(raw_values['BPS'], ratio)
     })
 
-    # 株価と市場指標
-    price = None
-    if prices and fy_end:
-        price = prices.get(fy_end) or prices.get(fy_end.replace("-", ""))
-    market_metrics = _calculate_market_metrics(price, calc_values['AdjustedEPS'], calc_values['AdjustedBPS'])
-    calc_values.update({
-        'Price': price,
-        'PER': market_metrics['per'],
-        'PBR': market_metrics['pbr']
-    })
-
     # 2Qは6ヶ月分のEPS/BPSのため、比率系指標は無効
     if per_type == "2Q":
-        calc_values.update({'ROE': None, 'CFCVR': None, 'PER': None, 'PBR': None})
+        calc_values.update({'ROE': None, 'CFCVR': None})
 
     return {
         "fy_end": fy_end,
@@ -245,8 +216,6 @@ def _assemble_summary(metrics: Dict[str, Any], years_metrics: List[Dict[str, Any
             "latest_fcf": latest_calc.get("CFC"),
             "latest_roe": latest_calc.get("ROE"),
             "latest_eps": latest_calc.get("AdjustedEPS"),
-            "latest_per": latest_calc.get("PER"),
-            "latest_pbr": latest_calc.get("PBR"),
             "latest_sales": latest_calc.get("Sales")
         })
 
@@ -262,7 +231,6 @@ def _assemble_summary(metrics: Dict[str, Any], years_metrics: List[Dict[str, Any
 
 def calculate_metrics_flexible(
     annual_data: List[Dict[str, Any]],
-    prices: Optional[Dict[str, float]] = None,
     analysis_years: Optional[int] = None
 ) -> Dict[str, Any]:
     """
@@ -288,104 +256,10 @@ def calculate_metrics_flexible(
         "available_years": len(years_data),
     }
 
-    years_metrics = [_build_year_entry(yd, latest_avg_sh, prices) for yd in years_data]
+    years_metrics = [_build_year_entry(yd, latest_avg_sh) for yd in years_data]
     metrics["years"] = years_metrics
 
     _assemble_summary(metrics, years_metrics, analysis_years)
     return metrics
 
 
-def calculate_quarterly_metrics(
-    quarterly_data: List[Dict[str, Any]],
-    prices: Optional[Dict[str, float]] = None,
-    quarters: int = 8
-) -> Dict[str, Any]:
-    """
-    四半期データから各種指標を計算（直近N四半期分）
-    """
-    if not quarterly_data:
-        return {}
-
-    quarters_data = quarterly_data[:quarters]
-    if not quarters_data:
-        return {}
-
-    latest = quarters_data[0]
-    metrics = {
-        "code": latest.get("Code"),
-        "latest_quarter_end": latest.get("CurFYEn"),
-        "quarters": len(quarters_data),
-    }
-
-    quarters_metrics = []
-    for quarter_data in quarters_data:
-        quarter_end = quarter_data.get("_quarter_end_date") or quarter_data.get("CurFYEn")
-
-        # 数値抽出
-        sales = to_millions(to_float(quarter_data.get("Sales")))
-        np = to_millions(to_float(quarter_data.get("NP")))
-        eq_raw = to_float(quarter_data.get("Eq"))
-        eq = to_millions(eq_raw)
-        eps = to_float(quarter_data.get("EPS"))
-        bps = to_float(quarter_data.get("BPS"))
-
-        # BPS補足計算
-        if bps is None:
-            sh_out = to_float(quarter_data.get("ShOutFY"))
-            if eq_raw is not None and sh_out is not None and sh_out > 0:
-                bps = eq_raw / (sh_out * 1000)
-
-        # 株価と市場指標
-        price = None
-        if prices and quarter_end:
-            date_key = normalize_date_format(quarter_end) or quarter_end
-            price = prices.get(date_key) or prices.get(quarter_end)
-
-        market_metrics = _calculate_market_metrics(price, eps, bps)
-
-        # 決算期の文字列作成 (YYYY年MM月期)
-        financial_period = ""
-        if quarter_end:
-            if len(quarter_end) == DATE_LEN_COMPACT:
-                financial_period = f"{quarter_end[:4]}年{quarter_end[4:6]}月期"
-            elif len(quarter_end) >= DATE_LEN_HYPHENATED:
-                financial_period = f"{quarter_end[:4]}年{quarter_end[5:7]}月期"
-
-        quarters_metrics.append({
-            "quarter_end": quarter_end,
-            "FinancialPeriod": financial_period,
-            "per_type": quarter_data.get("CurPerType"),
-            "sales": sales,
-            "np": np,
-            "eq": eq,
-            "eps": eps,
-            "bps": bps,
-            "price": price,
-            "per": market_metrics['per'],
-            "pbr": market_metrics['pbr'],
-        })
-
-    metrics["quarters_data"] = quarters_metrics
-
-    # 指数化（基準 = 最も古い四半期）
-    if len(quarters_metrics) >= 2:
-        oldest = quarters_metrics[-1]
-
-        def calc_idx(curr, base):
-            return (curr / base) * PERCENT if curr is not None and base and base > 0 else None
-
-        metrics.update({
-            "price_index": [calc_idx(m['price'], oldest['price']) for m in quarters_metrics],
-            "eps_index": [calc_idx(m['eps'], oldest['eps']) for m in quarters_metrics],
-            "sales_index": [calc_idx(m['sales'], oldest['sales']) for m in quarters_metrics],
-            "oldest_quarter_end": oldest.get("quarter_end")
-        })
-    else:
-        metrics.update({
-            "price_index": [],
-            "eps_index": [],
-            "sales_index": [],
-            "oldest_quarter_end": None
-        })
-
-    return metrics

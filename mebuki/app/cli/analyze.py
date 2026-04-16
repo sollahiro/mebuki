@@ -199,9 +199,6 @@ async def cmd_analyze(args):
             ("投資CF (百万)", lambda c: c.get("CFI")),
             ("フリーCF (百万)", lambda c: c.get("CFC")),
             ("配当性向 (%)", lambda c: c.get("PayoutRatio")),
-            ("PER (倍)", lambda c: c.get("PER")),
-            ("PBR (倍)", lambda c: c.get("PBR")),
-            ("年度末株価 (円)", lambda c: c.get("Price")),
             # ── 有利子負債 ──
             ("有利子負債合計 (百万)", lambda c: c.get("InterestBearingDebt")),
             ("投下資本 (百万)",       lambda c: (c.get("InterestBearingDebt") + c.get("Eq")) if c.get("InterestBearingDebt") is not None and c.get("Eq") is not None else None),
@@ -235,45 +232,6 @@ async def cmd_analyze(args):
 
     except Exception as e:
         print(f"エラー: 分析中に例外が発生しました: {e}")
-        logger.exception(e)
-    finally:
-        await data_service.close()
-
-
-async def cmd_price(args):
-    """株価データ取得コマンド"""
-    from mebuki.services.data_service import data_service
-
-    try:
-        code = validate_stock_code(args.code)
-        data = await data_service.get_price_data(code, days=args.days)
-        if not data:
-            print(f"株価データが見つかりませんでした: {code}")
-            return
-        if args.format == "json":
-            print(json.dumps(data, indent=2, ensure_ascii=False))
-        else:
-            print(f"\n[株価データ] {code}  直近{args.days}日")
-            print("-" * 70)
-            print(f"{'日付':<12} {'始値':>8} {'高値':>8} {'安値':>8} {'終値':>8} {'出来高':>12}")
-            print("-" * 70)
-            for row in data:
-                o = row.get('AdjO') or row.get('O', '-')
-                h = row.get('AdjH') or row.get('H', '-')
-                l = row.get('AdjL') or row.get('L', '-')
-                c = row.get('AdjC') or row.get('C', '-')
-                v = row.get('AdjVo') or row.get('Vo', '-')
-                print(
-                    f"{row.get('Date',''):<12}"
-                    f" {o:>8}"
-                    f" {h:>8}"
-                    f" {l:>8}"
-                    f" {c:>8}"
-                    f" {v:>12}"
-                )
-            print("-" * 70)
-    except Exception as e:
-        print(f"エラー: {e}")
         logger.exception(e)
     finally:
         await data_service.close()

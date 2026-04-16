@@ -63,24 +63,6 @@ async def list_tools() -> List[Tool]:
             },
         ),
         Tool(
-            name="get_japan_stock_price_data",
-            description="Access daily price history for a Japanese stock. 日本株の過去の株価データを取得します。",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "code": {
-                        "type": "string",
-                        "description": "Four-digit or five-digit Japanese stock code.",
-                    },
-                    "days": {
-                        "type": "number",
-                        "description": "Number of days to fetch (default: 365)",
-                    },
-                },
-                "required": ["code"],
-            },
-        ),
-        Tool(
             name="search_japan_stock_filings",
             description="List recent Japanese EDINET filings. 日本株の適時開示・法定開示書類の一覧を検索します。",
             inputSchema={
@@ -244,12 +226,6 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                     ensure_ascii=False,
                 ))]
             return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
-
-        if name == "get_japan_stock_price_data":
-            code = validate_stock_code(str(arguments["code"]))
-            days = int(arguments.get("days", 365))
-            data = await data_service.get_price_data(code, days=days)
-            return [TextContent(type="text", text=json.dumps(data, indent=2, ensure_ascii=False))]
 
         if name == "search_japan_stock_filings":
             code = validate_stock_code(str(arguments["code"]))

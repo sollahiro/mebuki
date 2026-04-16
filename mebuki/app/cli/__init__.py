@@ -1,6 +1,6 @@
 from .main import main
 from .parser import build_parser
-from .analyze import cmd_analyze, cmd_search, cmd_price, cmd_filings, cmd_filing
+from .analyze import cmd_analyze, cmd_search, cmd_filings, cmd_filing
 from .config import cmd_config
 from .mcp import cmd_mcp
 from .portfolio import cmd_watch, cmd_portfolio
@@ -12,7 +12,6 @@ __all__ = [
     "build_parser",
     "cmd_analyze",
     "cmd_search",
-    "cmd_price",
     "cmd_filings",
     "cmd_filing",
     "cmd_config",
