@@ -242,6 +242,7 @@ class DataService:
                     sales = data.get("Sales")
                     data["GrossProfit"] = h1_gp_m
                     data["GrossProfitMargin"] = h1_gp_m / sales * 100 if sales else None
+                    data["GrossProfitDocID"] = gp_result.get("docID")
 
                 # CFO/CFI（H1 = 2Q XBRL の current 値）
                 h1_cfo_m = h1_cfi_m = None
@@ -261,6 +262,7 @@ class DataService:
                     "gp_m": h1_gp_m,
                     "cfo_m": h1_cfo_m,
                     "cfi_m": h1_cfi_m,
+                    "gp_doc_id": gp_result.get("docID") if gp_result else None,
                 }
 
             elif half == "H2":
@@ -295,6 +297,7 @@ class DataService:
                         sales = data.get("Sales")
                         data["GrossProfit"] = h2_gp_m
                         data["GrossProfitMargin"] = h2_gp_m / sales * 100 if sales else None
+                        data["GrossProfitDocID"] = fy_gp_result.get("docID")
 
             else:
                 # FY のみ（2Q データなし）: EDINET FY GP を付与

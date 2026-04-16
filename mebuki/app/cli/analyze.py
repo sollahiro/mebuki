@@ -110,13 +110,19 @@ async def cmd_analyze(args):
                 ("営業CF (百万)",      lambda d: d.get("CFO")),
                 ("投資CF (百万)",      lambda d: d.get("CFI")),
                 ("フリーCF (百万)",    lambda d: d.get("FreeCF")),
+                ("有報コード (GP)",    lambda d: d.get("GrossProfitDocID")),
             ]
 
             for label, func in half_metrics_to_show:
                 row = [label]
                 for p in periods:
                     val = func(p["data"])
-                    row.append(f"{val:>10.2f}" if val is not None else f"{'-':>10}")
+                    if val is None:
+                        row.append(f"{'-':>10}")
+                    elif isinstance(val, str):
+                        row.append(f"{val:>10}")
+                    else:
+                        row.append(f"{val:>10.2f}")
                 print(row_format.format(*row))
 
             print(sep)
@@ -202,13 +208,19 @@ async def cmd_analyze(args):
             # ── 有利子負債 ──
             ("有利子負債合計 (百万)", lambda c: c.get("InterestBearingDebt")),
             ("投下資本 (百万)",       lambda c: (c.get("InterestBearingDebt") + c.get("Eq")) if c.get("InterestBearingDebt") is not None and c.get("Eq") is not None else None),
+            ("有報コード (IBD)",      lambda c: c.get("IBDDocID")),
         ]
 
         for label, func in metrics_to_show:
             row = [label]
             for p in periods:
                 val = func(p.get("CalculatedData", {}))
-                row.append(f"{val:>10.2f}" if val is not None else f"{'-':>10}")
+                if val is None:
+                    row.append(f"{'-':>10}")
+                elif isinstance(val, str):
+                    row.append(f"{val:>10}")
+                else:
+                    row.append(f"{val:>10.2f}")
             print(row_format.format(*row))
 
         print("-" * (16 + 11 * len(periods)))

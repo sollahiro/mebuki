@@ -164,8 +164,9 @@ class EdinetFetcher:
                     logger.warning(f"[IBD] {code} {fy_end_8}: XBRLダウンロード失敗")
                     return fy_end_8, None
                 ibd = extract_interest_bearing_debt(Path(xbrl_dir))
+                ibd["docID"] = doc["docID"]
                 logger.info(
-                    f"[IBD] {code} {fy_end_8}: current={ibd.get('current')}, method={ibd.get('method')}"
+                    f"[IBD] {code} {fy_end_8}: current={ibd.get('current')}, method={ibd.get('method')}, docID={doc['docID']}"
                 )
                 return fy_end_8, ibd
             except asyncio.TimeoutError:
@@ -213,7 +214,7 @@ class EdinetFetcher:
         from datetime import datetime as _dt
         now = _dt.now()
 
-        q2_records = []
+        q2_records_raw = []
         for r in financial_data:
             if r.get("CurPerType") != "2Q":
                 continue
@@ -223,9 +224,17 @@ class EdinetFetcher:
                 dt = _parse(disc_date)
                 if dt and dt > now:
                     continue
-            q2_records.append(r)
+            q2_records_raw.append(r)
 
-        q2_records = sorted(q2_records, key=lambda x: x.get("CurFYEn", ""), reverse=True)[:max_years]
+        # CurFYEn ごとに1件に集約（複数ある場合は最も遅い DiscDate を採用）
+        # 重複レコードが max_years の枠を消費しないようにする
+        seen_fy_ends: dict = {}
+        for r in q2_records_raw:
+            fy_en = r.get("CurFYEn", "")
+            if fy_en not in seen_fy_ends or r.get("DiscDate", "") > seen_fy_ends[fy_en].get("DiscDate", ""):
+                seen_fy_ends[fy_en] = r
+
+        q2_records = sorted(seen_fy_ends.values(), key=lambda x: x.get("CurFYEn", ""), reverse=True)[:max_years]
         if not q2_records:
             return {}
 
@@ -250,9 +259,10 @@ class EdinetFetcher:
                     return fy_end_8, None
                 gp = extract_gross_profit(Path(xbrl_dir))
                 cf = extract_cash_flow(Path(xbrl_dir))
+                gp["docID"] = doc["docID"]
                 logger.info(
                     f"[HALF-EDINET] {code} {fy_end_8}: "
-                    f"gp={gp.get('current')}, cfo={cf['cfo'].get('current')}, cfi={cf['cfi'].get('current')}"
+                    f"gp={gp.get('current')}, cfo={cf['cfo'].get('current')}, cfi={cf['cfi'].get('current')}, docID={doc['docID']}"
                 )
                 return fy_end_8, {"gp": gp, "cf": cf}
             except asyncio.TimeoutError:
@@ -309,8 +319,9 @@ class EdinetFetcher:
                     logger.warning(f"[GP] {code} {fy_end_8}: XBRLダウンロード失敗")
                     return fy_end_8, None
                 gp = extract_gross_profit(Path(xbrl_dir))
+                gp["docID"] = doc["docID"]
                 logger.info(
-                    f"[GP] {code} {fy_end_8}: current={gp.get('current')}, method={gp.get('method')}"
+                    f"[GP] {code} {fy_end_8}: current={gp.get('current')}, method={gp.get('method')}, docID={doc['docID']}"
                 )
                 return fy_end_8, gp
             except asyncio.TimeoutError:

@@ -228,9 +228,11 @@ class EdinetAPIClient:
                     continue
 
                 # 検索範囲の設定:
-                # 開始: 決算短信の開示日(DiscDate)
+                # 開始: max(決算短信の開示日(DiscDate), 会計期間終了日)
+                #       DiscDateが期末より前の異常値の場合、期末を下限にすることで
+                #       前年度の有報を誤って取り込む問題を防ぐ
                 # 終了: min(会計期間終了日 + 97日, 現在日時)
-                search_start = disc_date_obj
+                search_start = max(disc_date_obj, period_end_date)
                 search_end = min(period_end_date + timedelta(days=97), now)
 
                 target_doc_types = [doc_type_code] if doc_type_code else (

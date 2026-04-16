@@ -106,6 +106,7 @@ class IndividualAnalyzer:
                     year["CalculatedData"]["IBDAccountingStandard"] = ibd.get(
                         "accounting_standard", "unknown"
                     )
+                    year["CalculatedData"]["IBDDocID"] = ibd.get("docID")
                     np_ = year["CalculatedData"].get("NP")
                     eq = year["CalculatedData"].get("Eq")
                     if np_ is not None and eq is not None and (eq + ibd_m) != 0:
