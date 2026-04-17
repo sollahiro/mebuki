@@ -74,8 +74,8 @@ mebuki analyze <code> [--years N] [--format table|json] [--half] [--no-cache] [-
 | ROE / ROIC | 資本効率 |
 | 営業CF / 投資CF / フリーCF | キャッシュフロー |
 | 配当性向 | 株主還元方針 |
-| PER / PBR / 年度末株価 | バリュエーション |
 | 有利子負債合計 / 投下資本 | 財務健全性・ROIC計算基盤 |
+| DocID | IBD・GP抽出元のEDINET書類ID（`mebuki filing --doc-id` に渡せる） |
 
 > **分析ヒント**: 粗利率と営業利益率の差が大きい場合は販管費（人件費・広告費等）が重い構造。両者の推移を比較することで、コスト管理の効率改善・悪化を把握できる。
 
@@ -88,21 +88,7 @@ mebuki analyze 7203 --half --years 5                 # 5年分の半期推移
 mebuki analyze 7203 --no-cache                       # キャッシュ無効化
 ```
 
-### ③ 株価取得
-
-直近の株価データを取得する。
-
-```bash
-mebuki price <code> [--days N] [--format table|json]
-```
-
-例：
-```bash
-mebuki price 7203
-mebuki price 7203 --days 30
-```
-
-### ④ EDINETファイリング一覧
+### ③ EDINETファイリング一覧
 
 EDINETに提出された書類の一覧を取得する。
 
@@ -116,7 +102,7 @@ mebuki filings 7203
 mebuki filings 7203 --format json
 ```
 
-### ⑤ 有価証券報告書セクション抽出
+### ④ 有価証券報告書セクション抽出
 
 有価証券報告書から特定セクションを抽出する。
 
@@ -138,7 +124,7 @@ mebuki filing 7203 --doc-id S100XXXX --sections mda
 mebuki filing 7203 --format json
 ```
 
-### ⑥ ウォッチリスト管理
+### ⑤ ウォッチリスト管理
 
 注目銘柄のウォッチリストを管理する。
 
@@ -156,7 +142,7 @@ mebuki watch list --format json
 mebuki watch remove 7203
 ```
 
-### ⑦ ポートフォリオ管理
+### ⑥ ポートフォリオ管理
 
 保有銘柄のポートフォリオを管理する。
 
@@ -192,7 +178,7 @@ mebuki portfolio remove 7203 --broker SBI --account 特定
 
 1. **銘柄特定**: `mebuki search <社名>` でコードを確認
 2. **財務分析**: `mebuki analyze <code> --years 5` で財務推移を確認（ROIC・有利子負債を含む）
-   - 中間期も確認したい場合: `--include-2q` を追加
+   - 半期推移も確認したい場合: `--half` を追加
 3. **書類一覧**: `mebuki filings <code>` でEDINET提出書類を確認
 4. **報告書抽出**: `mebuki filing <code> --sections business_risks mda` でリスクと経営状況を確認
 
@@ -206,7 +192,7 @@ mebuki portfolio remove 7203 --broker SBI --account 特定
 
 ### 複数銘柄比較フロー
 
-同セクター内の銘柄を横断比較する際の標準フロー。以下はメガバンク3社（三菱UFJ/8306・三井住友/8316・みずほ/8411）を例にしているが、他の業界にも同様に応用できる。
+同セクター内の銘柄を横断比較する際の標準フロー。
 
 ```bash
 # 1. 銘柄コード確認（社名で検索）
@@ -233,8 +219,65 @@ mebuki filing <codeC> --sections business_risks mda management_policy
 | 営業利益率 (%) | 本業の収益性。粗利率との差（販管費率）も業界横断で比較できる |
 | ROE | 自己資本に対する収益性。同業他社との比較で経営効率を判断 |
 | ROIC | 投下資本全体に対するリターン。資本効率の本質的な指標 |
-| PER / PBR | バリュエーション。割高・割安の相対比較に使う |
 | 配当性向 | 株主還元方針の違いを比較 |
 | 営業CF | 稼ぐ力の実態。利益と乖離する場合は収益の質を疑う |
 
 > **業界特性による読み替え**: 銀行・保険はROICの定義が事業会社と異なるためROEを主軸に。製造業は粗利率と営業利益率の差（販管費の重さ）が競争力の差に直結。SaaSなどのストック型ビジネスは営業CFの安定性・成長率を重視する。
+
+---
+
+## 指標の定義と計算式
+
+### ROIC
+
+```
+ROIC (%) = 当期純利益 ÷ 投下資本 × 100
+投下資本  = 自己資本 + 有利子負債合計
+```
+
+> **注意**: 一般的な教科書定義（NOPAT ÷ 投下資本）とは異なり、mebuki では **当期純利益（NP）** を使って計算している。税引後営業利益ではないため、財務収益・特別損益・税率の影響を含む。同業他社との比較は同じ計算式のもの同士で行うこと。
+
+### ROE
+
+```
+ROE (%) = 当期純利益 ÷ 自己資本 × 100
+```
+
+---
+
+## 有利子負債（IBD）の定義と抽出ロジック
+
+### 定義（構成要素）
+
+| # | 項目 | J-GAAP XBRLタグ | IFRS XBRLタグ |
+|---|---|---|---|
+| 1 | 短期借入金 | ShortTermLoansPayable | BorrowingsCLIFRS |
+| 2 | コマーシャル・ペーパー | CommercialPapersLiabilities | CommercialPapersCLIFRS |
+| 3 | 短期社債 | ShortTermBondsPayable | —（J-GAAP専用） |
+| 4 | 1年内償還予定の社債 | CurrentPortionOfBonds | CurrentPortionOfBondsCLIFRS |
+| 5 | 1年内返済予定の長期借入金 | CurrentPortionOfLongTermLoansPayable | CurrentPortionOfLongTermBorrowingsCLIFRS |
+| 6 | 社債 | BondsPayable | BondsPayableNCLIFRS |
+| 7 | 長期借入金 | LongTermLoansPayable | BorrowingsNCLIFRS |
+
+> **IFRS集約タグ**: 粒度別タグが存在しない場合、以下の集約タグで #4+#5 または #6+#7 をまとめて取得する。
+> - `CurrentPortionOfLongTermDebtCLIFRS` → #4+#5
+> - `BondsAndBorrowingsCLIFRS` → #4+#5（代替）
+> - `LongTermDebtNCLIFRS` → #6+#7
+> - `BondsAndBorrowingsNCLIFRS` → #6+#7（代替）
+
+### 抽出戦略（優先順位）
+
+1. **直接法**: `InterestBearingDebt` / `InterestBearingLiabilities` タグが存在すればそれを使用
+2. **積み上げ法**: 上記7コンポーネントを個別取得して合算（J-GAAP / IFRS）
+3. **US-GAAP**: XBRLに対応タグがないため、有価証券報告書HTML内の借入金ノートセクションをパースして抽出
+
+### 出力フィールド
+
+`mebuki analyze <code> --scope raw` で確認できる生データの構造:
+
+| フィールド | 内容 |
+|---|---|
+| `InterestBearingDebt` | 有利子負債合計（百万円） |
+| `IBDComponents` | 各コンポーネントの当期・前期値（百万円） |
+| `IBDAccountingStandard` | 会計基準: `J-GAAP` / `IFRS` / `US-GAAP` |
+| `IBDDocID` | IBD抽出元のEDINET書類ID（表示ラベル: `DocID`） |
