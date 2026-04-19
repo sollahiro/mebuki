@@ -57,7 +57,11 @@ async def list_tools() -> List[Tool]:
                         "default": False,
                         "description": "If true, return H1/H2 semi-annual breakdown instead of annual data (default years: 3).",
                     },
-                    "use_cache": {"type": "boolean", "default": True},
+                    "use_cache": {
+                        "type": "boolean",
+                        "default": True,
+                        "description": "If false, bypass cache and re-fetch the latest data from J-QUANTS and EDINET. Use when you want up-to-date figures or when ROIC/IBD fields are missing.",
+                    },
                 },
                 "required": ["code"],
             },
