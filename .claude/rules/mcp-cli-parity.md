@@ -19,6 +19,15 @@
 | `get_japan_stock_portfolio` | `mebuki portfolio list` |
 | `manage_japan_stock_portfolio` | `mebuki portfolio add/sell/remove` |
 
+## パラメーター追加時のデフォルト値ルール
+
+新しいオプションパラメーターはオプトインにする。
+
+- bool フラグ → `False`（例: `half`）
+- 値パラメーター → `None`（例: `years`、サービス層でデフォルト処理）
+
+ただし `use_cache` は既存挙動との互換性のため `True` のまま維持する（例外）。
+
 ## `get_japan_stock_financial_data` のパラメーター対応
 
 | MCP パラメーター | CLI オプション | 備考 |
