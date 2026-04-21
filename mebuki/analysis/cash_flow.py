@@ -12,10 +12,10 @@ XBRLインスタンス文書から連結キャッシュフロー計算書の
   CF計算書はフロー項目なので Duration コンテキストを使用する。
 """
 
-import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Optional
 
+from mebuki.analysis.xbrl_utils import parse_xbrl_value, collect_numeric_elements, find_xbrl_files
 from mebuki.constants.xbrl import CF_OPERATING_TAGS, CF_INVESTING_TAGS
 
 _CF_RELEVANT_TAGS: frozenset = frozenset(
@@ -45,34 +45,8 @@ def _is_consolidated_prior_duration(ctx: str) -> bool:
     return any(p in ctx for p in _PRIOR_DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx
 
 
-def _parse_value(text: Optional[str]) -> Optional[float]:
-    if not text or text.strip() in ("", "nil"):
-        return None
-    try:
-        return float(text.strip())
-    except (ValueError, TypeError):
-        return None
-
-
-def _collect_numeric_elements(xml_file: Path, allowed_tags: frozenset) -> Dict[str, Any]:
-    results: dict = {}
-    try:
-        tree = ET.parse(xml_file)
-        root = tree.getroot()
-        for elem in root.iter():
-            tag = elem.tag
-            local_tag = tag.split("}")[1] if "}" in tag else tag
-            if local_tag not in allowed_tags:
-                continue
-            ctx = elem.attrib.get("contextRef", "")
-            value = _parse_value(elem.text)
-            if value is not None and ctx:
-                if local_tag not in results:
-                    results[local_tag] = {}
-                results[local_tag][ctx] = value
-    except ET.ParseError:
-        pass
-    return results
+_parse_value = parse_xbrl_value
+_collect_numeric_elements = collect_numeric_elements
 
 
 def _find_duration_value(
@@ -103,14 +77,8 @@ def extract_cash_flow(xbrl_dir: Path) -> dict:
             "accounting_standard": str,   # "J-GAAP" | "IFRS" | "US-GAAP"
         }
     """
-    xml_files = [
-        f for f in xbrl_dir.rglob("*.xml")
-        if not any(s in f.name for s in ["_lab", "_pre", "_cal", "_def"])
-    ]
-    xml_files += list(xbrl_dir.rglob("*.xbrl"))
-
     tag_elements: dict = {}
-    for f in xml_files:
+    for f in find_xbrl_files(xbrl_dir):
         for tag, ctx_map in _collect_numeric_elements(f, _CF_RELEVANT_TAGS).items():
             if tag not in tag_elements:
                 tag_elements[tag] = {}

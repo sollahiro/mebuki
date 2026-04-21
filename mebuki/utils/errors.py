@@ -14,36 +14,6 @@ class DataAvailability(Enum):
     PARTIAL = "partial"  # 一部データのみ
 
 
-class AnalysisError(Exception):
-    """分析エラーの基底クラス"""
-    pass
-
-
-class InsufficientDataError(AnalysisError):
-    """データ不足エラー"""
-    
-    def __init__(
-        self,
-        message: str,
-        required_years: int,
-        available_years: int,
-        metric_name: Optional[str] = None
-    ):
-        """
-        初期化
-        
-        Args:
-            message: エラーメッセージ
-            required_years: 必要な年数
-            available_years: 取得可能な年数
-            metric_name: 指標名
-        """
-        super().__init__(message)
-        self.required_years = required_years
-        self.available_years = available_years
-        self.metric_name = metric_name
-
-
 def check_data_availability(
     metrics: Dict[str, Any],
     required_years: int

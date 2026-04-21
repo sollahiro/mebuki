@@ -12,3 +12,5 @@
 @.claude/rules/date-conversion.md
 @.claude/rules/versioning.md
 @.claude/rules/mcp-cli-parity.md
+@.claude/rules/error-handling.md
+@.claude/rules/xbrl-analysis.md
