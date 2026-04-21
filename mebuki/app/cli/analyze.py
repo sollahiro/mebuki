@@ -5,7 +5,7 @@ import logging
 from mebuki.infrastructure.helpers import validate_stock_code
 from mebuki.infrastructure.settings import settings_store
 from mebuki.services.master_data import master_data_manager
-from mebuki.constants.formats import DATE_LEN_COMPACT
+from mebuki.utils.converters import extract_year_month
 
 logger = logging.getLogger(__name__)
 
@@ -174,10 +174,11 @@ async def cmd_analyze(args):
         periods = []
         for y_data in reversed(years_data): # 古い順に表示
             fy_end = y_data.get("fy_end", "不明")
-            if len(fy_end) == DATE_LEN_COMPACT:
-                period_str = f"{fy_end[2:4]}/{fy_end[4:6]}"
+            year, month = extract_year_month(fy_end)
+            if year is not None:
+                period_str = f"{str(year)[2:]}/{month:02d}"
             else:
-                period_str = fy_end[2:7] # YY-MM
+                period_str = fy_end
             per_type = y_data.get("RawData", {}).get("CurPerType", "FY")
             if per_type == "2Q":
                 period_str += "(2Q)"

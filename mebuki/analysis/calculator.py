@@ -9,7 +9,6 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 
 from ..utils.converters import to_float, is_valid_value, is_valid_financial_record, extract_year_month
-from mebuki.constants.formats import DATE_LEN_COMPACT, DATE_LEN_HYPHENATED
 from mebuki.constants.financial import PERCENT, MILLION_YEN
 
 
@@ -159,10 +158,9 @@ def _format_financial_period(fy_end: str, per_type: str) -> str:
     """決算期の文字列を返す（例: "2024年03月期" / "2024年03月期 (2Q)"）"""
     period = ""
     if fy_end:
-        if len(fy_end) == DATE_LEN_COMPACT:
-            period = f"{fy_end[:4]}年{fy_end[4:6]}月期"
-        elif len(fy_end) >= DATE_LEN_HYPHENATED:
-            period = f"{fy_end[:4]}年{fy_end[5:7]}月期"
+        year, month = extract_year_month(fy_end)
+        if year is not None:
+            period = f"{year}年{month:02d}月期"
     if per_type == "2Q":
         period += " (2Q)"
     return period
