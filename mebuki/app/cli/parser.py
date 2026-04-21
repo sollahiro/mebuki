@@ -54,6 +54,11 @@ def build_parser() -> argparse.ArgumentParser:
     mcp_sub.add_parser("install-lm-studio", help="LM Studio に登録")
     mcp_sub.add_parser("start", help="MCPサーバーを起動 (STDIO)")
 
+    # sector
+    sector_parser = subparsers.add_parser("sector", help="東証33業種で銘柄を検索")
+    sector_parser.add_argument("sector", nargs="?", help="業種名（省略時は全業種一覧を表示）")
+    sector_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+
     # watch
     watch_parser = subparsers.add_parser("watch", help="ウォッチリスト管理")
     watch_sub = watch_parser.add_subparsers(dest="watch_subcommand")

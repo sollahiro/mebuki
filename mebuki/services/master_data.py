@@ -178,5 +178,39 @@ class MasterDataManager:
             return None
         return self._code_index.get(str(code).strip())
 
+    def list_sectors(self) -> List[Dict[str, Any]]:
+        """33業種の一覧を銘柄数付きで返す"""
+        self.load_if_needed()
+        counts: dict = {}
+        names: dict = {}
+        for item in self._master_data:
+            code = item.get("S33", "")
+            name = item.get("S33Nm", "")
+            if code and name:
+                counts[code] = counts.get(code, 0) + 1
+                names[code] = name
+        return [
+            {"code": c, "name": names[c], "count": counts[c]}
+            for c in sorted(counts)
+        ]
+
+    def search_by_sector(self, sector_query: str, limit: int = 200) -> List[Dict[str, Any]]:
+        """業種名（部分一致）で銘柄一覧を返す"""
+        self.load_if_needed()
+        query_normalized = self._normalize_name(sector_query)
+        results = []
+        for item in self._master_data:
+            sector_name = item.get("S33Nm", "")
+            if query_normalized in self._normalize_name(sector_name):
+                results.append({
+                    "code": item.get("Code", ""),
+                    "name": item.get("CoName", ""),
+                    "sector": sector_name,
+                    "market": item.get("MktNm", ""),
+                })
+            if len(results) >= limit:
+                break
+        return results
+
 # シングルトン
 master_data_manager = MasterDataManager()

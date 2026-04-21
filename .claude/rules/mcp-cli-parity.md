@@ -18,6 +18,7 @@
 | `manage_japan_stock_watchlist` | `mebuki watch add/remove` |
 | `get_japan_stock_portfolio` | `mebuki portfolio list` |
 | `manage_japan_stock_portfolio` | `mebuki portfolio add/sell/remove` |
+| `search_japan_stocks_by_sector` | `mebuki sector [業種名]` |
 
 ## パラメーター追加時のデフォルト値ルール
 

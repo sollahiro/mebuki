@@ -5,6 +5,7 @@ from .analyze import cmd_search, cmd_analyze, cmd_filings, cmd_filing
 from .config import cmd_config
 from .mcp import cmd_mcp
 from .portfolio import cmd_watch, cmd_portfolio
+from .sector import cmd_sector
 from .parser import build_parser
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,8 @@ def main():
     elif args.command == "filing":
         import asyncio
         asyncio.run(cmd_filing(args))
+    elif args.command == "sector":
+        cmd_sector(args)
     elif args.command == "watch":
         cmd_watch(args)
     elif args.command == "portfolio":

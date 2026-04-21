@@ -9,6 +9,7 @@ from mcp.types import TextContent, Tool
 
 from mebuki.infrastructure.helpers import validate_stock_code
 from mebuki.services.data_service import data_service
+from mebuki.services.master_data import master_data_manager
 from mebuki.services.portfolio_service import portfolio_service
 
 logger = logging.getLogger("mebuki-mcp")
@@ -152,6 +153,20 @@ async def list_tools() -> List[Tool]:
             },
         ),
         Tool(
+            name="search_japan_stocks_by_sector",
+            description="Search Japanese stocks by sector (Tokyo Stock Exchange 33-sector classification). 東証33業種で銘柄を検索します。業種名を省略すると全業種一覧（銘柄数付き）を返します。",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "sector": {
+                        "type": "string",
+                        "description": "Sector name to search (partial match). e.g. '電気機器', '情報・通信業'. Omit to list all 33 sectors.",
+                    }
+                },
+                "required": [],
+            },
+        ),
+        Tool(
             name="manage_japan_stock_portfolio",
             description="Add a holding, sell shares, or remove a position from the portfolio. ポートフォリオの保有追加・売却・削除を行います。",
             inputSchema={
@@ -269,6 +284,14 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
                 data = portfolio_service.get_holdings()
             else:
                 data = portfolio_service.get_consolidated()
+            return [TextContent(type="text", text=json.dumps(data, indent=2, ensure_ascii=False))]
+
+        if name == "search_japan_stocks_by_sector":
+            sector_query = arguments.get("sector")
+            if sector_query:
+                data = master_data_manager.search_by_sector(str(sector_query))
+            else:
+                data = master_data_manager.list_sectors()
             return [TextContent(type="text", text=json.dumps(data, indent=2, ensure_ascii=False))]
 
         if name == "manage_japan_stock_portfolio":
