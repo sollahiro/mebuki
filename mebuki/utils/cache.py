@@ -84,30 +84,27 @@ class CacheManager:
             json.dump(metadata, f, ensure_ascii=False, indent=2)
         self._metadata_cache = metadata
     
-    def get(self, key: str, skip_date_check: bool = False) -> Optional[Any]:
+    def get(self, key: str) -> Optional[Any]:
         """
         キャッシュからデータを取得
-        
+
         Args:
             key: キャッシュキー
-            skip_date_check: 日付チェックをスキップするか（履歴表示などで使用）
-            
+
         Returns:
             キャッシュされたデータ。存在しないか期限切れの場合はNone
         """
         if not self.enabled:
             return None
-        
+
         cache_file = self._get_cache_file_path(key)
         if not cache_file.exists():
             return None
-        
-        # メタデータを確認
+
         metadata = self._load_metadata()
         cache_date = metadata.get(key)
-        
-        # 日付チェックをスキップしない場合のみ、日付チェックを実行
-        if not skip_date_check and cache_date:
+
+        if cache_date:
             try:
                 cache_datetime = datetime.fromisoformat(cache_date)
                 cache_date_obj = cache_datetime.date()
@@ -180,7 +177,6 @@ class CacheManager:
             if metadata_path.exists():
                 metadata_path.unlink()
             self._metadata_cache = None
-    
 
 
 
