@@ -28,6 +28,50 @@ class EdinetFetcher:
         self.api_client = api_client
         self.edinet_client = edinet_client
 
+    async def _run_extraction(
+        self,
+        doc: dict,
+        code: str,
+        prefix: str,
+        extract_fn: Callable[[Path], dict],
+        *,
+        result_check: Optional[Callable[[dict], bool]] = None,
+    ) -> tuple[str, dict | None]:
+        fy_end_8 = doc.get("jquants_fy_end", "").replace("-", "")
+        if not fy_end_8:
+            return "", None
+        try:
+            xbrl_dir = await asyncio.wait_for(
+                self.edinet_client.download_document(doc["docID"], 1),
+                timeout=30.0,
+            )
+            if not xbrl_dir:
+                logger.warning(f"[{prefix}] {code} {fy_end_8}: XBRLダウンロード失敗")
+                return fy_end_8, None
+            result = extract_fn(Path(xbrl_dir))
+            if result_check is not None and not result_check(result):
+                return fy_end_8, None
+            result["docID"] = doc["docID"]
+            logger.info(f"[{prefix}] {code} {fy_end_8}: docID={doc['docID']}")
+            return fy_end_8, result
+        except asyncio.TimeoutError:
+            logger.warning(f"[{prefix}] {code} {fy_end_8}: XBRLダウンロードタイムアウト(30s)")
+            return fy_end_8, None
+        except Exception as e:
+            logger.warning(f"[{prefix}] {code} {fy_end_8}: 抽出エラー - {e}")
+            return fy_end_8, None
+
+    def _collect_results(self, results: list, code: str, prefix: str) -> dict:
+        out: dict = {}
+        for res in results:
+            if isinstance(res, Exception):
+                logger.warning(f"[{prefix}] {code} gather エラー: {res}")
+                continue
+            k, v = res
+            if k and v is not None:
+                out[k] = v
+        return out
+
     async def fetch_edinet_data_async(
         self,
         code: str,
@@ -151,46 +195,13 @@ class EdinetFetcher:
         )
         logger.info(f"[IBD] {code}: {len(docs)}件のEDINET文書を検索")
 
-        async def _process_doc(doc: dict) -> tuple[str, dict | None]:
-            fy_end_8 = doc.get("jquants_fy_end", "").replace("-", "")
-            if not fy_end_8:
-                return "", None
-            try:
-                xbrl_dir = await asyncio.wait_for(
-                    self.edinet_client.download_document(doc["docID"], 1),
-                    timeout=30.0,
-                )
-                if not xbrl_dir:
-                    logger.warning(f"[IBD] {code} {fy_end_8}: XBRLダウンロード失敗")
-                    return fy_end_8, None
-                ibd = extract_interest_bearing_debt(Path(xbrl_dir))
-                ibd["docID"] = doc["docID"]
-                logger.info(
-                    f"[IBD] {code} {fy_end_8}: current={ibd.get('current')}, method={ibd.get('method')}, docID={doc['docID']}"
-                )
-                return fy_end_8, ibd
-            except asyncio.TimeoutError:
-                logger.warning(f"[IBD] {code} {fy_end_8}: XBRLダウンロードタイムアウト(30s)")
-                return fy_end_8, None
-            except Exception as e:
-                logger.warning(f"[IBD] {code} {fy_end_8}: 抽出エラー - {e}")
-                return fy_end_8, None
-
         _t0 = time.perf_counter()
         results = await asyncio.gather(
-            *[_process_doc(doc) for doc in docs], return_exceptions=True
+            *[self._run_extraction(doc, code, "IBD", extract_interest_bearing_debt) for doc in docs],
+            return_exceptions=True,
         )
-        ibd_by_year: dict = {}
-        for res in results:
-            if isinstance(res, Exception):
-                logger.warning(f"[IBD] {code} gather エラー: {res}")
-                continue
-            k, v = res
-            if k and v is not None:
-                ibd_by_year[k] = v
-
-        _elapsed = time.perf_counter() - _t0
-        logger.info(f"[IBD] {code}: IBD抽出完了 {len(ibd_by_year)}件 {_elapsed:.2f}s")
+        ibd_by_year = self._collect_results(results, code, "IBD")
+        logger.info(f"[IBD] {code}: IBD抽出完了 {len(ibd_by_year)}件 {time.perf_counter() - _t0:.2f}s")
         return ibd_by_year
 
     async def extract_half_year_edinet_data(
@@ -210,7 +221,6 @@ class EdinetFetcher:
             return {}
 
         # 2Qレコードのみ抽出（未来の開示日を除外して最新max_years件）
-        today = time.time()
         from datetime import datetime as _dt
         now = _dt.now()
 
@@ -273,20 +283,9 @@ class EdinetFetcher:
                 return fy_end_8, None
 
         _t0 = time.perf_counter()
-        results = await asyncio.gather(
-            *[_process_doc(doc) for doc in docs], return_exceptions=True
-        )
-        half_data: dict = {}
-        for res in results:
-            if isinstance(res, Exception):
-                logger.warning(f"[HALF-EDINET] {code} gather エラー: {res}")
-                continue
-            k, v = res
-            if k and v is not None:
-                half_data[k] = v
-
-        _elapsed = time.perf_counter() - _t0
-        logger.info(f"[HALF-EDINET] {code}: 半期EDINETデータ抽出完了 {len(half_data)}件 {_elapsed:.2f}s")
+        results = await asyncio.gather(*[_process_doc(doc) for doc in docs], return_exceptions=True)
+        half_data = self._collect_results(results, code, "HALF-EDINET")
+        logger.info(f"[HALF-EDINET] {code}: 半期EDINETデータ抽出完了 {len(half_data)}件 {time.perf_counter() - _t0:.2f}s")
         return half_data
 
     async def extract_employees_by_year(
@@ -306,46 +305,13 @@ class EdinetFetcher:
         )
         logger.info(f"[EMP] {code}: {len(docs)}件のEDINET文書を検索")
 
-        async def _process_doc(doc: dict) -> tuple[str, dict | None]:
-            fy_end_8 = doc.get("jquants_fy_end", "").replace("-", "")
-            if not fy_end_8:
-                return "", None
-            try:
-                xbrl_dir = await asyncio.wait_for(
-                    self.edinet_client.download_document(doc["docID"], 1),
-                    timeout=30.0,
-                )
-                if not xbrl_dir:
-                    logger.warning(f"[EMP] {code} {fy_end_8}: XBRLダウンロード失敗")
-                    return fy_end_8, None
-                emp = extract_employees(Path(xbrl_dir))
-                emp["docID"] = doc["docID"]
-                logger.info(
-                    f"[EMP] {code} {fy_end_8}: current={emp.get('current')}, scope={emp.get('scope')}, docID={doc['docID']}"
-                )
-                return fy_end_8, emp
-            except asyncio.TimeoutError:
-                logger.warning(f"[EMP] {code} {fy_end_8}: XBRLダウンロードタイムアウト(30s)")
-                return fy_end_8, None
-            except Exception as e:
-                logger.warning(f"[EMP] {code} {fy_end_8}: 抽出エラー - {e}")
-                return fy_end_8, None
-
         _t0 = time.perf_counter()
         results = await asyncio.gather(
-            *[_process_doc(doc) for doc in docs], return_exceptions=True
+            *[self._run_extraction(doc, code, "EMP", extract_employees) for doc in docs],
+            return_exceptions=True,
         )
-        emp_by_year: dict = {}
-        for res in results:
-            if isinstance(res, Exception):
-                logger.warning(f"[EMP] {code} gather エラー: {res}")
-                continue
-            k, v = res
-            if k and v is not None:
-                emp_by_year[k] = v
-
-        _elapsed = time.perf_counter() - _t0
-        logger.info(f"[EMP] {code}: 従業員数抽出完了 {len(emp_by_year)}件 {_elapsed:.2f}s")
+        emp_by_year = self._collect_results(results, code, "EMP")
+        logger.info(f"[EMP] {code}: 従業員数抽出完了 {len(emp_by_year)}件 {time.perf_counter() - _t0:.2f}s")
         return emp_by_year
 
     async def extract_net_revenue_by_year(
@@ -365,48 +331,13 @@ class EdinetFetcher:
         )
         logger.info(f"[NR] {code}: {len(docs)}件のEDINET文書を検索")
 
-        async def _process_doc(doc: dict) -> tuple[str, dict | None]:
-            fy_end_8 = doc.get("jquants_fy_end", "").replace("-", "")
-            if not fy_end_8:
-                return "", None
-            try:
-                xbrl_dir = await asyncio.wait_for(
-                    self.edinet_client.download_document(doc["docID"], 1),
-                    timeout=30.0,
-                )
-                if not xbrl_dir:
-                    return fy_end_8, None
-                nr = extract_net_revenue(Path(xbrl_dir))
-                if not nr["found"]:
-                    return fy_end_8, None
-                nr["docID"] = doc["docID"]
-                logger.info(
-                    f"[NR] {code} {fy_end_8}: "
-                    f"net_revenue={nr.get('net_revenue')}, business_profit={nr.get('business_profit')}"
-                )
-                return fy_end_8, nr
-            except asyncio.TimeoutError:
-                logger.warning(f"[NR] {code} {fy_end_8}: XBRLダウンロードタイムアウト(30s)")
-                return fy_end_8, None
-            except Exception as e:
-                logger.warning(f"[NR] {code} {fy_end_8}: 抽出エラー - {e}")
-                return fy_end_8, None
-
         _t0 = time.perf_counter()
         results = await asyncio.gather(
-            *[_process_doc(doc) for doc in docs], return_exceptions=True
+            *[self._run_extraction(doc, code, "NR", extract_net_revenue, result_check=lambda r: r.get("found")) for doc in docs],
+            return_exceptions=True,
         )
-        nr_by_year: dict = {}
-        for res in results:
-            if isinstance(res, Exception):
-                logger.warning(f"[NR] {code} gather エラー: {res}")
-                continue
-            k, v = res
-            if k and v is not None:
-                nr_by_year[k] = v
-
-        _elapsed = time.perf_counter() - _t0
-        logger.info(f"[NR] {code}: 純収益抽出完了 {len(nr_by_year)}件 {_elapsed:.2f}s")
+        nr_by_year = self._collect_results(results, code, "NR")
+        logger.info(f"[NR] {code}: 純収益抽出完了 {len(nr_by_year)}件 {time.perf_counter() - _t0:.2f}s")
         return nr_by_year
 
     async def extract_gross_profit_by_year(
@@ -426,44 +357,11 @@ class EdinetFetcher:
         )
         logger.info(f"[GP] {code}: {len(docs)}件のEDINET文書を検索")
 
-        async def _process_doc(doc: dict) -> tuple[str, dict | None]:
-            fy_end_8 = doc.get("jquants_fy_end", "").replace("-", "")
-            if not fy_end_8:
-                return "", None
-            try:
-                xbrl_dir = await asyncio.wait_for(
-                    self.edinet_client.download_document(doc["docID"], 1),
-                    timeout=30.0,
-                )
-                if not xbrl_dir:
-                    logger.warning(f"[GP] {code} {fy_end_8}: XBRLダウンロード失敗")
-                    return fy_end_8, None
-                gp = extract_gross_profit(Path(xbrl_dir))
-                gp["docID"] = doc["docID"]
-                logger.info(
-                    f"[GP] {code} {fy_end_8}: current={gp.get('current')}, method={gp.get('method')}, docID={doc['docID']}"
-                )
-                return fy_end_8, gp
-            except asyncio.TimeoutError:
-                logger.warning(f"[GP] {code} {fy_end_8}: XBRLダウンロードタイムアウト(30s)")
-                return fy_end_8, None
-            except Exception as e:
-                logger.warning(f"[GP] {code} {fy_end_8}: 抽出エラー - {e}")
-                return fy_end_8, None
-
         _t0 = time.perf_counter()
         results = await asyncio.gather(
-            *[_process_doc(doc) for doc in docs], return_exceptions=True
+            *[self._run_extraction(doc, code, "GP", extract_gross_profit) for doc in docs],
+            return_exceptions=True,
         )
-        gp_by_year: dict = {}
-        for res in results:
-            if isinstance(res, Exception):
-                logger.warning(f"[GP] {code} gather エラー: {res}")
-                continue
-            k, v = res
-            if k and v is not None:
-                gp_by_year[k] = v
-
-        _elapsed = time.perf_counter() - _t0
-        logger.info(f"[GP] {code}: GP抽出完了 {len(gp_by_year)}件 {_elapsed:.2f}s")
+        gp_by_year = self._collect_results(results, code, "GP")
+        logger.info(f"[GP] {code}: GP抽出完了 {len(gp_by_year)}件 {time.perf_counter() - _t0:.2f}s")
         return gp_by_year
