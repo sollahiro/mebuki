@@ -194,25 +194,35 @@ async def cmd_analyze(args):
         def get_op_margin(c):
             return c.get("OperatingMargin") or (c.get("OP") / c.get("Sales") * 100 if c.get("OP") and c.get("Sales") else None)
 
+        # IFRS金融会社は純収益・事業利益ラベルを使う（最新年度のラベルで判定）
+        latest_cd = periods[-1].get("CalculatedData", {}) if periods else {}
+        sales_label = latest_cd.get("SalesLabel", "売上高") + " (百万)"
+        op_label = latest_cd.get("OPLabel", "営業利益") + " (百万)"
+        op_margin_label = latest_cd.get("OPLabel", "営業利益") + "率 (%)"
+
         metrics_to_show = [
-            ("売上高 (百万)", lambda c: c.get("Sales")),
-            ("売上総利益 (百万)", lambda c: c.get("GrossProfit")),
-            ("粗利率 (%)", lambda c: c.get("GrossProfitMargin")),
-            ("営業利益 (百万)", lambda c: c.get("OP")),
-            ("営業利益率 (%)", get_op_margin),
-            ("ROE (%)", lambda c: c.get("ROE")),
-            ("ROIC (%)", lambda c: c.get("ROIC")),
-            ("営業CF (百万)", lambda c: c.get("CFO")),
-            ("投資CF (百万)", lambda c: c.get("CFI")),
-            ("フリーCF (百万)", lambda c: c.get("CFC")),
-            ("配当性向 (%)", lambda c: c.get("PayoutRatio")),
+            (sales_label,             lambda c: c.get("Sales")),
+            ("売上総利益 (百万)",      lambda c: c.get("GrossProfit")),
+            ("粗利率 (%)",            lambda c: c.get("GrossProfitMargin")),
+            (op_label,                lambda c: c.get("OP")),
+            (op_margin_label,         get_op_margin),
+            ("ROE (%)",               lambda c: c.get("ROE")),
+            ("ROIC (%)",              lambda c: c.get("ROIC")),
+            ("営業CF (百万)",          lambda c: c.get("CFO")),
+            ("投資CF (百万)",          lambda c: c.get("CFI")),
+            ("フリーCF (百万)",        lambda c: c.get("CFC")),
+            ("配当性向 (%)",           lambda c: c.get("PayoutRatio")),
             # ── 有利子負債 ──
-            ("有利子負債合計 (百万)", lambda c: c.get("InterestBearingDebt")),
-            ("投下資本 (百万)",       lambda c: (c.get("InterestBearingDebt") + c.get("Eq")) if c.get("InterestBearingDebt") is not None and c.get("Eq") is not None else None),
-            ("DocID",                 lambda c: c.get("IBDDocID")),
+            ("有利子負債合計 (百万)",   lambda c: c.get("InterestBearingDebt")),
+            ("投下資本 (百万)",         lambda c: (c.get("InterestBearingDebt") + c.get("Eq")) if c.get("InterestBearingDebt") is not None and c.get("Eq") is not None else None),
+            # ── 従業員数 ──
+            ("従業員数 (人)",           lambda c: c.get("Employees"),   "int"),
+            ("DocID",                  lambda c: c.get("IBDDocID")),
         ]
 
-        for label, func in metrics_to_show:
+        for metric_def in metrics_to_show:
+            label, func = metric_def[0], metric_def[1]
+            fmt_hint = metric_def[2] if len(metric_def) > 2 else None
             row = [label]
             for p in periods:
                 val = func(p.get("CalculatedData", {}))
@@ -220,6 +230,8 @@ async def cmd_analyze(args):
                     row.append(f"{'-':>10}")
                 elif isinstance(val, str):
                     row.append(f"{val:>10}")
+                elif fmt_hint == "int":
+                    row.append(f"{int(val):>10,}")
                 else:
                     row.append(f"{val:>10.2f}")
             print(row_format.format(*row))

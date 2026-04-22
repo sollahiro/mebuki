@@ -71,6 +71,8 @@ class IndividualAnalyzer:
         edinet_data = {}
         ibd_by_year: Dict[str, dict] = {}
         gp_by_year: Dict[str, dict] = {}
+        emp_by_year: Dict[str, dict] = {}
+        nr_by_year: Dict[str, dict] = {}
 
         if financial_data:
             edinet_coro = self._edinet_fetcher.fetch_edinet_data_async(
@@ -82,8 +84,14 @@ class IndividualAnalyzer:
             gp_coro = self._edinet_fetcher.extract_gross_profit_by_year(
                 code, financial_data, actual_years
             )
-            edinet_data, ibd_by_year, gp_by_year = await asyncio.gather(
-                edinet_coro, ibd_coro, gp_coro
+            emp_coro = self._edinet_fetcher.extract_employees_by_year(
+                code, financial_data, actual_years
+            )
+            nr_coro = self._edinet_fetcher.extract_net_revenue_by_year(
+                code, financial_data, actual_years
+            )
+            edinet_data, ibd_by_year, gp_by_year, emp_by_year, nr_by_year = await asyncio.gather(
+                edinet_coro, ibd_coro, gp_coro, emp_coro, nr_coro
             )
 
         if financial_data and metrics:
@@ -133,6 +141,36 @@ class IndividualAnalyzer:
                         sales = new_cd.get("Sales")
                         new_cd["GrossProfitMargin"] = gp_m / sales * PERCENT if sales else None
                     year["CalculatedData"] = new_cd
+
+        for year in metrics.get("years", []):
+            fy_end_key = year.get("fy_end", "").replace("-", "")
+            nr = nr_by_year.get(fy_end_key)
+            if nr and nr.get("found"):
+                cd = year["CalculatedData"]
+                rd = year["RawData"]
+                if cd.get("Sales") is None and nr.get("net_revenue") is not None:
+                    nr_m = nr["net_revenue"] / MILLION_YEN
+                    cd["Sales"] = nr_m
+                    rd["Sales"] = nr["net_revenue"]
+                    cd["SalesLabel"] = "純収益"
+                    # GrossProfitMargin を Sales 確定後に再計算
+                    gp = cd.get("GrossProfit")
+                    if gp is not None:
+                        cd["GrossProfitMargin"] = gp / nr_m * PERCENT
+                if cd.get("OP") is None and nr.get("business_profit") is not None:
+                    bp_m = nr["business_profit"] / MILLION_YEN
+                    cd["OP"] = bp_m
+                    rd["OP"] = nr["business_profit"]
+                    cd["OPLabel"] = "事業利益"
+                    sales = cd.get("Sales")
+                    if sales:
+                        cd["OperatingMargin"] = bp_m / sales * PERCENT
+
+        for year in metrics.get("years", []):
+            fy_end_key = year.get("fy_end", "").replace("-", "")
+            emp = emp_by_year.get(fy_end_key)
+            if emp and emp.get("current") is not None:
+                year["CalculatedData"]["Employees"] = emp["current"]
 
         return {
             "stock_info": stock_info,

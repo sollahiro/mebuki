@@ -289,6 +289,126 @@ class EdinetFetcher:
         logger.info(f"[HALF-EDINET] {code}: 半期EDINETデータ抽出完了 {len(half_data)}件 {_elapsed:.2f}s")
         return half_data
 
+    async def extract_employees_by_year(
+        self,
+        code: str,
+        financial_data: List[Dict[str, Any]],
+        max_years: int,
+    ) -> Dict[str, dict]:
+        """年度別に従業員数を抽出。Returns: { "YYYYMMDD": employees_result_dict }"""
+        from mebuki.analysis.employees import extract_employees
+
+        if not self.edinet_client or not self.edinet_client.api_key:
+            return {}
+
+        docs = await self.edinet_client.search_recent_reports(
+            code, financial_data, max_years, ["120"], max_years,
+        )
+        logger.info(f"[EMP] {code}: {len(docs)}件のEDINET文書を検索")
+
+        async def _process_doc(doc: dict) -> tuple[str, dict | None]:
+            fy_end_8 = doc.get("jquants_fy_end", "").replace("-", "")
+            if not fy_end_8:
+                return "", None
+            try:
+                xbrl_dir = await asyncio.wait_for(
+                    self.edinet_client.download_document(doc["docID"], 1),
+                    timeout=30.0,
+                )
+                if not xbrl_dir:
+                    logger.warning(f"[EMP] {code} {fy_end_8}: XBRLダウンロード失敗")
+                    return fy_end_8, None
+                emp = extract_employees(Path(xbrl_dir))
+                emp["docID"] = doc["docID"]
+                logger.info(
+                    f"[EMP] {code} {fy_end_8}: current={emp.get('current')}, scope={emp.get('scope')}, docID={doc['docID']}"
+                )
+                return fy_end_8, emp
+            except asyncio.TimeoutError:
+                logger.warning(f"[EMP] {code} {fy_end_8}: XBRLダウンロードタイムアウト(30s)")
+                return fy_end_8, None
+            except Exception as e:
+                logger.warning(f"[EMP] {code} {fy_end_8}: 抽出エラー - {e}")
+                return fy_end_8, None
+
+        _t0 = time.perf_counter()
+        results = await asyncio.gather(
+            *[_process_doc(doc) for doc in docs], return_exceptions=True
+        )
+        emp_by_year: dict = {}
+        for res in results:
+            if isinstance(res, Exception):
+                logger.warning(f"[EMP] {code} gather エラー: {res}")
+                continue
+            k, v = res
+            if k and v is not None:
+                emp_by_year[k] = v
+
+        _elapsed = time.perf_counter() - _t0
+        logger.info(f"[EMP] {code}: 従業員数抽出完了 {len(emp_by_year)}件 {_elapsed:.2f}s")
+        return emp_by_year
+
+    async def extract_net_revenue_by_year(
+        self,
+        code: str,
+        financial_data: List[Dict[str, Any]],
+        max_years: int,
+    ) -> Dict[str, dict]:
+        """年度別に IFRS 純収益・事業利益を抽出。Returns: { "YYYYMMDD": nr_result_dict }"""
+        from mebuki.analysis.net_revenue import extract_net_revenue
+
+        if not self.edinet_client or not self.edinet_client.api_key:
+            return {}
+
+        docs = await self.edinet_client.search_recent_reports(
+            code, financial_data, max_years, ["120"], max_years,
+        )
+        logger.info(f"[NR] {code}: {len(docs)}件のEDINET文書を検索")
+
+        async def _process_doc(doc: dict) -> tuple[str, dict | None]:
+            fy_end_8 = doc.get("jquants_fy_end", "").replace("-", "")
+            if not fy_end_8:
+                return "", None
+            try:
+                xbrl_dir = await asyncio.wait_for(
+                    self.edinet_client.download_document(doc["docID"], 1),
+                    timeout=30.0,
+                )
+                if not xbrl_dir:
+                    return fy_end_8, None
+                nr = extract_net_revenue(Path(xbrl_dir))
+                if not nr["found"]:
+                    return fy_end_8, None
+                nr["docID"] = doc["docID"]
+                logger.info(
+                    f"[NR] {code} {fy_end_8}: "
+                    f"net_revenue={nr.get('net_revenue')}, business_profit={nr.get('business_profit')}"
+                )
+                return fy_end_8, nr
+            except asyncio.TimeoutError:
+                logger.warning(f"[NR] {code} {fy_end_8}: XBRLダウンロードタイムアウト(30s)")
+                return fy_end_8, None
+            except Exception as e:
+                logger.warning(f"[NR] {code} {fy_end_8}: 抽出エラー - {e}")
+                return fy_end_8, None
+
+        _t0 = time.perf_counter()
+        results = await asyncio.gather(
+            *[_process_doc(doc) for doc in docs], return_exceptions=True
+        )
+        nr_by_year: dict = {}
+        for res in results:
+            if isinstance(res, Exception):
+                logger.warning(f"[NR] {code} gather エラー: {res}")
+                continue
+            k, v = res
+            if k and v is not None:
+                nr_by_year[k] = v
+
+        _elapsed = time.perf_counter() - _t0
+        logger.info(f"[NR] {code}: 純収益抽出完了 {len(nr_by_year)}件 {_elapsed:.2f}s")
+        return nr_by_year
+
     async def extract_gross_profit_by_year(
         self,
         code: str,
