@@ -11,27 +11,25 @@
 
 ## リリース手順
 
+バージョン更新を依頼されたら、以下のステップをすべて実行すること。
+
 0. **バンプは機能コミットとは分離し、後続の独立コミットとして行う**
 1. `mebuki/__init__.py` と `pyproject.toml` の両方を更新する
-2. `poetry lock` を実行してコミットに含める
-3. **既存タグの付け直しは禁止**。必ず新しいバージョンに上げて新タグを切ること
-   - タグを付け直すと GitHub が tarball を再生成して SHA256 が変わり、Homebrew formula との checksum 不一致が発生する
-
-## タグの作成・プッシュ
-
-バンプコミット後に以下を実行する。
+2. `poetry lock` を実行してコミットに含める（依存変化がなくても実行する）
+3. バンプコミットを作成する（`chore: bump version to X.Y.Z`）
+4. タグを作成する（`git tag vX.Y.Z`）
+5. コミットとタグをリモートへプッシュする
 
 ```bash
-# タグ命名規則: v{major}.{minor}.{patch}
-git tag v2.10.0
-
-# タグをリモートへプッシュ（コミットとは別途必要）
-git push origin v2.10.0
+git push origin main
+git push origin vX.Y.Z
 ```
 
 - `git push origin main` ではタグは送られない。**タグは必ず `git push origin <tag>` で明示的にプッシュする**
 - タグは軽量タグ（annotated 不要）で統一
-- タグ後に間違いを見つけた場合はタグを削除せず、バージョンを上げて新タグを切ること
+- **既存タグの付け直しは禁止**。必ず新しいバージョンに上げて新タグを切ること
+  - タグを付け直すと GitHub が tarball を再生成して SHA256 が変わり、Homebrew formula との checksum 不一致が発生する
+- タグ後に間違いを見つけた場合もタグを削除せず、バージョンを上げて新タグを切ること
 
 ## キャッシュバージョンの埋め込み（`mebuki/services/data_service.py`）
 
