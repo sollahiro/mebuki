@@ -110,7 +110,7 @@ async def cmd_analyze(args):
                 ("営業CF (百万)",      lambda d: d.get("CFO")),
                 ("投資CF (百万)",      lambda d: d.get("CFI")),
                 ("フリーCF (百万)",    lambda d: d.get("FreeCF")),
-                ("DocID",              lambda d: d.get("GrossProfitDocID")),
+                ("DocID",              lambda d: d.get("DocID")),
             ]
 
             for label, func in half_metrics_to_show:
