@@ -27,6 +27,29 @@ class EdinetFetcher:
     ):
         self.api_client = api_client
         self.edinet_client = edinet_client
+        self._doc_cache: dict = {}
+        self._doc_locks: dict = {}
+
+    async def _get_annual_docs(
+        self,
+        code: str,
+        financial_data: List[Dict[str, Any]],
+        max_years: int,
+    ) -> list:
+        """search_recent_reports の結果をインスタンス内でキャッシュ。
+
+        同一 code+max_years を asyncio.gather で並列呼び出しした場合に
+        ネットワーク呼び出しを1回に集約する。
+        """
+        key = (code, max_years)
+        if key not in self._doc_locks:
+            self._doc_locks[key] = asyncio.Lock()
+        async with self._doc_locks[key]:
+            if key not in self._doc_cache:
+                self._doc_cache[key] = await self.edinet_client.search_recent_reports(
+                    code, financial_data, max_years, ["120"], max_years,
+                )
+            return self._doc_cache[key]
 
     async def _run_extraction(
         self,
@@ -190,9 +213,7 @@ class EdinetFetcher:
         if not self.edinet_client or not self.edinet_client.api_key:
             return {}
 
-        docs = await self.edinet_client.search_recent_reports(
-            code, financial_data, max_years, ["120"], max_years,
-        )
+        docs = await self._get_annual_docs(code, financial_data, max_years)
         logger.info(f"[IBD] {code}: {len(docs)}件のEDINET文書を検索")
 
         _t0 = time.perf_counter()
@@ -300,9 +321,7 @@ class EdinetFetcher:
         if not self.edinet_client or not self.edinet_client.api_key:
             return {}
 
-        docs = await self.edinet_client.search_recent_reports(
-            code, financial_data, max_years, ["120"], max_years,
-        )
+        docs = await self._get_annual_docs(code, financial_data, max_years)
         logger.info(f"[EMP] {code}: {len(docs)}件のEDINET文書を検索")
 
         _t0 = time.perf_counter()
@@ -326,9 +345,7 @@ class EdinetFetcher:
         if not self.edinet_client or not self.edinet_client.api_key:
             return {}
 
-        docs = await self.edinet_client.search_recent_reports(
-            code, financial_data, max_years, ["120"], max_years,
-        )
+        docs = await self._get_annual_docs(code, financial_data, max_years)
         logger.info(f"[NR] {code}: {len(docs)}件のEDINET文書を検索")
 
         _t0 = time.perf_counter()
@@ -352,9 +369,7 @@ class EdinetFetcher:
         if not self.edinet_client or not self.edinet_client.api_key:
             return {}
 
-        docs = await self.edinet_client.search_recent_reports(
-            code, financial_data, max_years, ["120"], max_years,
-        )
+        docs = await self._get_annual_docs(code, financial_data, max_years)
         logger.info(f"[GP] {code}: {len(docs)}件のEDINET文書を検索")
 
         _t0 = time.perf_counter()

@@ -93,9 +93,6 @@ def _is_nonconsolidated_prior_duration(ctx: str) -> bool:
     )
 
 
-_parse_value = parse_xbrl_value
-_collect_numeric_elements = collect_numeric_elements
-
 
 def _find_consolidated_duration_value(
     tag_elements: dict, tag: str
@@ -170,7 +167,7 @@ def extract_gross_profit(xbrl_dir: Path) -> dict:
     """
     tag_elements: dict = {}
     for f in find_xbrl_files(xbrl_dir):
-        for tag, ctx_map in _collect_numeric_elements(f, allowed_tags=_GP_RELEVANT_TAGS).items():
+        for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_GP_RELEVANT_TAGS).items():
             if tag not in tag_elements:
                 tag_elements[tag] = {}
             tag_elements[tag].update(ctx_map)

@@ -67,32 +67,15 @@ class XBRLParser:
                 content = []
                 current = heading.next_sibling
                 while current:
-                    # 次の見出しが見つかったら終了
-                    # currentがTagオブジェクトの場合のみname属性にアクセス
-                    try:
-                        # BeautifulSoupのTagオブジェクトの場合
-                        if hasattr(current, 'name') and hasattr(current, 'get_text'):
-                            if getattr(current, 'name', None) in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
-                                break
-                            text = current.get_text(strip=True)
-                            if text:
-                                content.append(text)
-                        elif isinstance(current, str):
-                            text = current.strip()
-                            if text:
-                                content.append(text)
-                    except (AttributeError, TypeError):
-                        # 属性アクセスエラーの場合はスキップ
-                        pass
-                    
-                    # next_siblingが存在する場合のみ取得（NavigableStringやTagオブジェクトの場合）
-                    try:
-                        if hasattr(current, 'next_sibling'):
-                            current = current.next_sibling  # type: ignore
-                        else:
+                    if hasattr(current, 'name') and current.name:
+                        if current.name in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
                             break
-                    except (AttributeError, TypeError):
-                        break
+                        text = current.get_text(strip=True)
+                    else:
+                        text = str(current).strip()
+                    if text:
+                        content.append(text)
+                    current = current.next_sibling
                 
                 if content:
                     return "\n".join(content)

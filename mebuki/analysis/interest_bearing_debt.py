@@ -102,9 +102,6 @@ def _is_nonconsolidated_prior(ctx: str) -> bool:
     )
 
 
-_parse_value = parse_xbrl_value
-_collect_numeric_elements = collect_numeric_elements
-
 
 def _find_consolidated_value(tag_elements: dict, tag: str) -> tuple[Optional[float], Optional[float]]:
     """指定タグの連結当期・前期値のみを返す（個別へのフォールバックなし）。"""
@@ -372,7 +369,7 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
     """
     tag_elements: dict = {}
     for f in find_xbrl_files(xbrl_dir):
-        for tag, ctx_map in _collect_numeric_elements(f, allowed_tags=_IBD_RELEVANT_TAGS).items():
+        for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_IBD_RELEVANT_TAGS).items():
             if tag not in tag_elements:
                 tag_elements[tag] = {}
             tag_elements[tag].update(ctx_map)

@@ -45,61 +45,45 @@ def extract_annual_data(
         年度データ（CurPerType="FY"、またはinclude_2q=Trueの場合は"2Q"も含む）のリスト、
         年度終了日でソート（重複除去済み、未来の年度は除外）
     """
-    from datetime import datetime
-    
-    # 現在日付を取得
     today = datetime.now()
-    current_year = today.year
-    current_month = today.month
-    
-    annual_data = []
-    for record in quarterly_data:
-        period_type = record.get("CurPerType")
-        # FYデータを取得、include_2qがTrueの場合は2Qも取得
-        if period_type == "FY" or (include_2q and period_type == "2Q"):
-            pass  # 続行
-        else:
-            continue
-        
-        # 未来の年度データを除外（年度終了日と開示日の両方をチェック）
+
+    def _should_include(record: dict) -> bool:
         fy_end = record.get("CurFYEn", "")
         disc_date = record.get("DiscDate", "")
-        
-        # 開示日が未来の場合は除外（開示日が存在する場合）
+
         if disc_date:
             try:
-                disc_date_obj = parse_date_string(disc_date)
-                if disc_date_obj and disc_date_obj > today:
-                    # 開示日が未来の場合は除外
-                    continue
+                disc_dt = parse_date_string(disc_date)
+                if disc_dt and disc_dt > today:
+                    return False
             except (ValueError, TypeError):
-                # パースに失敗した場合は年度終了日でチェック
                 pass
-        
-        # 年度終了日が未来の場合は除外
+
         if fy_end:
             year, month = extract_year_month(fy_end)
             if year is None or month is None:
-                # 形式が不明な場合は含める
-                annual_data.append(record)
-                continue
-
-            # 現在日付より未来の年度は除外
-            # 例: 2026/03/07時点で2026/03/31のデータは除外
+                return True
             try:
                 fy_end_dt = parse_date_string(fy_end)
                 if fy_end_dt and fy_end_dt > today:
-                    continue
+                    return False
             except (ValueError, TypeError):
-                # パース失敗時は念のため旧ロジックでフォールバック
-                if year > current_year or (year == current_year and month > current_month):
-                    continue
-        
-        # 主要財務データが全てN/Aの場合は除外（converters.pyの関数を使用）
+                if year > today.year or (year == today.year and month > today.month):
+                    return False
+
         if not is_valid_financial_record(record):
             logger.warning(f"主要財務データが全てN/Aのため除外: fy_end={fy_end}")
+            return False
+
+        return True
+
+    annual_data = []
+    for record in quarterly_data:
+        period_type = record.get("CurPerType")
+        if period_type != "FY" and not (include_2q and period_type == "2Q"):
             continue
-        
+        if not _should_include(record):
+            continue
         annual_data.append(record)
     
     # 年度終了日（CurFYEn）でソート（古い順）

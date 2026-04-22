@@ -45,9 +45,6 @@ def _is_consolidated_prior_duration(ctx: str) -> bool:
     return any(p in ctx for p in _PRIOR_DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx
 
 
-_parse_value = parse_xbrl_value
-_collect_numeric_elements = collect_numeric_elements
-
 
 def _find_duration_value(
     tag_elements: dict, tag: str
@@ -79,7 +76,7 @@ def extract_cash_flow(xbrl_dir: Path) -> dict:
     """
     tag_elements: dict = {}
     for f in find_xbrl_files(xbrl_dir):
-        for tag, ctx_map in _collect_numeric_elements(f, _CF_RELEVANT_TAGS).items():
+        for tag, ctx_map in collect_numeric_elements(f, _CF_RELEVANT_TAGS).items():
             if tag not in tag_elements:
                 tag_elements[tag] = {}
             tag_elements[tag].update(ctx_map)
