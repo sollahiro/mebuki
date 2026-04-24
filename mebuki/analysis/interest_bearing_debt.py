@@ -150,26 +150,45 @@ def _determine_column_order(headers: list[str]) -> tuple[int, int]:
     """
     ['第87期末（百万円）', '第88期末（百万円）'] のようなヘッダリストから
     (prior_col_idx, current_col_idx) を返す。
+
+    US-GAAP連結注記形式 ['前連結会計年度末(百万円)', '', '当連結会計年度末(百万円)'] にも対応。
     """
     period_nums = []
     for h in headers:
         m = re.search(r'第(\d+)期', h)
         period_nums.append(int(m.group(1)) if m else -1)
+
+    if any(n >= 0 for n in period_nums):
+        if len(period_nums) < 2:
+            return None, 0
+        if period_nums[0] > period_nums[1]:
+            return 1, 0
+        else:
+            return 0, 1
+
+    # 前連結/当連結 パターン（US-GAAP企業の連結財務諸表注記）
+    prior_idx = current_idx = None
+    for i, h in enumerate(headers):
+        if "当連結会計年度" in h or "当連結決算" in h:
+            current_idx = i
+        elif "前連結会計年度" in h or "前連結決算" in h:
+            prior_idx = i
+    if current_idx is not None:
+        return prior_idx, current_idx
+
     if len(period_nums) < 2:
         return None, 0
-    if period_nums[0] > period_nums[1]:
-        return 1, 0
-    else:
-        return 0, 1
+    return 0, 1
 
 
 def _find_loan_section_pos(content: str) -> int:
     """借入金ノートセクションの開始位置を返す。見つからない場合 -1。"""
-    idx = content.find("短期借入金の残高")
-    if idx >= 0:
-        nearby = content[idx: idx + 200]
-        if "該当事項" not in nearby:
-            return idx
+    for keyword in ["短期借入金の残高", "短期の社債及び借入金"]:
+        idx = content.find(keyword)
+        if idx >= 0:
+            nearby = content[idx: idx + 200]
+            if "該当事項" not in nearby:
+                return idx
     return -1
 
 
@@ -179,6 +198,8 @@ def _parse_loan_tables(tables: list) -> Dict[str, Any]:
     lt_total_current = lt_total_prior = None
     lt_1yr_current = lt_1yr_prior = None
     bonds_current = bonds_prior = None
+    st_total_current = st_total_prior = None  # 合計行（US-GAAP形式）
+    lt_net_current = lt_net_prior = None       # 差引計行（US-GAAP形式）
 
     for tbl in tables:
         headers = tbl["headers"]
@@ -194,10 +215,10 @@ def _parse_loan_tables(tables: list) -> Dict[str, Any]:
             label = row[0]
             vals = row[1:]
 
-            def _get(idx):
-                if idx is None or idx >= len(vals):
+            def _get(idx, _vals=vals):
+                if idx is None or idx >= len(_vals):
                     return None
-                return _parse_number(vals[idx])
+                return _parse_number(_vals[idx])
 
             if "短期借入金" in label and "（" not in label and "１年" not in label and "1年" not in label:
                 short_term_current = short_term_current or _get(current_idx)
@@ -215,11 +236,21 @@ def _parse_loan_tables(tables: list) -> Dict[str, Any]:
                 bonds_current = bonds_current or _get(current_idx)
                 bonds_prior   = bonds_prior   or _get(prior_idx)
 
+            elif re.match(r'^合計$', label):
+                st_total_current = st_total_current or _get(current_idx)
+                st_total_prior   = st_total_prior   or _get(prior_idx)
+
+            elif re.match(r'^差引計$', label):
+                lt_net_current = lt_net_current or _get(current_idx)
+                lt_net_prior   = lt_net_prior   or _get(prior_idx)
+
     return {
         "short_term": (short_term_current, short_term_prior),
         "lt_total":   (lt_total_current,   lt_total_prior),
         "lt_1yr":     (lt_1yr_current,     lt_1yr_prior),
         "bonds":      (bonds_current,      bonds_prior),
+        "st_total":   (st_total_current,   st_total_prior),
+        "lt_net":     (lt_net_current,     lt_net_prior),
     }
 
 
@@ -234,20 +265,29 @@ def _extract_usgaap_from_html(htm_file: Path) -> Optional[Dict[str, Any]]:
     if idx < 0:
         return None
 
-    section_html = content[max(0, idx - 200): idx + 20000]
+    section_html = content[max(0, idx - 200): idx + 40000]
     soup = BeautifulSoup(section_html, "html.parser")
     tables = soup.find_all("table")
     if not tables:
         return None
 
     parsed_tables = []
+    _HEADER_MARKERS = ("第", "前連結会計年度", "当連結会計年度", "前連結決算", "当連結決算")
+
     for tbl in tables:
         rows = tbl.find_all("tr")
         if not rows:
             continue
-        header_row = [c.get_text(strip=True) for c in rows[0].find_all(["td", "th"])]
+        # 実際のヘッダー行を検出（空行をスキップ）
+        header_idx = 0
+        for i, row in enumerate(rows):
+            cells = [c.get_text(strip=True) for c in row.find_all(["td", "th"])]
+            if any(any(m in c for m in _HEADER_MARKERS) for c in cells):
+                header_idx = i
+                break
+        header_row = [c.get_text(strip=True) for c in rows[header_idx].find_all(["td", "th"])]
         data_rows = []
-        for row in rows[1:]:
+        for row in rows[header_idx + 1:]:
             cells = [c.get_text(strip=True) for c in row.find_all(["td", "th"])]
             if cells:
                 data_rows.append(cells)
@@ -258,6 +298,31 @@ def _extract_usgaap_from_html(htm_file: Path) -> Optional[Dict[str, Any]]:
     lt_total_current,   lt_total_prior   = extracted["lt_total"]
     lt_1yr_current,     lt_1yr_prior     = extracted["lt_1yr"]
     bonds_current,      bonds_prior      = extracted["bonds"]
+    st_total_current,   st_total_prior   = extracted["st_total"]
+    lt_net_current,     lt_net_prior     = extracted["lt_net"]
+
+    def _to_yen(v):
+        return v * MILLION_YEN if v is not None else None
+
+    def safe_sum(vals):
+        vs = [v for v in vals if v is not None]
+        return sum(vs) if vs else None
+
+    # 合計＋差引計が揃っていればUS-GAAP連結注記形式として処理（富士フイルム等）
+    if st_total_current is not None and lt_net_current is not None:
+        components = [
+            {"label": "社債及び短期借入金（合計）",     "tag": "USGAAP_STTotal",
+             "current": _to_yen(st_total_current), "prior": _to_yen(st_total_prior)},
+            {"label": "長期の社債及び借入金（差引計）", "tag": "USGAAP_LTNet",
+             "current": _to_yen(lt_net_current),   "prior": _to_yen(lt_net_prior)},
+        ]
+        return {
+            "current": safe_sum([c["current"] for c in components]),
+            "prior":   safe_sum([c["prior"]   for c in components]),
+            "method":  "usgaap_html",
+            "accounting_standard": "US-GAAP",
+            "components": components,
+        }
 
     if all(v is None for v in [short_term_current, lt_total_current, bonds_current]):
         return None
@@ -268,9 +333,6 @@ def _extract_usgaap_from_html(htm_file: Path) -> Optional[Dict[str, Any]]:
     lt_longterm_current = _subtract(lt_total_current, lt_1yr_current)
     lt_longterm_prior   = _subtract(lt_total_prior,   lt_1yr_prior)
 
-    def _to_yen(v):
-        return v * MILLION_YEN if v is not None else None
-
     components = [
         {"label": "短期借入金",               "tag": "USGAAP_ShortTermLoans",        "current": _to_yen(short_term_current),  "prior": _to_yen(short_term_prior)},
         {"label": "コマーシャル・ペーパー",    "tag": None,                            "current": None,                         "prior": None},
@@ -279,10 +341,6 @@ def _extract_usgaap_from_html(htm_file: Path) -> Optional[Dict[str, Any]]:
         {"label": "社債",                     "tag": "USGAAP_Bonds",                  "current": _to_yen(bonds_current),       "prior": _to_yen(bonds_prior)},
         {"label": "長期借入金",               "tag": "USGAAP_LTLoans",                "current": _to_yen(lt_longterm_current), "prior": _to_yen(lt_longterm_prior)},
     ]
-
-    def safe_sum(vals):
-        vs = [v for v in vals if v is not None]
-        return sum(vs) if vs else None
 
     return {
         "current": safe_sum([c["current"] for c in components]),
