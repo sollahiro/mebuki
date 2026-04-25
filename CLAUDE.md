@@ -9,8 +9,9 @@
 
 テストで自動検証: `tests/test_dependency_rules.py`
 
-@.claude/rules/date-conversion.md
-@.claude/rules/versioning.md
-@.claude/rules/mcp-cli-parity.md
-@.claude/rules/error-handling.md
-@.claude/rules/xbrl-analysis.md
+@.claude/rules/generic/commit-conventions.md
+@.claude/rules/project/date-conversion.md
+@.claude/rules/project/versioning.md
+@.claude/rules/project/mcp-cli-parity.md
+@.claude/rules/project/error-handling.md
+@.claude/rules/project/xbrl-analysis.md
