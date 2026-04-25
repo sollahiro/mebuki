@@ -11,14 +11,14 @@ def build_parser() -> argparse.ArgumentParser:
     # search
     search_parser = subparsers.add_parser("search", help="銘柄を検索")
     search_parser.add_argument("query", help="検索クエリ（銘柄名またはコード）")
-    search_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+    search_parser.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
 
     # analyze
     analyze_parser = subparsers.add_parser("analyze", help="銘柄を分析")
     analyze_parser.add_argument("code", help="銘柄コード")
     analyze_parser.add_argument("--scope", choices=["raw"], default=None, help="取得スコープ（raw: J-QUANTS生データ）")
     analyze_parser.add_argument("--years", type=int, help="分析年数")
-    analyze_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+    analyze_parser.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
     analyze_parser.add_argument("--no-cache", action="store_true", help="キャッシュを使用しない")
     analyze_parser.add_argument(
         "--half", action="store_true",
@@ -28,14 +28,14 @@ def build_parser() -> argparse.ArgumentParser:
     # filings
     filings_parser = subparsers.add_parser("filings", help="EDINET書類一覧を取得")
     filings_parser.add_argument("code", help="銘柄コード")
-    filings_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+    filings_parser.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
 
     # filing
     filing_parser = subparsers.add_parser("filing", help="EDINET書類の内容を抽出")
     filing_parser.add_argument("code", help="銘柄コード")
     filing_parser.add_argument("--doc-id", dest="doc_id", help="書類ID (省略時は最新の有価証券報告書)")
     filing_parser.add_argument("--sections", nargs="+", help="抽出するセクション名 (複数指定可)")
-    filing_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+    filing_parser.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
 
     # config
     config_parser = subparsers.add_parser("config", help="設定の表示・変更")
@@ -57,7 +57,7 @@ def build_parser() -> argparse.ArgumentParser:
     # sector
     sector_parser = subparsers.add_parser("sector", help="東証33業種で銘柄を検索")
     sector_parser.add_argument("sector", nargs="?", help="業種名（省略時は全業種一覧を表示）")
-    sector_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+    sector_parser.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
 
     # watch
     watch_parser = subparsers.add_parser("watch", help="ウォッチリスト管理")
@@ -65,12 +65,12 @@ def build_parser() -> argparse.ArgumentParser:
     watch_add = watch_sub.add_parser("add", help="ウォッチリストに追加")
     watch_add.add_argument("code", help="銘柄コード")
     watch_add.add_argument("--name", help="銘柄名（省略時は自動取得）")
-    watch_add.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+    watch_add.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
     watch_rm = watch_sub.add_parser("remove", help="ウォッチリストから削除")
     watch_rm.add_argument("code", help="銘柄コード")
-    watch_rm.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+    watch_rm.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
     watch_list = watch_sub.add_parser("list", help="ウォッチリストを表示")
-    watch_list.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+    watch_list.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
 
     # portfolio
     pf_parser = subparsers.add_parser("portfolio", help="ポートフォリオ管理")
@@ -84,23 +84,23 @@ def build_parser() -> argparse.ArgumentParser:
     pf_add.add_argument("--account", choices=["特定", "一般", "NISA"], default="特定", help="口座種別")
     pf_add.add_argument("--date", help="取得日 (YYYY-MM-DD)")
     pf_add.add_argument("--name", help="銘柄名（省略時は自動取得）")
-    pf_add.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+    pf_add.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
 
     pf_sell = pf_sub.add_parser("sell", help="保有銘柄を売却")
     pf_sell.add_argument("code", help="銘柄コード")
     pf_sell.add_argument("quantity", type=int, help="売却数量")
     pf_sell.add_argument("--broker", default="", help="証券会社名")
     pf_sell.add_argument("--account", choices=["特定", "一般", "NISA"], default="特定", help="口座種別")
-    pf_sell.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+    pf_sell.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
 
     pf_rm = pf_sub.add_parser("remove", help="保有エントリを削除")
     pf_rm.add_argument("code", help="銘柄コード")
     pf_rm.add_argument("--broker", default="", help="証券会社名")
     pf_rm.add_argument("--account", choices=["特定", "一般", "NISA"], default="特定", help="口座種別")
-    pf_rm.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+    pf_rm.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
 
     pf_list = pf_sub.add_parser("list", help="ポートフォリオを表示")
     pf_list.add_argument("--detail", action="store_true", help="口座別詳細を表示")
-    pf_list.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+    pf_list.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
 
     return parser
