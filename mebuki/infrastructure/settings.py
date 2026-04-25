@@ -39,7 +39,6 @@ class SettingsStore:
             "jquantsApiKey": "",
             "edinetApiKey": "",
             "analysisYears": 5,
-            "llmProvider": "none", # 初期値は none
             "cacheDir": str(cache_dir),
             "cacheEnabled": True,
             "mcpEnabled": True,
@@ -71,7 +70,6 @@ class SettingsStore:
                 "edinetApiKey": "edinetApiKey",
                 "analysisYears": "analysisYears",
                 "cacheEnabled": "cacheEnabled",
-                "llmProvider": "llmProvider",
             }
             
             for store_key, settings_key in mapping.items():

@@ -38,20 +38,10 @@ def cmd_config(args, parser):
             "edinet-key": "edinetApiKey",
             "years": "analysisYears",
             "analysisYears": "analysisYears",
-            "llm": "llmProvider",
-            "llmProvider": "llmProvider"
         }
 
         target_key = key_map.get(args.key, args.key)
         target_value = args.value
-
-        # LLMプロバイダーのバリデーション
-        if target_key == "llmProvider":
-            allowed = ["gemini", "grok", "claude", "none"]
-            if target_value.lower() not in allowed:
-                print(f"エラー: 無効なLLMプロバイダーです。{allowed} から選択してください。")
-                return
-            target_value = target_value.lower()
 
         settings_store.update({target_key: target_value}, save=True)
         print(f"設定を更新しました: {target_key}")
