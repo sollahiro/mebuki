@@ -178,7 +178,7 @@ def cmd_mcp(args, parser):
             pass
 
     elif args.mcp_subcommand == "install-claude":
-        print("\nClaude Desktop への MCP サーバー登録を試みています...")
+        print("\nClaude Desktop への MCP サーバー登録を試みています...", file=sys.stderr)
 
         from pathlib import Path
 
@@ -186,11 +186,11 @@ def cmd_mcp(args, parser):
         if sys.platform == "darwin":
             config_path = Path.home() / "Library" / "Application Support" / "Claude" / "claude_desktop_config.json"
         else:
-            print(f"OS {sys.platform} は自動インストールに対応していません。手動で設定してください。")
+            print(f"OS {sys.platform} は自動インストールに対応していません。手動で設定してください。", file=sys.stderr)
             return
 
         if not config_path.parent.exists():
-            print(f"Claude Desktop の設定ディレクトリが見つかりません: {config_path.parent}")
+            print(f"Claude Desktop の設定ディレクトリが見つかりません: {config_path.parent}", file=sys.stderr)
         else:
             executable, cmd_args = _get_mcp_command()
 
@@ -217,20 +217,20 @@ def cmd_mcp(args, parser):
                 with open(config_path, "w", encoding="utf-8") as f:
                     json.dump(config_data, f, indent=2, ensure_ascii=False)
 
-                print(f"成功: Claude Desktop に 'mebuki' MCP サーバーを登録しました。")
-                print(f"設定ファイル: {config_path}")
-                print("Claude Desktop を再起動して反映させてください。")
+                print(f"成功: Claude Desktop に 'mebuki' MCP サーバーを登録しました。", file=sys.stderr)
+                print(f"設定ファイル: {config_path}", file=sys.stderr)
+                print("Claude Desktop を再起動して反映させてください。", file=sys.stderr)
             except Exception as e:
-                print(f"エラー: Claude Desktop への登録中に問題が発生しました: {e}")
+                print(f"エラー: Claude Desktop への登録中に問題が発生しました: {e}", file=sys.stderr)
 
     elif args.mcp_subcommand == "install-goose":
-        print("\nGoose への MCP 拡張登録を試みています...")
+        print("\nGoose への MCP 拡張登録を試みています...", file=sys.stderr)
         import os
         from pathlib import Path
 
         config_path = Path.home() / ".config" / "goose" / "config.yaml"
         if not config_path.parent.exists():
-            print(f"Goose の設定ディレクトリが見つかりません: {config_path.parent}")
+            print(f"Goose の設定ディレクトリが見つかりません: {config_path.parent}", file=sys.stderr)
             return
 
         try:
@@ -261,18 +261,18 @@ def cmd_mcp(args, parser):
             with open(config_path, "w", encoding="utf-8") as f:
                 f.write(_yaml_dump(config_data) + "\n")
 
-            print(f"成功: Goose に 'mebuki' 拡張を登録しました。")
-            print(f"設定ファイル: {config_path}")
+            print(f"成功: Goose に 'mebuki' 拡張を登録しました。", file=sys.stderr)
+            print(f"設定ファイル: {config_path}", file=sys.stderr)
         except Exception as e:
-            print(f"エラー: Goose への登録中に問題が発生しました: {e}")
+            print(f"エラー: Goose への登録中に問題が発生しました: {e}", file=sys.stderr)
 
     elif args.mcp_subcommand == "install-lm-studio":
-        print("\nLM Studio への MCP サーバー登録を試みています...")
+        print("\nLM Studio への MCP サーバー登録を試みています...", file=sys.stderr)
         from pathlib import Path
 
         config_path = Path.home() / ".lmstudio" / "mcp.json"
         if not config_path.parent.exists():
-            print(f"LM Studio の設定ディレクトリが見つかりません: {config_path.parent}")
+            print(f"LM Studio の設定ディレクトリが見つかりません: {config_path.parent}", file=sys.stderr)
             return
 
         try:
@@ -297,8 +297,8 @@ def cmd_mcp(args, parser):
             with open(config_path, "w", encoding="utf-8") as f:
                 json.dump(config_data, f, indent=2, ensure_ascii=False)
 
-            print(f"成功: LM Studio に 'mebuki' MCP サーバーを登録しました。")
-            print(f"設定ファイル: {config_path}")
-            print("LM Studio を再起動して反映させてください。")
+            print(f"成功: LM Studio に 'mebuki' MCP サーバーを登録しました。", file=sys.stderr)
+            print(f"設定ファイル: {config_path}", file=sys.stderr)
+            print("LM Studio を再起動して反映させてください。", file=sys.stderr)
         except Exception as e:
-            print(f"エラー: LM Studio への登録中に問題が発生しました: {e}")
+            print(f"エラー: LM Studio への登録中に問題が発生しました: {e}", file=sys.stderr)

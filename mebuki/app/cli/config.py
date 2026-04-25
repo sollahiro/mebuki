@@ -1,3 +1,4 @@
+import sys
 import logging
 from mebuki.infrastructure.settings import settings_store
 
@@ -18,16 +19,16 @@ def cmd_config(args, parser):
 
     if args.config_subcommand == "show":
         settings = settings_store.get_masked()
-        print("\n現在の設定 (機密情報はマスクされています):")
-        print("-" * 40)
+        print("\n現在の設定 (機密情報はマスクされています):", file=sys.stderr)
+        print("-" * 40, file=sys.stderr)
         for k, v in settings.items():
-            print(f"{k:<20}: {v}")
-        print("-" * 40)
-        print(f"設定ファイルパス: {settings_store.config_path}")
+            print(f"{k:<20}: {v}", file=sys.stderr)
+        print("-" * 40, file=sys.stderr)
+        print(f"設定ファイルパス: {settings_store.config_path}", file=sys.stderr)
 
     elif args.config_subcommand == "set":
         if not args.key or args.value is None:
-            print("キーと値を指定してください。例: mebuki config set jquantsApiKey YOUR_KEY")
+            print("キーと値を指定してください。例: mebuki config set jquantsApiKey YOUR_KEY", file=sys.stderr)
             return
 
         # マッピング（CLIからの入力をバックエンドのキー名に変換）
@@ -49,28 +50,28 @@ def cmd_config(args, parser):
                 if target_value <= 0:
                     raise ValueError
             except ValueError:
-                print("エラー: years には正の整数を指定してください。")
+                print("エラー: years には正の整数を指定してください。", file=sys.stderr)
                 return
 
         settings_store.update({target_key: target_value}, save=True)
-        print(f"設定を更新しました: {target_key}")
+        print(f"設定を更新しました: {target_key}", file=sys.stderr)
 
     elif args.config_subcommand == "check":
         j_key = settings_store.jquants_api_key
         e_key = settings_store.edinet_api_key
-        print("\nAPI設定チェック:")
-        print(f"  J-QUANTS APIキー: {'✅ 設定済み' if j_key else '❌ 未設定'}")
-        print(f"  EDINET APIキー:   {'✅ 設定済み' if e_key else '❌ 未設定'}")
+        print("\nAPI設定チェック:", file=sys.stderr)
+        print(f"  J-QUANTS APIキー: {'✅ 設定済み' if j_key else '❌ 未設定'}", file=sys.stderr)
+        print(f"  EDINET APIキー:   {'✅ 設定済み' if e_key else '❌ 未設定'}", file=sys.stderr)
         if not j_key or not e_key:
-            print("\n未設定のキーは以下のコマンドで設定できます:")
+            print("\n未設定のキーは以下のコマンドで設定できます:", file=sys.stderr)
             if not j_key:
-                print("  mebuki config set jquants-key <KEY>")
+                print("  mebuki config set jquants-key <KEY>", file=sys.stderr)
             if not e_key:
-                print("  mebuki config set edinet-key <KEY>")
+                print("  mebuki config set edinet-key <KEY>", file=sys.stderr)
 
     elif args.config_subcommand == "init":
-        print("\nmebuki 初期設定")
-        print("-" * 40)
+        print("\nmebuki 初期設定", file=sys.stderr)
+        print("-" * 40, file=sys.stderr)
         j_key = input("J-QUANTS APIキー (空でスキップ): ").strip()
         e_key = input("EDINET APIキー (空でスキップ): ").strip()
 
@@ -80,6 +81,6 @@ def cmd_config(args, parser):
 
         if updates:
             settings_store.update(updates, save=True)
-            print("設定を保存しました。")
+            print("設定を保存しました。", file=sys.stderr)
         else:
-            print("変更はありません。")
+            print("変更はありません。", file=sys.stderr)

@@ -1,4 +1,5 @@
 import json
+import sys
 import logging
 
 logger = logging.getLogger(__name__)
@@ -17,12 +18,12 @@ def cmd_watch(args):
             if fmt == "json":
                 print(json.dumps(result, indent=2, ensure_ascii=False))
             elif result["status"] == "already_exists":
-                print(f"既にウォッチリストに存在します: {args.code}")
+                print(f"既にウォッチリストに存在します: {args.code}", file=sys.stderr)
             else:
                 item = result["item"]
-                print(f"ウォッチリストに追加しました: {item['ticker_code']} {item['name']}")
+                print(f"ウォッチリストに追加しました: {item['ticker_code']} {item['name']}", file=sys.stderr)
         except ValueError as e:
-            print(f"エラー: {e}")
+            print(f"エラー: {e}", file=sys.stderr)
 
     elif sub == "remove":
         try:
@@ -30,11 +31,11 @@ def cmd_watch(args):
             if fmt == "json":
                 print(json.dumps(result, indent=2, ensure_ascii=False))
             elif result["status"] == "removed":
-                print(f"ウォッチリストから削除しました: {args.code}")
+                print(f"ウォッチリストから削除しました: {args.code}", file=sys.stderr)
             else:
-                print(f"見つかりませんでした: {args.code}")
+                print(f"見つかりませんでした: {args.code}", file=sys.stderr)
         except ValueError as e:
-            print(f"エラー: {e}")
+            print(f"エラー: {e}", file=sys.stderr)
 
     elif sub == "list":
         watchlist = portfolio_service.get_watchlist()
@@ -42,19 +43,19 @@ def cmd_watch(args):
             print(json.dumps(watchlist, indent=2, ensure_ascii=False))
             return
         if not watchlist:
-            print("ウォッチリストは空です。")
+            print("ウォッチリストは空です。", file=sys.stderr)
             return
-        print(f"\nウォッチリスト ({len(watchlist)}件):")
-        print("-" * 40)
-        print(f"{'コード':<8} {'銘柄名':<20} {'追加日'}")
-        print("-" * 40)
+        print(f"\nウォッチリスト ({len(watchlist)}件):", file=sys.stderr)
+        print("-" * 40, file=sys.stderr)
+        print(f"{'コード':<8} {'銘柄名':<20} {'追加日'}", file=sys.stderr)
+        print("-" * 40, file=sys.stderr)
         for item in watchlist:
             added = item.get("added_at", "")[:10]
-            print(f"{item['ticker_code']:<8} {item['name']:<20} {added}")
-        print("-" * 40)
+            print(f"{item['ticker_code']:<8} {item['name']:<20} {added}", file=sys.stderr)
+        print("-" * 40, file=sys.stderr)
 
     else:
-        print("サブコマンドを指定してください: add / remove / list")
+        print("サブコマンドを指定してください: add / remove / list", file=sys.stderr)
 
 
 def cmd_portfolio(args):
@@ -63,7 +64,7 @@ def cmd_portfolio(args):
 
     sub = args.portfolio_subcommand
     if sub is None:
-        print("サブコマンドを指定してください: add / sell / remove / list")
+        print("サブコマンドを指定してください: add / sell / remove / list", file=sys.stderr)
         return
 
     fmt = getattr(args, 'format', 'table')
@@ -83,9 +84,9 @@ def cmd_portfolio(args):
                 print(json.dumps(result, indent=2, ensure_ascii=False))
             else:
                 lot = result["lot"]
-                print(f"保有を追加しました: {args.code}  {lot['quantity']}株 @{lot['cost_price']}円  ({lot['bought_at']})")
+                print(f"保有を追加しました: {args.code}  {lot['quantity']}株 @{lot['cost_price']}円  ({lot['bought_at']})", file=sys.stderr)
         except ValueError as e:
-            print(f"エラー: {e}")
+            print(f"エラー: {e}", file=sys.stderr)
 
     elif sub == "sell":
         try:
@@ -98,9 +99,9 @@ def cmd_portfolio(args):
             if fmt == "json":
                 print(json.dumps(result, indent=2, ensure_ascii=False))
             else:
-                print(f"売却処理完了: {args.code}  {result['sold_quantity']}株  残{result['remaining_quantity']}株")
+                print(f"売却処理完了: {args.code}  {result['sold_quantity']}株  残{result['remaining_quantity']}株", file=sys.stderr)
         except ValueError as e:
-            print(f"エラー: {e}")
+            print(f"エラー: {e}", file=sys.stderr)
 
     elif sub == "remove":
         try:
@@ -112,11 +113,11 @@ def cmd_portfolio(args):
             if fmt == "json":
                 print(json.dumps(result, indent=2, ensure_ascii=False))
             elif result["status"] == "removed":
-                print(f"保有エントリを削除しました: {args.code}")
+                print(f"保有エントリを削除しました: {args.code}", file=sys.stderr)
             else:
-                print(f"見つかりませんでした: {args.code}")
+                print(f"見つかりませんでした: {args.code}", file=sys.stderr)
         except ValueError as e:
-            print(f"エラー: {e}")
+            print(f"エラー: {e}", file=sys.stderr)
 
     elif sub == "list":
         detail = getattr(args, "detail", False)
@@ -127,32 +128,32 @@ def cmd_portfolio(args):
         if detail:
             holdings = portfolio_service.get_holdings()
             if not holdings:
-                print("保有銘柄はありません。")
+                print("保有銘柄はありません。", file=sys.stderr)
                 return
-            print(f"\nポートフォリオ詳細 ({len(holdings)}ポジション):")
-            print("-" * 70)
+            print(f"\nポートフォリオ詳細 ({len(holdings)}ポジション):", file=sys.stderr)
+            print("-" * 70, file=sys.stderr)
             for item in holdings:
                 qty = sum(lot["quantity"] for lot in item["lots"])
                 if qty == 0:
                     continue
                 avg = sum(lot["quantity"] * lot["cost_price"] for lot in item["lots"]) / qty
-                print(f"  {item['ticker_code']} {item['name']}  [{item['broker']} {item['account_type']}]")
-                print(f"    保有数: {qty}株  平均取得単価: {avg:.2f}円")
+                print(f"  {item['ticker_code']} {item['name']}  [{item['broker']} {item['account_type']}]", file=sys.stderr)
+                print(f"    保有数: {qty}株  平均取得単価: {avg:.2f}円", file=sys.stderr)
                 for lot in item["lots"]:
-                    print(f"      ロット: {lot['quantity']}株 @{lot['cost_price']}円 ({lot['bought_at']})")
-            print("-" * 70)
+                    print(f"      ロット: {lot['quantity']}株 @{lot['cost_price']}円 ({lot['bought_at']})", file=sys.stderr)
+            print("-" * 70, file=sys.stderr)
         else:
             consolidated = portfolio_service.get_consolidated()
             if not consolidated:
-                print("保有銘柄はありません。")
+                print("保有銘柄はありません。", file=sys.stderr)
                 return
-            print(f"\nポートフォリオ ({len(consolidated)}銘柄):")
-            print("-" * 60)
-            print(f"{'コード':<8} {'銘柄名':<20} {'保有数':>8} {'平均取得単価':>12}")
-            print("-" * 60)
+            print(f"\nポートフォリオ ({len(consolidated)}銘柄):", file=sys.stderr)
+            print("-" * 60, file=sys.stderr)
+            print(f"{'コード':<8} {'銘柄名':<20} {'保有数':>8} {'平均取得単価':>12}", file=sys.stderr)
+            print("-" * 60, file=sys.stderr)
             for c in consolidated:
-                print(f"{c['ticker_code']:<8} {c['name']:<20} {c['total_quantity']:>8} {c['avg_cost_price']:>12.2f}")
-            print("-" * 60)
+                print(f"{c['ticker_code']:<8} {c['name']:<20} {c['total_quantity']:>8} {c['avg_cost_price']:>12.2f}", file=sys.stderr)
+            print("-" * 60, file=sys.stderr)
 
     else:
-        print("サブコマンドを指定してください: add / sell / remove / list")
+        print("サブコマンドを指定してください: add / sell / remove / list", file=sys.stderr)
