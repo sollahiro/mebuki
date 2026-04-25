@@ -1,6 +1,7 @@
 import json
 import sys
 import logging
+import aiohttp
 from mebuki.infrastructure.helpers import validate_stock_code
 from mebuki.infrastructure.settings import settings_store
 from mebuki.services.master_data import master_data_manager
@@ -48,7 +49,9 @@ async def cmd_analyze(args):
         try:
             result = await data_service.get_financial_data(code, scope=args.scope, use_cache=not args.no_cache)
             print(json.dumps(result, indent=2, ensure_ascii=False))
-        except Exception as e:
+        except ValueError as e:
+            print(f"エラー: {e}")
+        except aiohttp.ClientError as e:
             print(f"エラー: {e}")
             logger.exception(e)
         finally:
@@ -113,8 +116,10 @@ async def cmd_analyze(args):
                 print(row_format.format(*row))
 
             print(sep)
-        except Exception as e:
-            print(f"エラー: 分析中に例外が発生しました: {e}")
+        except ValueError as e:
+            print(f"エラー: {e}")
+        except aiohttp.ClientError as e:
+            print(f"エラー: {e}")
             logger.exception(e)
         finally:
             await data_service.close()
@@ -242,8 +247,10 @@ async def cmd_analyze(args):
                     portfolio_service.add_watch(code, name=info.get("name", ""))
                     print(f"ウォッチリストに追加しました: {code} {info['name']}")
 
-    except Exception as e:
-        print(f"エラー: 分析中に例外が発生しました: {e}")
+    except ValueError as e:
+        print(f"エラー: {e}")
+    except aiohttp.ClientError as e:
+        print(f"エラー: {e}")
         logger.exception(e)
     finally:
         await data_service.close()
@@ -279,7 +286,9 @@ async def cmd_filings(args):
                     f" {doc.get('docDescription','')}"
                 )
             print("-" * 80)
-    except Exception as e:
+    except ValueError as e:
+        print(f"エラー: {e}")
+    except aiohttp.ClientError as e:
         print(f"エラー: {e}")
         logger.exception(e)
     finally:
@@ -319,7 +328,9 @@ async def cmd_filing(args):
                 print("-" * 60)
                 text = sec_text if isinstance(sec_text, str) else json.dumps(sec_text, ensure_ascii=False)
                 print(text[:2000] + ("..." if len(text) > 2000 else ""))
-    except Exception as e:
+    except ValueError as e:
+        print(f"エラー: {e}")
+    except aiohttp.ClientError as e:
         print(f"エラー: {e}")
         logger.exception(e)
     finally:
