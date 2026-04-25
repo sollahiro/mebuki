@@ -264,6 +264,7 @@ def extract_gross_profit(xbrl_dir: Path) -> dict:
             "current": float | None,      # 当期（円）
             "prior":   float | None,      # 前期（円）
             "method":  str,               # "direct" | "computed" | "not_found"
+            "reason":  str | None,        # not_found 時のみ失敗理由を格納、それ以外は None
             "accounting_standard": str,   # "J-GAAP" | "IFRS" | "US-GAAP"
             "components": [
                 {
@@ -292,6 +293,7 @@ def extract_gross_profit(xbrl_dir: Path) -> dict:
         return {
             "current": None, "prior": None,
             "method": "not_found", "accounting_standard": "US-GAAP", "components": [],
+            "reason": "US-GAAP 連結損益計算書 HTML (0105010) で売上総利益を取得できない",
         }
 
     # 直接法: GrossProfit タグを検索
@@ -358,6 +360,7 @@ def extract_gross_profit(xbrl_dir: Path) -> dict:
             "method": "not_found",
             "accounting_standard": accounting_standard,
             "components": comp_results,
+            "reason": "売上高タグが見つからない",
         }
 
     def _subtract(a: Optional[float], b: Optional[float]) -> Optional[float]:
@@ -377,6 +380,7 @@ def extract_gross_profit(xbrl_dir: Path) -> dict:
             "method": "not_found",
             "accounting_standard": accounting_standard,
             "components": comp_results,
+            "reason": "売上高タグは存在するが当期・前期ともに値なし",
         }
 
     return {

@@ -398,6 +398,7 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
             "current": float | None,      # 合計 当期末（円）
             "prior":   float | None,      # 合計 前期末（円）
             "method":  str,               # "direct" | "computed" | "usgaap_html" | "not_found"
+            "reason":  str | None,        # not_found 時のみ失敗理由を格納、それ以外は None
             "accounting_standard": str,   # "J-GAAP" | "IFRS" | "US-GAAP"
             "components": [               # 各コンポーネント
                 {
@@ -431,7 +432,8 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
                 zero_comps = [{"label": d["label"], "tag": None, "current": 0.0, "prior": 0.0}
                               for d in COMPONENT_DEFINITIONS]
                 return {"current": 0.0, "prior": 0.0, "method": "usgaap_zero", "accounting_standard": "US-GAAP", "components": zero_comps}
-        return {"current": None, "prior": None, "method": "not_found", "accounting_standard": "US-GAAP", "components": []}
+        return {"current": None, "prior": None, "method": "not_found", "accounting_standard": "US-GAAP", "components": [],
+                "reason": "US-GAAP 連結財務諸表注記 HTML (0105020) で借入金を取得できない"}
 
     # 直接法
     for ibd_tag in INTEREST_BEARING_DEBT_TAGS:
@@ -526,7 +528,8 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
 
     found = [c for c in components if c["current"] is not None or c["prior"] is not None]
     if not found:
-        return {"current": None, "prior": None, "method": "not_found", "accounting_standard": accounting_standard, "components": components}
+        return {"current": None, "prior": None, "method": "not_found", "accounting_standard": accounting_standard, "components": components,
+                "reason": "有利子負債タグが見つからない"}
 
     def safe_sum(vals):
         vs = [v for v in vals if v is not None]
