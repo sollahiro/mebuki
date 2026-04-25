@@ -73,6 +73,7 @@ class IndividualAnalyzer:
         gp_by_year: Dict[str, dict] = {}
         emp_by_year: Dict[str, dict] = {}
         nr_by_year: Dict[str, dict] = {}
+        doc_id_by_year: Dict[str, str] = {}
 
         if financial_data:
             edinet_coro = self._edinet_fetcher.fetch_edinet_data_async(
@@ -90,11 +91,21 @@ class IndividualAnalyzer:
             nr_coro = self._edinet_fetcher.extract_net_revenue_by_year(
                 code, financial_data, actual_years
             )
-            edinet_data, ibd_by_year, gp_by_year, emp_by_year, nr_by_year = await asyncio.gather(
-                edinet_coro, ibd_coro, gp_coro, emp_coro, nr_coro
+            doc_id_coro = self._edinet_fetcher.get_doc_ids_by_year(
+                code, financial_data, actual_years
+            )
+            edinet_data, ibd_by_year, gp_by_year, emp_by_year, nr_by_year, doc_id_by_year = await asyncio.gather(
+                edinet_coro, ibd_coro, gp_coro, emp_coro, nr_coro, doc_id_coro
             )
 
         if financial_data and metrics:
+            # docID は IBD/GP/従業員数の取得元書類から独立して設定
+            for year in metrics.get("years", []):
+                fy_end_key = year.get("fy_end", "").replace("-", "")
+                doc_id = doc_id_by_year.get(fy_end_key)
+                if doc_id:
+                    year["CalculatedData"]["IBDDocID"] = doc_id
+
             for year in metrics.get("years", []):
                 fy_end = year.get("fy_end", "")
                 fy_end_key = fy_end.replace("-", "")
@@ -114,7 +125,6 @@ class IndividualAnalyzer:
                     year["CalculatedData"]["IBDAccountingStandard"] = ibd.get(
                         "accounting_standard", "unknown"
                     )
-                    year["CalculatedData"]["IBDDocID"] = ibd.get("docID")
                     np_ = year["CalculatedData"].get("NP")
                     eq = year["CalculatedData"].get("Eq")
                     if np_ is not None and eq is not None and (eq + ibd_m) != 0:

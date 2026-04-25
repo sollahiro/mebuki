@@ -201,6 +201,23 @@ class EdinetFetcher:
 
         return results
 
+    async def get_doc_ids_by_year(
+        self,
+        code: str,
+        financial_data: List[Dict[str, Any]],
+        max_years: int,
+    ) -> Dict[str, str]:
+        """年度別にEDINET有価証券報告書のdocIDを返す。Returns: { "YYYYMMDD": docID }"""
+        if not self.edinet_client or not self.edinet_client.api_key:
+            return {}
+        docs = await self._get_annual_docs(code, financial_data, max_years)
+        result: Dict[str, str] = {}
+        for doc in docs:
+            fy_end = doc.get("jquants_fy_end", "").replace("-", "")
+            if fy_end:
+                result[fy_end] = doc["docID"]
+        return result
+
     async def extract_ibd_by_year(
         self,
         code: str,
