@@ -416,7 +416,7 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
     """
     tag_elements: dict = {}
     for f in find_xbrl_files(xbrl_dir):
-        for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_IBD_RELEVANT_TAGS).items():
+        for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_IBD_RELEVANT_TAGS, nil_as_zero=True).items():
             if tag not in tag_elements:
                 tag_elements[tag] = {}
             tag_elements[tag].update(ctx_map)

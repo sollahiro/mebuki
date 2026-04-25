@@ -39,13 +39,18 @@ def parse_xbrl_value(text: Optional[str]) -> Optional[float]:
         return None
 
 
+_XSI_NIL = "{http://www.w3.org/2001/XMLSchema-instance}nil"
+
+
 def collect_numeric_elements(
     xml_file: Path,
     allowed_tags: frozenset[str] | None = None,
+    nil_as_zero: bool = False,
 ) -> Dict[str, Any]:
     """XMLファイルから {local_tag: {contextRef: value}} の辞書を返す。
 
     allowed_tags を指定すると、そのセット外のタグをスキップして高速化できる。
+    nil_as_zero=True のとき xsi:nil="true" の要素を 0.0 として記録する。
     """
     results: dict = {}
     try:
@@ -58,6 +63,8 @@ def collect_numeric_elements(
                 continue
             ctx = elem.attrib.get("contextRef", "")
             value = parse_xbrl_value(elem.text)
+            if value is None and nil_as_zero and elem.attrib.get(_XSI_NIL, "").lower() == "true":
+                value = 0.0
             if value is not None and ctx:
                 if local_tag not in results:
                     results[local_tag] = {}
