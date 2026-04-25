@@ -93,6 +93,7 @@ async def cmd_analyze(args):
                 ("営業利益 (百万)",    lambda d: d.get("OP")),
                 ("営業利益率 (%)",     lambda d: d.get("OperatingMargin")),
                 ("純利益 (百万)",      lambda d: d.get("NP")),
+                ("ROIC (%)",           lambda d: d.get("ROIC")),
                 ("営業CF (百万)",      lambda d: d.get("CFO")),
                 ("投資CF (百万)",      lambda d: d.get("CFI")),
                 ("フリーCF (百万)",    lambda d: d.get("FreeCF")),

@@ -61,12 +61,16 @@ _IBD_RELEVANT_TAGS: frozenset[str] = frozenset(
 # contextRef で連結期末時点を表すパターン
 INSTANT_CONTEXT_PATTERNS = [
     "CurrentYearInstant",
+    "CurrentQuarterInstant",   # 四半期報告書（2Q等）
+    "InterimInstant",           # 半期報告書（SSR: 2024年制度変更後）
     "FilingDateInstant",
 ]
 
 PRIOR_CONTEXT_PATTERNS = [
     "Prior1YearInstant",
     "PriorYearInstant",
+    "Prior1QuarterInstant",    # 四半期報告書の前期末
+    "Prior1InterimInstant",    # 半期報告書の前期末
 ]
 
 

@@ -248,9 +248,9 @@ class EdinetFetcher:
         financial_data: List[Dict[str, Any]],
         max_years: int,
     ) -> Dict[str, dict]:
-        """2Q期間のEDINETデータ（GrossProfit + CF）を年度別に抽出。
+        """2Q期間のEDINETデータ（GrossProfit + CF + IBD）を年度別に抽出。
 
-        Returns: { "YYYYMMDD": {"gp": gp_result_dict, "cf": cf_result_dict} }
+        Returns: { "YYYYMMDD": {"gp": gp_result_dict, "cf": cf_result_dict, "ibd": ibd_result_dict} }
         """
         from mebuki.analysis.gross_profit import extract_gross_profit
         from mebuki.analysis.cash_flow import extract_cash_flow
@@ -305,14 +305,16 @@ class EdinetFetcher:
                 if not xbrl_dir:
                     logger.warning(f"[HALF-EDINET] {code} {fy_end_8}: XBRLダウンロード失敗")
                     return fy_end_8, None
+                from mebuki.analysis.interest_bearing_debt import extract_interest_bearing_debt
                 gp = extract_gross_profit(Path(xbrl_dir))
                 cf = extract_cash_flow(Path(xbrl_dir))
+                ibd = extract_interest_bearing_debt(Path(xbrl_dir))
                 gp["docID"] = doc["docID"]
                 logger.info(
                     f"[HALF-EDINET] {code} {fy_end_8}: "
-                    f"gp={gp.get('current')}, cfo={cf['cfo'].get('current')}, cfi={cf['cfi'].get('current')}, docID={doc['docID']}"
+                    f"gp={gp.get('current')}, cfo={cf['cfo'].get('current')}, cfi={cf['cfi'].get('current')}, ibd={ibd.get('current')}, docID={doc['docID']}"
                 )
-                return fy_end_8, {"gp": gp, "cf": cf}
+                return fy_end_8, {"gp": gp, "cf": cf, "ibd": ibd}
             except asyncio.TimeoutError:
                 logger.warning(f"[HALF-EDINET] {code} {fy_end_8}: XBRLダウンロードタイムアウト(30s)")
                 return fy_end_8, None

@@ -206,9 +206,10 @@ class DataService:
         unique_fy_ends = len(set(p["fy_end"] for p in base_periods))
         edinet_fetcher = EdinetFetcher(self.api_client, self.edinet_client)
         try:
-            half_edinet, fy_gp = await asyncio.gather(
+            half_edinet, fy_gp, ibd_by_year = await asyncio.gather(
                 edinet_fetcher.extract_half_year_edinet_data(code, financial_data, max_years=unique_fy_ends),
                 edinet_fetcher.extract_gross_profit_by_year(code, financial_data, max_years=years),
+                edinet_fetcher.extract_ibd_by_year(code, financial_data, max_years=years),
             )
         except Exception as e:
             logger.warning(f"[HALF] {code}: EDINET補完スキップ - {e}")
@@ -221,6 +222,14 @@ class DataService:
                 fy_end_8 = r.get("CurFYEn", "").replace("-", "")
                 if fy_end_8:
                     fy_by_end[fy_end_8] = r
+
+        # 2Q J-Quants レコードを fy_end → record で引けるようにしておく
+        q2_by_end: Dict[str, Dict] = {}
+        for r in financial_data:
+            if r.get("CurPerType") == "2Q":
+                fy_end_8 = r.get("CurFYEn", "").replace("-", "")
+                if fy_end_8:
+                    q2_by_end[fy_end_8] = r
 
         # H1 期間で確定した EDINET CF 値を H2 計算に引き継ぐ
         h1_edinet_by_fy: Dict[str, Dict] = {}
@@ -257,6 +266,16 @@ class DataService:
                         data["CFI"] = h1_cfi_m
                     if h1_cfo_m is not None and h1_cfi_m is not None:
                         data["FreeCF"] = h1_cfo_m + h1_cfi_m
+
+                # ROIC (H1): NP_H1 / (Eq_2Q + IBD_2Q)
+                ibd_result = edinet_q2.get("ibd")
+                h1_ibd_m = ibd_result["current"] / MILLION_YEN if ibd_result and ibd_result.get("current") is not None else None
+                q2_rec = q2_by_end.get(fy_end_8, {})
+                h1_eq_raw = to_float(q2_rec.get("Eq"))
+                h1_eq_m = h1_eq_raw / MILLION_YEN if h1_eq_raw is not None else None
+                np_h1 = data.get("NP")
+                if np_h1 is not None and h1_eq_m is not None and h1_ibd_m is not None and (h1_eq_m + h1_ibd_m) != 0:
+                    data["ROIC"] = np_h1 / (h1_eq_m + h1_ibd_m) * 100
 
                 h1_edinet_by_fy[fy_end_8] = {
                     "gp_m": h1_gp_m,
@@ -298,6 +317,15 @@ class DataService:
                         data["GrossProfitMargin"] = h2_gp_m / sales * 100 if sales else None
                         data["DocID"] = fy_gp_result.get("docID")
 
+                # ROIC (H2): NP_H2 / (Eq_FY + IBD_FY)
+                h2_ibd = ibd_by_year.get(fy_end_8)
+                h2_ibd_m = h2_ibd["current"] / MILLION_YEN if h2_ibd and h2_ibd.get("current") is not None else None
+                h2_eq_raw = to_float(fy_rec.get("Eq"))
+                h2_eq_m = h2_eq_raw / MILLION_YEN if h2_eq_raw is not None else None
+                np_h2 = data.get("NP")
+                if np_h2 is not None and h2_eq_m is not None and h2_ibd_m is not None and (h2_eq_m + h2_ibd_m) != 0:
+                    data["ROIC"] = np_h2 / (h2_eq_m + h2_ibd_m) * 100
+
             else:
                 # FY のみ（2Q データなし）: EDINET FY GP を付与
                 fy_gp_result = fy_gp.get(fy_end_8)
@@ -306,6 +334,16 @@ class DataService:
                     sales = data.get("Sales")
                     data["GrossProfit"] = gp_m
                     data["GrossProfitMargin"] = gp_m / sales * 100 if sales else None
+
+                # ROIC (FY): NP_FY / (Eq_FY + IBD_FY)
+                fy_rec_data = fy_by_end.get(fy_end_8, {})
+                fy_ibd = ibd_by_year.get(fy_end_8)
+                fy_ibd_m = fy_ibd["current"] / MILLION_YEN if fy_ibd and fy_ibd.get("current") is not None else None
+                fy_eq_raw = to_float(fy_rec_data.get("Eq"))
+                fy_eq_m = fy_eq_raw / MILLION_YEN if fy_eq_raw is not None else None
+                np_fy = data.get("NP")
+                if np_fy is not None and fy_eq_m is not None and fy_ibd_m is not None and (fy_eq_m + fy_ibd_m) != 0:
+                    data["ROIC"] = np_fy / (fy_eq_m + fy_ibd_m) * 100
 
         self.cache_manager.set(cache_key, {
             "_cache_version": _CACHE_VERSION,
