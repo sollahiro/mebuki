@@ -49,8 +49,7 @@ mebuki/
 │   │   ├── fiscal_year.py
 │   │   ├── formatters.py
 │   │   ├── jquants_utils.py
-│   │   ├── sectors.py
-│   │   └── xbrl_compressor.py
+│   │   └── sectors.py
 └── assets/                # 銘柄マスタ等
 ```
 
