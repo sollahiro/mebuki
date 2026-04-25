@@ -15,16 +15,12 @@ logger = logging.getLogger(__name__)
 
 class _NumpyEncoder(json.JSONEncoder):
     def default(self, obj) -> Any:
-        try:
-            import numpy as np
-            if isinstance(obj, np.integer):
-                return int(obj)
-            if isinstance(obj, np.floating):
-                return float(obj)
-            if isinstance(obj, np.ndarray):
+        module = getattr(type(obj), "__module__", "")
+        if module == "numpy" or module.startswith("numpy."):
+            if hasattr(obj, "tolist"):
                 return obj.tolist()
-        except ImportError:
-            pass
+            if hasattr(obj, "item"):
+                return obj.item()
         return super().default(obj)
 
 

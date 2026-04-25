@@ -10,9 +10,24 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        # ビルド・インストールツール（実行時不要）
+        'setuptools', '_distutils_hack', 'jaraco', 'more_itertools',
+        # 開発・テストツール（実行時不要）
+        '_pytest', 'pytest', 'doctest', 'unittest', 'pdb', 'bdb',
+        # 数値計算（cache.py の duck-typing 化により不要）
+        'numpy',
+        # 未使用の HTTP クライアント（httpx/aiohttp を使用）
+        'requests', 'urllib3',
+        # 未使用のシリアライズ・設定ライブラリ
+        'yaml',
+        # 未使用の対話型 UI（interactive.py 削除済み）
+        'questionary', 'prompt_toolkit',
+        # 未使用のその他
+        'keyring', 'xmlrpc', 'ftplib', 'smtplib',
+    ],
     noarchive=False,
-    optimize=0,
+    optimize=1,
 )
 pyz = PYZ(a.pure)
 
