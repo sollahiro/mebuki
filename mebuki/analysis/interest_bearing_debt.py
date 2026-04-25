@@ -31,7 +31,7 @@ try:
 except ImportError:
     _BS4_AVAILABLE = False
 
-from mebuki.analysis.xbrl_utils import parse_xbrl_value, collect_numeric_elements, find_xbrl_files
+from mebuki.analysis.xbrl_utils import parse_xbrl_value, collect_numeric_elements, find_xbrl_files, parse_html_number
 from mebuki.constants.financial import MILLION_YEN
 from mebuki.constants.xbrl import (
     INTEREST_BEARING_DEBT_TAGS,
@@ -129,22 +129,6 @@ def _find_nonconsolidated_value(tag_elements: dict, tag: str) -> tuple[Optional[
     return current, prior
 
 
-def _parse_number(text: str) -> Optional[float]:
-    """HTML表セルの数値テキストをfloatに変換（百万円単位のまま）。
-    "22,548" → 22548.0, "22,548百万円" → 22548.0, "－" → None
-    """
-    if not text:
-        return None
-    text = text.strip()
-    text = re.sub(r'(百万円|十万円|億円|兆円|千円|百円|万円|円)$', '', text).strip()
-    text = text.replace(",", "").replace("，", "")
-    if text in ("－", "-", "―", "—", ""):
-        return None
-    try:
-        return float(text)
-    except ValueError:
-        return None
-
 
 def _determine_column_order(headers: list[str]) -> tuple[int, int]:
     """
@@ -218,7 +202,7 @@ def _parse_loan_tables(tables: list) -> Dict[str, Any]:
             def _get(idx, _vals=vals):
                 if idx is None or idx >= len(_vals):
                     return None
-                return _parse_number(_vals[idx])
+                return parse_html_number(_vals[idx])
 
             if "短期借入金" in label and "（" not in label and "１年" not in label and "1年" not in label:
                 short_term_current = short_term_current or _get(current_idx)
