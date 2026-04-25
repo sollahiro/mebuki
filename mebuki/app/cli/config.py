@@ -43,8 +43,30 @@ def cmd_config(args, parser):
         target_key = key_map.get(args.key, args.key)
         target_value = args.value
 
+        if target_key == "analysisYears":
+            try:
+                target_value = int(target_value)
+                if target_value <= 0:
+                    raise ValueError
+            except ValueError:
+                print("エラー: years には正の整数を指定してください。")
+                return
+
         settings_store.update({target_key: target_value}, save=True)
         print(f"設定を更新しました: {target_key}")
+
+    elif args.config_subcommand == "check":
+        j_key = settings_store.jquants_api_key
+        e_key = settings_store.edinet_api_key
+        print("\nAPI設定チェック:")
+        print(f"  J-QUANTS APIキー: {'✅ 設定済み' if j_key else '❌ 未設定'}")
+        print(f"  EDINET APIキー:   {'✅ 設定済み' if e_key else '❌ 未設定'}")
+        if not j_key or not e_key:
+            print("\n未設定のキーは以下のコマンドで設定できます:")
+            if not j_key:
+                print("  mebuki config set jquants-key <KEY>")
+            if not e_key:
+                print("  mebuki config set edinet-key <KEY>")
 
     elif args.config_subcommand == "init":
         print("\nmebuki 初期設定")

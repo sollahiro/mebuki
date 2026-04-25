@@ -64,17 +64,23 @@ class SettingsStore:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config_data = json.load(f)
                 
-            # 各設定値をマッピング
-            mapping = {
-                "jquantsApiKey": "jquantsApiKey",
-                "edinetApiKey": "edinetApiKey",
-                "analysisYears": "analysisYears",
-                "cacheEnabled": "cacheEnabled",
-            }
-            
-            for store_key, settings_key in mapping.items():
-                if store_key in config_data:
-                    self._settings[settings_key] = config_data[store_key]
+            for key in ["jquantsApiKey", "edinetApiKey"]:
+                if key in config_data:
+                    self._settings[key] = config_data[key]
+
+            if "analysisYears" in config_data:
+                val = config_data["analysisYears"]
+                if isinstance(val, int) and val > 0:
+                    self._settings["analysisYears"] = val
+                else:
+                    logger.warning(f"analysisYears の値が不正です ({val!r})。デフォルト値 {self._settings['analysisYears']} を使用します。")
+
+            if "cacheEnabled" in config_data:
+                val = config_data["cacheEnabled"]
+                if isinstance(val, bool):
+                    self._settings["cacheEnabled"] = val
+                else:
+                    logger.warning(f"cacheEnabled の値が不正です ({val!r})。デフォルト値 {self._settings['cacheEnabled']} を使用します。")
             
             logger.info(f"Loaded persistent settings from {config_path}")
         except Exception as e:

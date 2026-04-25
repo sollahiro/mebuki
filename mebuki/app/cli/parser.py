@@ -45,6 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
     set_parser.add_argument("key", help="設定キー (jquants-key, edinet-key, years 等)")
     set_parser.add_argument("value", help="設定値")
     config_sub.add_parser("init", help="対話形式で初期設定")
+    config_sub.add_parser("check", help="API設定の確認")
 
     # mcp
     mcp_parser = subparsers.add_parser("mcp", help="MCP連携管理")
