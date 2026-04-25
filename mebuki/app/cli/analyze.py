@@ -1,4 +1,3 @@
-import argparse
 import json
 import sys
 import logging
@@ -32,19 +31,6 @@ def cmd_search(args):
     for item in results:
         print(f"{item['code']:<8} {item['name']:<20} {item['market']:<15} {item['sector']}")
     print("-" * 60)
-
-    from .ui import select_stock_from_results
-    selected = select_stock_from_results(results, "分析する銘柄を選択してください:", "↩  分析しない / 戻る")
-
-    if selected:
-        import asyncio
-        asyncio.run(cmd_analyze(argparse.Namespace(
-            code=selected['code'],
-            years=None,
-            format="table",
-            no_cache=False,
-            scope=None,
-        )))
 
 
 async def cmd_analyze(args):
