@@ -30,3 +30,7 @@ from mebuki.analysis.xbrl_utils import parse_xbrl_value, collect_numeric_element
 | `gross_profit.py` | Duration | 損益計算書（売上総利益） |
 | `cash_flow.py` | Duration | CF計算書（営業CF・投資CF） |
 | `interest_bearing_debt.py` | Instant | 貸借対照表（有利子負債） |
+
+## 詳細リファレンス
+
+タグ体系・コンテキスト命名規則・会計基準判定ロジック・US-GAAP HTMLパースの仕様は `docs/xbrl-parsing.md` を参照してください。
