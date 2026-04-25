@@ -30,6 +30,8 @@ from mebuki.analysis.xbrl_utils import parse_xbrl_value, collect_numeric_element
 | `gross_profit.py` | Duration | 損益計算書（売上総利益） |
 | `cash_flow.py` | Duration | CF計算書（営業CF・投資CF） |
 | `interest_bearing_debt.py` | Instant | 貸借対照表（有利子負債） |
+| `employees.py` | Instant | 従業員数（連結優先・個別フォールバック） |
+| `net_revenue.py` | Duration | IFRS金融会社向け純収益・事業利益 |
 
 ## 詳細リファレンス
 

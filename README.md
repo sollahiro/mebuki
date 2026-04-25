@@ -94,7 +94,6 @@ AI アシスタントは以下のツールを自動的に使い分けます：
 | :--- | :--- | :--- |
 | **検索** | `find_japan_stock_code` | 社名やコードから証券コードを特定 |
 | **定量分析** | `get_japan_stock_financial_data` | 財務データ（年次・半期推移、ROIC・有利子負債含む）を取得 |
-| **株価** | `get_japan_stock_price_data` | 日足株価履歴データの取得 |
 | **有報検索** | `search_japan_stock_filings` | EDINET文書（有報等）の検索 |
 | **有報抽出** | `extract_japan_stock_filing_content` | 有報の特定セクション（事業リスク等）の抽出 |
 | **ウォッチリスト参照** | `get_japan_stock_watchlist` | ウォッチリスト（監視銘柄一覧）の取得 |

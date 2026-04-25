@@ -128,7 +128,6 @@ AIアシスタントがmebukiのツールを使用して、自動的に以下の
 連携により、以下のツールがAIアシスタントから利用可能になります:
 - `find_japan_stock_code`: 企業名や銘柄コードから証券コードを検索
 - `get_japan_stock_financial_data`: 財務データ（年次・半期推移、ROIC・有利子負債含む）を取得。`half=true` でH1/H2半期推移、`years` で年数指定可能
-- `get_japan_stock_price_data`: 日足株価履歴データの取得
 - `search_japan_stock_filings`: EDINET文書（有報等）の検索
 - `extract_japan_stock_filing_content`: 有報の特定セクションを抽出
 - `get_japan_stock_watchlist`: ウォッチリストの取得

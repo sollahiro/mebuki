@@ -16,16 +16,20 @@ mebuki/
 │   │   │   ├── config.py      # config コマンド
 │   │   │   ├── mcp.py         # mcp コマンド
 │   │   │   ├── portfolio.py   # watch/portfolio コマンド
+│   │   │   ├── sector.py      # sector コマンド
 │   │   │   └── ui.py          # バナー・UI補助
-│   │   └── mcp_server.py  # MCP サーバー (全8ツール: 検索・財務・有報・ウォッチリスト・ポートフォリオ)
+│   │   └── mcp_server.py  # MCP サーバー (全9ツール: 検索・財務・有報・業種・ウォッチリスト・ポートフォリオ)
 │   ├── services/          # ユースケース層 (分析/検索/集約)
 │   │   ├── data_service.py
 │   │   ├── analyzer.py
+│   │   ├── edinet_fetcher.py
+│   │   ├── financial_fetcher.py
 │   │   ├── master_data.py
 │   │   └── portfolio_service.py  # ウォッチリスト・保有銘柄管理
 │   ├── infrastructure/    # 設定・外部APIアダプタ補助・永続化
 │   │   ├── settings.py
 │   │   ├── helpers.py
+│   │   ├── keystore.py
 │   │   └── portfolio_store.py   # ポートフォリオ永続化 (portfolio.json)
 │   ├── api/               # 外部APIクライアント (J-QUANTS/EDINET)
 │   │   ├── jquants_client.py
@@ -33,7 +37,12 @@ mebuki/
 │   ├── analysis/          # 財務計算・XBRL解析
 │   │   ├── calculator.py
 │   │   ├── xbrl_parser.py
-│   │   └── interest_bearing_debt.py  # 有利子負債抽出ロジック
+│   │   ├── xbrl_utils.py          # XBRL共通ユーティリティ
+│   │   ├── gross_profit.py        # 売上総利益抽出
+│   │   ├── cash_flow.py           # CF計算書抽出
+│   │   ├── interest_bearing_debt.py  # 有利子負債抽出
+│   │   ├── employees.py           # 従業員数抽出
+│   │   └── net_revenue.py         # IFRS純収益抽出
 │   ├── llm/               # LLMプロバイダ連携
 │   │   └── providers.py
 │   ├── constants/
@@ -47,7 +56,6 @@ mebuki/
 │   │   ├── errors.py
 │   │   ├── financial_data.py
 │   │   ├── fiscal_year.py
-│   │   ├── formatters.py
 │   │   ├── jquants_utils.py
 │   │   └── sectors.py
 └── assets/                # 銘柄マスタ等
