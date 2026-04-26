@@ -140,6 +140,25 @@ CF_INVESTING_TAGS: List[str] = [
     "CashFlowsFromUsedInInvestingActivitiesIFRSSummaryOfBusinessResults", # IFRS（決算短信）
 ]
 
+# 実効税率（Tax）タグ定義
+# analysis/tax_expense.py で使用
+
+# 税引前利益
+PRETAX_INCOME_JGAAP_TAGS: List[str] = [
+    "IncomeBeforeIncomeTaxes",
+]
+PRETAX_INCOME_IFRS_TAGS: List[str] = [
+    "ProfitLossBeforeTaxIFRS",
+]
+
+# 法人税等
+INCOME_TAX_JGAAP_TAGS: List[str] = [
+    "IncomeTaxes",
+]
+INCOME_TAX_IFRS_TAGS: List[str] = [
+    "IncomeTaxExpenseIFRS",
+]
+
 # 支払利息（IE）タグ定義
 # analysis/interest_expense.py で使用
 

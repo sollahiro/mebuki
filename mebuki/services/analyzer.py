@@ -72,6 +72,7 @@ class IndividualAnalyzer:
         ibd_by_year: Dict[str, dict] = {}
         gp_by_year: Dict[str, dict] = {}
         ie_by_year: Dict[str, dict] = {}
+        tax_by_year: Dict[str, dict] = {}
         emp_by_year: Dict[str, dict] = {}
         nr_by_year: Dict[str, dict] = {}
         doc_id_by_year: Dict[str, str] = {}
@@ -89,6 +90,9 @@ class IndividualAnalyzer:
             ie_coro = self._edinet_fetcher.extract_interest_expense_by_year(
                 code, financial_data, actual_years
             )
+            tax_coro = self._edinet_fetcher.extract_tax_expense_by_year(
+                code, financial_data, actual_years
+            )
             emp_coro = self._edinet_fetcher.extract_employees_by_year(
                 code, financial_data, actual_years
             )
@@ -98,8 +102,8 @@ class IndividualAnalyzer:
             doc_id_coro = self._edinet_fetcher.get_doc_ids_by_year(
                 code, financial_data, actual_years
             )
-            edinet_data, ibd_by_year, gp_by_year, ie_by_year, emp_by_year, nr_by_year, doc_id_by_year = await asyncio.gather(
-                edinet_coro, ibd_coro, gp_coro, ie_coro, emp_coro, nr_coro, doc_id_coro
+            edinet_data, ibd_by_year, gp_by_year, ie_by_year, tax_by_year, emp_by_year, nr_by_year, doc_id_by_year = await asyncio.gather(
+                edinet_coro, ibd_coro, gp_coro, ie_coro, tax_coro, emp_coro, nr_coro, doc_id_coro
             )
 
         if financial_data and metrics:
@@ -139,6 +143,18 @@ class IndividualAnalyzer:
                 ie = ie_by_year.get(fy_end_key)
                 if ie and ie.get("current") is not None:
                     year["CalculatedData"]["InterestExpense"] = ie["current"] / MILLION_YEN
+
+            for year in metrics.get("years", []):
+                fy_end_key = year.get("fy_end", "").replace("-", "")
+                tax = tax_by_year.get(fy_end_key)
+                if tax and tax.get("method") == "computed":
+                    cd = year["CalculatedData"]
+                    if tax.get("pretax_income") is not None:
+                        cd["PretaxIncome"] = tax["pretax_income"] / MILLION_YEN
+                    if tax.get("income_tax") is not None:
+                        cd["IncomeTax"] = tax["income_tax"] / MILLION_YEN
+                    if tax.get("effective_tax_rate") is not None:
+                        cd["EffectiveTaxRate"] = tax["effective_tax_rate"] * PERCENT
 
             for year in metrics.get("years", []):
                 fy_end_key = year.get("fy_end", "").replace("-", "")

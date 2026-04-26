@@ -400,6 +400,30 @@ class EdinetFetcher:
         logger.info(f"[GP] {code}: GP抽出完了 {len(gp_by_year)}件 {time.perf_counter() - _t0:.2f}s")
         return gp_by_year
 
+    async def extract_tax_expense_by_year(
+        self,
+        code: str,
+        financial_data: List[Dict[str, Any]],
+        max_years: int,
+    ) -> Dict[str, dict]:
+        """年度別に税引前利益・法人税等を抽出。Returns: { "YYYYMMDD": tax_result_dict }"""
+        from mebuki.analysis.tax_expense import extract_tax_expense
+
+        if not self.edinet_client or not self.edinet_client.api_key:
+            return {}
+
+        docs = await self._get_annual_docs(code, financial_data, max_years)
+        logger.info(f"[TAX] {code}: {len(docs)}件のEDINET文書を検索")
+
+        _t0 = time.perf_counter()
+        results = await asyncio.gather(
+            *[self._run_extraction(doc, code, "TAX", extract_tax_expense) for doc in docs],
+            return_exceptions=True,
+        )
+        tax_by_year = self._collect_results(results, code, "TAX")
+        logger.info(f"[TAX] {code}: 実効税率抽出完了 {len(tax_by_year)}件 {time.perf_counter() - _t0:.2f}s")
+        return tax_by_year
+
     async def extract_interest_expense_by_year(
         self,
         code: str,
