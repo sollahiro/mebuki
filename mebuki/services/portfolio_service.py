@@ -215,6 +215,52 @@ class PortfolioService:
     # 名寄せビュー
     # ──────────────────────────────
 
+    def get_sector_allocation(self) -> List[Dict[str, Any]]:
+        """保有銘柄をセクター別に集計して返す"""
+        from mebuki.services.data_service import data_service
+
+        consolidated = self.get_consolidated()
+        if not consolidated:
+            return []
+
+        sectors: Dict[str, Dict[str, Any]] = {}
+        total_cost = 0.0
+
+        for item in consolidated:
+            code = item["ticker_code"]
+            cost = item["total_quantity"] * item["avg_cost_price"]
+            total_cost += cost
+
+            try:
+                info = data_service.fetch_stock_basic_info(code)
+                sector_name = info.get("sector_33_name") or "不明"
+            except Exception:
+                sector_name = "不明"
+
+            if sector_name not in sectors:
+                sectors[sector_name] = {
+                    "sector_name": sector_name,
+                    "ticker_count": 0,
+                    "tickers": [],
+                    "total_cost": 0.0,
+                }
+            sectors[sector_name]["ticker_count"] += 1
+            sectors[sector_name]["tickers"].append(code)
+            sectors[sector_name]["total_cost"] += cost
+
+        result = []
+        for s in sorted(sectors.values(), key=lambda x: x["total_cost"], reverse=True):
+            ratio = round(s["total_cost"] / total_cost * 100, 1) if total_cost > 0 else 0.0
+            result.append({
+                "sector_name": s["sector_name"],
+                "ticker_count": s["ticker_count"],
+                "tickers": s["tickers"],
+                "total_cost": round(s["total_cost"]),
+                "ratio": ratio,
+            })
+
+        return result
+
     def get_consolidated(self) -> List[Dict[str, Any]]:
         """ticker 単位で保有を集計した名寄せビューを返す"""
         holdings = self.get_holdings()

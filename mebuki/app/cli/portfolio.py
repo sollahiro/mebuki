@@ -155,5 +155,24 @@ def cmd_portfolio(args):
                 print(f"{c['ticker_code']:<8} {c['name']:<20} {c['total_quantity']:>8} {c['avg_cost_price']:>12.2f}", file=sys.stderr)
             print("-" * 60, file=sys.stderr)
 
+    elif sub == "sector":
+        allocation = portfolio_service.get_sector_allocation()
+        if fmt == "json":
+            print(json.dumps(allocation, indent=2, ensure_ascii=False))
+            return
+        if not allocation:
+            print("保有銘柄はありません。", file=sys.stderr)
+            return
+        total_tickers = sum(s["ticker_count"] for s in allocation)
+        print(f"\nセクター配分 ({total_tickers}銘柄):", file=sys.stderr)
+        print("-" * 60, file=sys.stderr)
+        print(f"{'業種名':<22} {'銘柄数':>6} {'取得コスト':>14} {'比率':>7}", file=sys.stderr)
+        print("-" * 60, file=sys.stderr)
+        for s in allocation:
+            cost_str = f"{s['total_cost']:,.0f}円"
+            ratio_str = f"{s['ratio']:.1f}%"
+            print(f"{s['sector_name']:<22} {s['ticker_count']:>6} {cost_str:>14} {ratio_str:>7}", file=sys.stderr)
+        print("-" * 60, file=sys.stderr)
+
     else:
-        print("サブコマンドを指定してください: add / sell / remove / list", file=sys.stderr)
+        print("サブコマンドを指定してください: add / sell / remove / list / sector", file=sys.stderr)

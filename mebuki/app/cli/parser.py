@@ -104,4 +104,7 @@ def build_parser() -> argparse.ArgumentParser:
     pf_list.add_argument("--detail", action="store_true", help="口座別詳細を表示")
     pf_list.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
 
+    pf_sector = pf_sub.add_parser("sector", help="セクター別配分を表示")
+    pf_sector.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+
     return parser

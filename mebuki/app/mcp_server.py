@@ -144,9 +144,9 @@ async def list_tools() -> List[Tool]:
                 "properties": {
                     "mode": {
                         "type": "string",
-                        "enum": ["consolidated", "detail"],
+                        "enum": ["consolidated", "detail", "sector"],
                         "default": "consolidated",
-                        "description": "'consolidated' (default): per-ticker summary. 'detail': per-account breakdown.",
+                        "description": "'consolidated' (default): per-ticker summary. 'detail': per-account breakdown. 'sector': sector allocation by TSE 33-sector classification.",
                     },
                 },
                 "required": [],
@@ -282,6 +282,8 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             mode = str(arguments.get("mode", "consolidated"))
             if mode == "detail":
                 data = portfolio_service.get_holdings()
+            elif mode == "sector":
+                data = portfolio_service.get_sector_allocation()
             else:
                 data = portfolio_service.get_consolidated()
             return [TextContent(type="text", text=json.dumps(data, indent=2, ensure_ascii=False))]
