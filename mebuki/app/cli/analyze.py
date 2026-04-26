@@ -204,8 +204,9 @@ async def cmd_analyze(args):
             ("投資CF (百万)",          lambda c: c.get("CFI")),
             ("フリーCF (百万)",        lambda c: c.get("CFC")),
             ("配当性向 (%)",           lambda c: c.get("PayoutRatio")),
-            # ── 有利子負債 ──
+            # ── 有利子負債・支払利息 ──
             ("有利子負債合計 (百万)",   lambda c: c.get("InterestBearingDebt")),
+            ("支払利息 (百万)",         lambda c: c.get("InterestExpense")),
             ("投下資本 (百万)",         lambda c: (c.get("InterestBearingDebt") + c.get("Eq")) if c.get("InterestBearingDebt") is not None and c.get("Eq") is not None else None),
             # ── 従業員数 ──
             ("従業員数 (人)",           lambda c: c.get("Employees"),   "int"),

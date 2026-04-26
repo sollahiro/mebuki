@@ -71,6 +71,7 @@ class IndividualAnalyzer:
         edinet_data = {}
         ibd_by_year: Dict[str, dict] = {}
         gp_by_year: Dict[str, dict] = {}
+        ie_by_year: Dict[str, dict] = {}
         emp_by_year: Dict[str, dict] = {}
         nr_by_year: Dict[str, dict] = {}
         doc_id_by_year: Dict[str, str] = {}
@@ -85,6 +86,9 @@ class IndividualAnalyzer:
             gp_coro = self._edinet_fetcher.extract_gross_profit_by_year(
                 code, financial_data, actual_years
             )
+            ie_coro = self._edinet_fetcher.extract_interest_expense_by_year(
+                code, financial_data, actual_years
+            )
             emp_coro = self._edinet_fetcher.extract_employees_by_year(
                 code, financial_data, actual_years
             )
@@ -94,8 +98,8 @@ class IndividualAnalyzer:
             doc_id_coro = self._edinet_fetcher.get_doc_ids_by_year(
                 code, financial_data, actual_years
             )
-            edinet_data, ibd_by_year, gp_by_year, emp_by_year, nr_by_year, doc_id_by_year = await asyncio.gather(
-                edinet_coro, ibd_coro, gp_coro, emp_coro, nr_coro, doc_id_coro
+            edinet_data, ibd_by_year, gp_by_year, ie_by_year, emp_by_year, nr_by_year, doc_id_by_year = await asyncio.gather(
+                edinet_coro, ibd_coro, gp_coro, ie_coro, emp_coro, nr_coro, doc_id_coro
             )
 
         if financial_data and metrics:
@@ -129,6 +133,12 @@ class IndividualAnalyzer:
                     eq = year["CalculatedData"].get("Eq")
                     if np_ is not None and eq is not None and (eq + ibd_m) != 0:
                         year["CalculatedData"]["ROIC"] = np_ / (eq + ibd_m) * PERCENT
+
+            for year in metrics.get("years", []):
+                fy_end_key = year.get("fy_end", "").replace("-", "")
+                ie = ie_by_year.get(fy_end_key)
+                if ie and ie.get("current") is not None:
+                    year["CalculatedData"]["InterestExpense"] = ie["current"] / MILLION_YEN
 
             for year in metrics.get("years", []):
                 fy_end_key = year.get("fy_end", "").replace("-", "")

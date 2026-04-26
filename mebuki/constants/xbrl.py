@@ -140,6 +140,20 @@ CF_INVESTING_TAGS: List[str] = [
     "CashFlowsFromUsedInInvestingActivitiesIFRSSummaryOfBusinessResults", # IFRS（決算短信）
 ]
 
+# 支払利息（IE）タグ定義
+# analysis/interest_expense.py で使用
+
+# J-GAAP: 営業外費用の支払利息
+INTEREST_EXPENSE_JGAAP_TAGS: List[str] = [
+    "InterestExpensesNOE",
+]
+
+# IFRS: 支払利息（InterestExpensesIFRS）を優先し、存在しない場合は金融費用合計（FinanceCostsIFRS）にフォールバック
+INTEREST_EXPENSE_IFRS_TAGS: List[str] = [
+    "InterestExpensesIFRS",   # 支払利息（推奨）
+    "FinanceCostsIFRS",       # 金融費用合計（フォールバック）
+]
+
 AGGREGATE_IFRS_DEFINITIONS: List[Dict[str, Any]] = [
     {
         "tag": "CurrentPortionOfLongTermDebtCLIFRS",  # 1年内長期有利子負債（社債+借入金を集約）
