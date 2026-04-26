@@ -15,3 +15,7 @@
 @.claude/rules/project/mcp-cli-parity.md
 @.claude/rules/project/error-handling.md
 @.claude/rules/project/xbrl-analysis.md
+@.claude/rules/project/dependencies.md
+@.claude/rules/project/caching.md
+@.claude/rules/project/constants.md
+@.claude/rules/project/typing.md
