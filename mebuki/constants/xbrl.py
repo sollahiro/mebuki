@@ -159,6 +159,20 @@ INCOME_TAX_IFRS_TAGS: List[str] = [
     "IncomeTaxExpenseIFRS",
 ]
 
+# 営業利益（OP）タグ定義
+# analysis/operating_profit.py で使用
+
+OPERATING_PROFIT_DIRECT_TAGS: List[str] = [
+    "OperatingProfitLossIFRS",   # IFRS連結
+    "OperatingIncomeLoss",       # J-GAAP連結（標準）
+    "OperatingIncome",           # J-GAAP（旧タグ / 個別フォールバック）
+]
+
+ORDINARY_INCOME_TAGS: List[str] = [
+    "OrdinaryIncome",            # J-GAAP 金融機関向け経常利益
+    "OrdinaryIncomeLoss",        # J-GAAP 経常利益（代替）
+]
+
 # 支払利息（IE）タグ定義
 # analysis/interest_expense.py で使用
 

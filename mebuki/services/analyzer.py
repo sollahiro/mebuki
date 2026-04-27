@@ -75,6 +75,7 @@ class IndividualAnalyzer:
         tax_by_year: Dict[str, dict] = {}
         emp_by_year: Dict[str, dict] = {}
         nr_by_year: Dict[str, dict] = {}
+        op_by_year: Dict[str, dict] = {}
         doc_id_by_year: Dict[str, str] = {}
 
         if financial_data:
@@ -99,11 +100,14 @@ class IndividualAnalyzer:
             nr_coro = self._edinet_fetcher.extract_net_revenue_by_year(
                 code, financial_data, actual_years
             )
+            op_coro = self._edinet_fetcher.extract_operating_profit_by_year(
+                code, financial_data, actual_years
+            )
             doc_id_coro = self._edinet_fetcher.get_doc_ids_by_year(
                 code, financial_data, actual_years
             )
-            edinet_data, ibd_by_year, gp_by_year, ie_by_year, tax_by_year, emp_by_year, nr_by_year, doc_id_by_year = await asyncio.gather(
-                edinet_coro, ibd_coro, gp_coro, ie_coro, tax_coro, emp_coro, nr_coro, doc_id_coro
+            edinet_data, ibd_by_year, gp_by_year, ie_by_year, tax_by_year, emp_by_year, nr_by_year, op_by_year, doc_id_by_year = await asyncio.gather(
+                edinet_coro, ibd_coro, gp_coro, ie_coro, tax_coro, emp_coro, nr_coro, op_coro, doc_id_coro
             )
 
         if financial_data and metrics:
@@ -177,6 +181,20 @@ class IndividualAnalyzer:
                         sales = new_cd.get("Sales")
                         new_cd["GrossProfitMargin"] = gp_m / sales * PERCENT if sales else None
                     year["CalculatedData"] = new_cd
+
+            for year in metrics.get("years", []):
+                fy_end_key = year.get("fy_end", "").replace("-", "")
+                op = op_by_year.get(fy_end_key)
+                if op and op.get("current") is not None:
+                    cd = year["CalculatedData"]
+                    if cd.get("OP") is None:
+                        op_m = op["current"] / MILLION_YEN
+                        cd["OP"] = op_m
+                        if op.get("label") == "経常利益":
+                            cd["OPLabel"] = "経常利益"
+                        sales = cd.get("Sales")
+                        if sales:
+                            cd["OperatingMargin"] = op_m / sales * PERCENT
 
         for year in metrics.get("years", []):
             fy_end_key = year.get("fy_end", "").replace("-", "")

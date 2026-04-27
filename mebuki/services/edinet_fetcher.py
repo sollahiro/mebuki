@@ -447,3 +447,27 @@ class EdinetFetcher:
         ie_by_year = self._collect_results(results, code, "IE")
         logger.info(f"[IE] {code}: 支払利息抽出完了 {len(ie_by_year)}件 {time.perf_counter() - _t0:.2f}s")
         return ie_by_year
+
+    async def extract_operating_profit_by_year(
+        self,
+        code: str,
+        financial_data: List[Dict[str, Any]],
+        max_years: int,
+    ) -> Dict[str, dict]:
+        """年度別に営業利益（または経常利益）を抽出。Returns: { "YYYYMMDD": op_result_dict }"""
+        from mebuki.analysis.operating_profit import extract_operating_profit
+
+        if not self.edinet_client or not self.edinet_client.api_key:
+            return {}
+
+        docs = await self._get_annual_docs(code, financial_data, max_years)
+        logger.info(f"[OP] {code}: {len(docs)}件のEDINET文書を検索")
+
+        _t0 = time.perf_counter()
+        results = await asyncio.gather(
+            *[self._run_extraction(doc, code, "OP", extract_operating_profit) for doc in docs],
+            return_exceptions=True,
+        )
+        op_by_year = self._collect_results(results, code, "OP")
+        logger.info(f"[OP] {code}: 営業利益抽出完了 {len(op_by_year)}件 {time.perf_counter() - _t0:.2f}s")
+        return op_by_year
