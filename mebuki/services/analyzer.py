@@ -208,6 +208,19 @@ class IndividualAnalyzer:
             if emp and emp.get("current") is not None:
                 year["CalculatedData"]["Employees"] = emp["current"]
 
+        from mebuki.utils.wacc import load_rf_rates, get_rf_for_date, calculate_wacc
+        rf_rates = load_rf_rates(settings_store.cache_dir)
+        for year in metrics.get("years", []):
+            cd = year["CalculatedData"]
+            rf = get_rf_for_date(rf_rates, year.get("fy_end", ""))
+            cd.update(calculate_wacc(
+                eq=cd.get("Eq"),
+                ibd=cd.get("InterestBearingDebt"),
+                ie=cd.get("InterestExpense"),
+                tc_pct=cd.get("EffectiveTaxRate"),
+                rf=rf,
+            ))
+
         return {
             "stock_info": stock_info,
             "financial_data": financial_data,
