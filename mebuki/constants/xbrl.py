@@ -190,4 +190,13 @@ AGGREGATE_IFRS_DEFINITIONS: List[Dict[str, Any]] = [
         "tag": "BondsAndBorrowingsNCLIFRS",            # 非流動負債 社債及び借入金（社債+借入金を集約）
         "covers": ["社債", "長期借入金"],
     },
+    {
+        "tag": "InterestBearingLiabilitiesCLIFRS",     # 流動有利子負債合計（全流動コンポーネントを集約）
+        "covers": ["短期借入金", "コマーシャル・ペーパー", "短期社債", "1年内償還予定の社債", "1年内返済予定の長期借入金"],
+        "label": "流動有利子負債合計（集約）",
+    },
+    {
+        "tag": "InterestBearingLiabilitiesNCLIFRS",    # 非流動有利子負債合計（全非流動コンポーネントを集約）
+        "covers": ["社債", "長期借入金"],
+    },
 ]

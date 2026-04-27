@@ -149,9 +149,9 @@ def calculate_wacc(
         return result
     if d == 0:
         result["WACC"] = re_ * PERCENT
-    elif ie is not None and tc_pct is not None:
+    elif ie is not None and tc_pct is not None and 0 <= tc_pct <= 100:
         rd = ie / d
-        result["CostOfDebt"] = rd * PERCENT
+        result["CostOfDebt"] = rd * PERCENT if rd <= 1.0 else None
         tc = tc_pct / PERCENT
         result["WACC"] = ((eq / v) * re_ + (d / v) * rd * (1 - tc)) * PERCENT
     return result

@@ -528,10 +528,15 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
         first["tag"] = agg_def["tag"]
         first["current"] = agg_c
         first["prior"] = agg_p
-        first["label"] = agg_def["covers"][0] + "＋" + agg_def["covers"][1] + "（集約）"
+        agg_label = agg_def.get("label") or (agg_def["covers"][0] + "＋" + agg_def["covers"][1] + "（集約）")
+        first["label"] = agg_label
 
     found = [c for c in components if c["current"] is not None or c["prior"] is not None]
     if not found:
+        xbrl_files = find_xbrl_files(xbrl_dir)
+        if any(f.stat().st_size > 100_000 for f in xbrl_files):
+            zero_comps = [{"label": comp["label"], "tag": None, "current": 0.0, "prior": 0.0} for comp in COMPONENT_DEFINITIONS]
+            return {"current": 0.0, "prior": 0.0, "method": "zero_debt", "accounting_standard": accounting_standard, "components": zero_comps}
         return {"current": None, "prior": None, "method": "not_found", "accounting_standard": accounting_standard, "components": components,
                 "reason": "有利子負債タグが見つからない"}
 
