@@ -281,3 +281,63 @@ ROE (%) = 当期純利益 ÷ 自己資本 × 100
 | `IBDComponents` | 各コンポーネントの当期・前期値（百万円） |
 | `IBDAccountingStandard` | 会計基準: `J-GAAP` / `IFRS` / `US-GAAP` |
 | `IBDDocID` | IBD抽出元のEDINET書類ID（表示ラベル: `DocID`） |
+
+---
+
+## WACC（加重平均資本コスト）
+
+### 計算式
+
+```
+Re   = Rf + β × MRP          # 株主資本コスト（CAPM）
+Rd   = 支払利息 ÷ 有利子負債  # 負債コスト（税引前）
+E    = 自己資本（帳簿純資産）
+D    = 有利子負債合計
+V    = E + D
+WACC = (E/V) × Re + (D/V) × Rd × (1 − Tc)
+```
+
+### パラメータ
+
+| パラメータ | 値・取得方法 | 備考 |
+|---|---|---|
+| **Rf** | 財務省公表 10年国債流通利回り（FY終了日時点） | 毎営業日更新 CSV から取得・1日キャッシュ |
+| **β** | 1.0（固定） | 暫定値（市場平均） |
+| **MRP** | 5.5%（固定） | 日本株 市場リスクプレミアム標準値 |
+| **E** | `Eq`（帳簿純資産、百万円） | J-Quants から取得 |
+| **D** | `InterestBearingDebt`（百万円） | EDINET XBRL 貸借対照表から抽出 |
+| **Rd** | `InterestExpense` ÷ `InterestBearingDebt` | EDINET XBRL 損益計算書から抽出 |
+| **Tc** | `EffectiveTaxRate`（%） | EDINET XBRL 損益計算書から算出 |
+
+### FY別Rfの取得ロジック
+
+各FYの **fy_end 日付** に対応する10年国債利回りを使用する。
+
+- データソース1: `jgbcm_all.csv`（前月末まで）
+- データソース2: `jgbcm.csv`（当月分）
+- FY終了日当日の値がない場合（休日等）は最大14日遡って直前営業日の値を使用
+- どちらも取得できない場合のフォールバック: 1.0%
+
+これにより、ゼロ金利期（2021年 Rf≈0.1%）と金利上昇後（2025年 Rf≈1.5%）のRe・WACCの変化を年次ごとに正確に反映する。
+
+### 出力フィールド（CalculatedData）
+
+| フィールド | 内容 | 単位 |
+|---|---|---|
+| `CostOfEquity` | 株主資本コスト = Rf + β×MRP | % |
+| `CostOfDebt` | 負債コスト = IE/IBD × 100（IBD=0 の場合は None） | % |
+| `WACC` | 加重平均資本コスト（IE・Tc が None の場合は None） | % |
+
+### 特殊ケース
+
+| 条件 | 挙動 |
+|---|---|
+| IBD = 0（無借金企業） | CostOfDebt = None、WACC = Re |
+| IE または Tc が取得できない | CostOfDebt/WACC = None、CostOfEquity のみ表示 |
+| `--half` モード | 半期データには IE・Tc が含まれないため WACC 非表示 |
+
+### 留意点
+
+- **E は帳簿純資産**。時価総額ではないため D/(D+E) 比率に影響する。将来的には J-Quants の株価データで時価ベースに移行予定。
+- **β=1.0 は暫定値**。実測βは株価時系列と市場インデックスの共分散から計算するが、EDINET/XBRLには記載がないため現時点では固定。
+- **ROIC との違い**: ROIC は NP/(Eq+IBD) × 100。WACC は資本コストの加重平均であり、ROICと比較することで経済的付加価値（EVA）の判断ができる（ROIC > WACC なら価値創造）。
