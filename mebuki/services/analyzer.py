@@ -151,7 +151,7 @@ class IndividualAnalyzer:
             for year in metrics.get("years", []):
                 fy_end_key = year.get("fy_end", "").replace("-", "")
                 tax = tax_by_year.get(fy_end_key)
-                if tax and tax.get("method") == "computed":
+                if tax and tax.get("method") in ("computed", "usgaap_html"):
                     cd = year["CalculatedData"]
                     if tax.get("pretax_income") is not None:
                         cd["PretaxIncome"] = tax["pretax_income"] / MILLION_YEN

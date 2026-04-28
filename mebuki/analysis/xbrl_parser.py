@@ -67,8 +67,9 @@ class XBRLParser:
                 content = []
                 current = heading.next_sibling
                 while current:
-                    if hasattr(current, 'name') and current.name:
-                        if current.name in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
+                    current_name = getattr(current, 'name', None)
+                    if current_name:
+                        if current_name in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
                             break
                         text = current.get_text(strip=True)
                     else:

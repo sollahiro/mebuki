@@ -14,13 +14,16 @@ from typing import Any, Dict, Optional
 
 def parse_html_number(text: str) -> Optional[float]:
     """HTML表セルの数値テキストを float に変換（百万円単位のまま）。
-    "22,548" → 22548.0, "22,548百万円" → 22548.0, "－" → None
+    "22,548" → 22548.0, "22,548百万円" → 22548.0, "△8,752" → -8752.0, "－" → None
     """
     if not text:
         return None
     text = text.strip()
     text = re.sub(r'(百万円|十万円|億円|兆円|千円|百円|万円|円)$', '', text).strip()
     text = text.replace(",", "").replace("，", "")
+    # △ は日本の会計慣行で負数を示す（例: △8,752 → -8752）
+    if text.startswith("△"):
+        text = "-" + text[1:]
     if text in ("－", "-", "―", "—", ""):
         return None
     try:
