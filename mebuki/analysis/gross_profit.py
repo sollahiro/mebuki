@@ -30,13 +30,17 @@ try:
 except ImportError:
     _BS4_AVAILABLE = False
 
+from mebuki.analysis.context_helpers import (
+    _is_consolidated_duration,
+    _is_consolidated_prior_duration,
+    _is_nonconsolidated_duration,
+    _is_nonconsolidated_prior_duration,
+)
 from mebuki.analysis.xbrl_utils import parse_xbrl_value, collect_numeric_elements, find_xbrl_files, parse_html_number
 from mebuki.constants.financial import MILLION_YEN
 from mebuki.constants.xbrl import (
-    DURATION_CONTEXT_PATTERNS,
     GROSS_PROFIT_COMPONENT_DEFINITIONS,
     GROSS_PROFIT_DIRECT_TAGS,
-    PRIOR_DURATION_CONTEXT_PATTERNS,
 )
 
 # XBRL解析で収集対象とするローカルタグ名のセット
@@ -54,37 +58,6 @@ _GP_RELEVANT_TAGS: frozenset[str] = frozenset(
     ]
 )
 
-
-def _is_consolidated_duration(ctx: str) -> bool:
-    """連結の当期損益コンテキストかどうか。"""
-    return (
-        any(p in ctx for p in DURATION_CONTEXT_PATTERNS)
-        and "_NonConsolidated" not in ctx
-    )
-
-
-def _is_consolidated_prior_duration(ctx: str) -> bool:
-    """連結の前期損益コンテキストかどうか。"""
-    return (
-        any(p in ctx for p in PRIOR_DURATION_CONTEXT_PATTERNS)
-        and "_NonConsolidated" not in ctx
-    )
-
-
-def _is_nonconsolidated_duration(ctx: str) -> bool:
-    """個別の当期損益コンテキストかどうか。"""
-    return (
-        any(p in ctx for p in DURATION_CONTEXT_PATTERNS)
-        and "_NonConsolidated" in ctx
-    )
-
-
-def _is_nonconsolidated_prior_duration(ctx: str) -> bool:
-    """個別の前期損益コンテキストかどうか。"""
-    return (
-        any(p in ctx for p in PRIOR_DURATION_CONTEXT_PATTERNS)
-        and "_NonConsolidated" in ctx
-    )
 
 
 

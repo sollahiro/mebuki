@@ -17,14 +17,15 @@ try:
 except ImportError:
     _BS4_AVAILABLE = False
 
+from mebuki.analysis.context_helpers import (
+    _is_consolidated_duration,
+    _is_consolidated_prior_duration,
+    _is_nonconsolidated_duration,
+    _is_nonconsolidated_prior_duration,
+)
 from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files, parse_html_number
 from mebuki.constants.financial import MILLION_YEN
-from mebuki.constants.xbrl import (
-    DURATION_CONTEXT_PATTERNS,
-    OPERATING_PROFIT_DIRECT_TAGS,
-    ORDINARY_INCOME_TAGS,
-    PRIOR_DURATION_CONTEXT_PATTERNS,
-)
+from mebuki.constants.xbrl import OPERATING_PROFIT_DIRECT_TAGS, ORDINARY_INCOME_TAGS
 
 _OP_RELEVANT_TAGS: frozenset[str] = frozenset(
     OPERATING_PROFIT_DIRECT_TAGS
@@ -39,21 +40,6 @@ _OP_RELEVANT_TAGS: frozenset[str] = frozenset(
     ]
 )
 
-def _is_consolidated_duration(ctx: str) -> bool:
-    return any(p in ctx for p in DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx
-
-
-def _is_prior_consolidated_duration(ctx: str) -> bool:
-    return any(p in ctx for p in PRIOR_DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx
-
-
-def _is_nonconsolidated_duration(ctx: str) -> bool:
-    return any(p in ctx for p in DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" in ctx
-
-
-def _is_prior_nonconsolidated_duration(ctx: str) -> bool:
-    return any(p in ctx for p in PRIOR_DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" in ctx
-
 
 def _find_duration_value(
     tag_elements: dict, tag: str, consolidated: bool
@@ -61,7 +47,7 @@ def _find_duration_value(
     if tag not in tag_elements:
         return None, None
     is_cur = _is_consolidated_duration if consolidated else _is_nonconsolidated_duration
-    is_pri = _is_prior_consolidated_duration if consolidated else _is_prior_nonconsolidated_duration
+    is_pri = _is_consolidated_prior_duration if consolidated else _is_nonconsolidated_prior_duration
     current = prior = None
     for ctx, val in tag_elements[tag].items():
         if is_cur(ctx):
