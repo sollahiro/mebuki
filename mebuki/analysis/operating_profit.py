@@ -9,7 +9,7 @@
 """
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 try:
     from bs4 import BeautifulSoup
@@ -18,6 +18,7 @@ except ImportError:
     _BS4_AVAILABLE = False
 
 from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files, parse_html_number
+from mebuki.constants.financial import MILLION_YEN
 from mebuki.constants.xbrl import OPERATING_PROFIT_DIRECT_TAGS, ORDINARY_INCOME_TAGS
 
 _OP_RELEVANT_TAGS: frozenset[str] = frozenset(
@@ -65,7 +66,7 @@ def _is_prior_nonconsolidated_duration(ctx: str) -> bool:
 
 def _find_duration_value(
     tag_elements: dict, tag: str, consolidated: bool
-) -> tuple[Optional[float], Optional[float]]:
+) -> tuple[float | None, float | None]:
     if tag not in tag_elements:
         return None, None
     is_cur = _is_consolidated_duration if consolidated else _is_nonconsolidated_duration
@@ -81,7 +82,7 @@ def _find_duration_value(
 
 def _try_tags(
     tag_elements: dict, tags: list[str], consolidated: bool
-) -> tuple[Optional[str], Optional[float], Optional[float]]:
+) -> tuple[str | None, float | None, float | None]:
     """指定した連結/個別モードでタグリストを試す。"""
     for tag in tags:
         c, p = _find_duration_value(tag_elements, tag, consolidated)
@@ -110,7 +111,7 @@ def _detect_accounting_standard(tag_elements: dict) -> str:
     return "J-GAAP"
 
 
-def _extract_usgaap_op_from_html(xbrl_dir: Path) -> Optional[dict]:
+def _extract_usgaap_op_from_html(xbrl_dir: Path) -> dict | None:
     if not _BS4_AVAILABLE:
         return None
 
@@ -194,8 +195,8 @@ def _extract_usgaap_op_from_html(xbrl_dir: Path) -> Optional[dict]:
                 prior_val = numerics[0][1]
                 current_val = numerics[-1][1]
 
-            def _to_yen(v: Optional[float]) -> Optional[float]:
-                return v * 1_000_000 if v is not None else None
+            def _to_yen(v: float | None) -> float | None:
+                return v * MILLION_YEN if v is not None else None
 
             return {
                 "current": _to_yen(current_val),
