@@ -5,7 +5,7 @@ J-QUANTSの財務データを解析・変換するための共通ロジックを
 """
 
 import logging
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any
 from datetime import datetime
 
 from .fiscal_year import calculate_fiscal_year_from_start
@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 
 
 def prepare_edinet_search_data(
-    financial_data: List[Dict[str, Any]],
+    financial_data: list[dict[str, Any]],
     max_records: int = 2
-) -> Tuple[List[Dict[str, Any]], List[int]]:
+) -> tuple[list[dict[str, Any]], list[int]]:
     """
     J-QUANTS財務データからEDINET検索用データを準備
     
@@ -39,7 +39,7 @@ def prepare_edinet_search_data(
     # 期間ごと（年度×種別）にグループ化し、最も早い開示日（DiscDate）を持つレコードを採用する
     # これにより、訂正等でレコードが複数ある場合でも、最初の開示日を基準にEDINET検索を行い、
     # 検索開始日が遅くなることを防ぐ。
-    period_groups: Dict[Tuple[int, str], List[Dict[str, Any]]] = {}
+    period_groups: dict[tuple[int, str], list[dict[str, Any]]] = {}
     
     for record in target_records:
         fy_st = record.get("CurFYSt", "")

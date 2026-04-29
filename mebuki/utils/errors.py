@@ -2,7 +2,7 @@
 エラーハンドリングとデータ不足時の対応モジュール
 """
 
-from typing import Optional, Dict, Any, Tuple
+from typing import Any
 from enum import Enum
 
 
@@ -15,7 +15,7 @@ class DataAvailability(Enum):
 
 
 def check_data_availability(
-    metrics: Dict[str, Any],
+    metrics: dict[str, Any],
     required_years: int
 ) -> DataAvailability:
     """
@@ -42,7 +42,7 @@ def check_data_availability(
 
 
 def get_data_availability_message(
-    metrics: Dict[str, Any],
+    metrics: dict[str, Any],
     required_years: int
 ) -> str:
     """
@@ -67,9 +67,9 @@ def get_data_availability_message(
 
 
 def validate_metrics_for_analysis(
-    metrics: Dict[str, Any],
+    metrics: dict[str, Any],
     required_years: int = 2
-) -> Tuple[bool, Optional[str]]:
+) -> tuple[bool, str | None]:
     """
     分析に必要なデータが揃っているか検証
     

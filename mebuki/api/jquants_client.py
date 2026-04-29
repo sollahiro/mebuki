@@ -8,7 +8,7 @@ APIキー認証とデータ取得機能を提供します。
 import asyncio
 import logging
 import ssl
-from typing import Optional, Dict, List, Any
+from typing import Any
 
 import aiohttp
 import certifi
@@ -25,7 +25,7 @@ class JQuantsAPIClient:
     RETRY_DELAY = 2.0  # 秒（レート制限対応のため増加）
     RATE_LIMIT_WAIT = 60  # レート制限時の待機時間（秒）
 
-    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
+    def __init__(self, api_key: str | None = None, base_url: str | None = None):
         """
         初期化
 
@@ -35,8 +35,8 @@ class JQuantsAPIClient:
         """
         self.api_key = api_key.strip() if api_key else api_key
         self.base_url = base_url or JQUANTS_API_BASE_URL
-        self._session: Optional[aiohttp.ClientSession] = None
-        self._session_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._session: aiohttp.ClientSession | None = None
+        self._session_loop: asyncio.AbstractEventLoop | None = None
 
     def update_api_key(self, api_key: str) -> None:
         """APIキーを更新し、セッションを次回リクエスト時に再作成します。"""
@@ -71,8 +71,8 @@ class JQuantsAPIClient:
     async def _request(
         self,
         endpoint: str,
-        params: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         APIリクエストを実行（リトライ機能付き）
 
@@ -147,8 +147,8 @@ class JQuantsAPIClient:
     async def _get_all_pages(
         self,
         endpoint: str,
-        params: Optional[Dict[str, Any]] = None
-    ) -> List[Dict[str, Any]]:
+        params: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
         """
         ページネーション対応のデータ取得
 
@@ -182,12 +182,12 @@ class JQuantsAPIClient:
 
     async def get_financial_summary(
         self,
-        code: Optional[str] = None,
-        date: Optional[str] = None,
-        max_years: Optional[int] = None,
-        period_types: Optional[List[str]] = None,
-        include_fields: Optional[List[str]] = None
-    ) -> List[Dict[str, Any]]:
+        code: str | None = None,
+        date: str | None = None,
+        max_years: int | None = None,
+        period_types: list[str] | None = None,
+        include_fields: list[str] | None = None
+    ) -> list[dict[str, Any]]:
         """
         財務情報を取得
 
@@ -223,9 +223,9 @@ class JQuantsAPIClient:
 
     async def get_equity_master(
         self,
-        code: Optional[str] = None,
-        date: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+        code: str | None = None,
+        date: str | None = None
+    ) -> list[dict[str, Any]]:
         """
         上場銘柄一覧を取得
 
@@ -244,7 +244,7 @@ class JQuantsAPIClient:
 
         return await self._get_all_pages("/equities/master", params)
 
-    async def get_earnings_calendar(self) -> List[Dict[str, Any]]:
+    async def get_earnings_calendar(self) -> list[dict[str, Any]]:
         """
         決算発表予定日を取得
 

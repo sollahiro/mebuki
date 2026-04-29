@@ -8,7 +8,8 @@ import asyncio
 import logging
 import time
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Callable, AsyncGenerator
+from typing import Any
+from collections.abc import Callable, AsyncGenerator
 
 from mebuki.api.jquants_client import JQuantsAPIClient
 from mebuki.api.edinet_client import EdinetAPIClient
@@ -23,7 +24,7 @@ class EdinetFetcher:
     def __init__(
         self,
         api_client: JQuantsAPIClient,
-        edinet_client: Optional[EdinetAPIClient],
+        edinet_client: EdinetAPIClient | None,
     ):
         self.api_client = api_client
         self.edinet_client = edinet_client
@@ -33,7 +34,7 @@ class EdinetFetcher:
     async def _get_annual_docs(
         self,
         code: str,
-        financial_data: List[Dict[str, Any]],
+        financial_data: list[dict[str, Any]],
         max_years: int,
     ) -> list:
         """search_recent_reports の結果をインスタンス内でキャッシュ。
@@ -58,7 +59,7 @@ class EdinetFetcher:
         prefix: str,
         extract_fn: Callable[[Path], dict],
         *,
-        result_check: Optional[Callable[[dict], bool]] = None,
+        result_check: Callable[[dict], bool] | None = None,
     ) -> tuple[str, dict | None]:
         fy_end_8 = doc.get("jquants_fy_end", "").replace("-", "")
         if not fy_end_8:
@@ -98,9 +99,9 @@ class EdinetFetcher:
     async def fetch_edinet_data_async(
         self,
         code: str,
-        financial_data: List[Dict[str, Any]],
+        financial_data: list[dict[str, Any]],
         max_documents: int = 10,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """EDINETデータを非同期で取得"""
         if not self.edinet_client:
             return {}
@@ -124,9 +125,9 @@ class EdinetFetcher:
     async def fetch_edinet_reports_stream(
         self,
         code: str,
-        financial_data: List[Dict[str, Any]],
+        financial_data: list[dict[str, Any]],
         max_documents: int = 20,
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """EDINET書類を取得し、準備ができた段階で順次yieldする"""
         if not self.edinet_client or not self.edinet_client.api_key:
             logger.warning(f"EDINETクライアントが利用不可またはAPIキー未設定: code={code}")
@@ -174,11 +175,11 @@ class EdinetFetcher:
     async def fetch_edinet_reports(
         self,
         code: str,
-        years: List[int],
-        jquants_annual_data: Optional[List[Dict[str, Any]]] = None,
-        progress_callback: Optional[Callable] = None,
+        years: list[int],
+        jquants_annual_data: list[dict[str, Any]] | None = None,
+        progress_callback: Callable | None = None,
         max_documents: int = 20,
-    ) -> Dict[int, List[Dict[str, Any]]]:
+    ) -> dict[int, list[dict[str, Any]]]:
         """指定年度の有価証券報告書を取得"""
         results = {}
         async for data in self.fetch_edinet_reports_stream(
@@ -204,14 +205,14 @@ class EdinetFetcher:
     async def get_doc_ids_by_year(
         self,
         code: str,
-        financial_data: List[Dict[str, Any]],
+        financial_data: list[dict[str, Any]],
         max_years: int,
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """年度別にEDINET有価証券報告書のdocIDを返す。Returns: { "YYYYMMDD": docID }"""
         if not self.edinet_client or not self.edinet_client.api_key:
             return {}
         docs = await self._get_annual_docs(code, financial_data, max_years)
-        result: Dict[str, str] = {}
+        result: dict[str, str] = {}
         for doc in docs:
             fy_end = doc.get("jquants_fy_end", "").replace("-", "")
             if fy_end:
@@ -221,9 +222,9 @@ class EdinetFetcher:
     async def extract_ibd_by_year(
         self,
         code: str,
-        financial_data: List[Dict[str, Any]],
+        financial_data: list[dict[str, Any]],
         max_years: int,
-    ) -> Dict[str, dict]:
+    ) -> dict[str, dict]:
         """年度別に有利子負債を抽出。Returns: { "YYYYMMDD": ibd_result_dict }"""
         from mebuki.analysis.interest_bearing_debt import extract_interest_bearing_debt
 
@@ -245,9 +246,9 @@ class EdinetFetcher:
     async def extract_half_year_edinet_data(
         self,
         code: str,
-        financial_data: List[Dict[str, Any]],
+        financial_data: list[dict[str, Any]],
         max_years: int,
-    ) -> Dict[str, dict]:
+    ) -> dict[str, dict]:
         """2Q期間のEDINETデータ（GrossProfit + CF + IBD）を年度別に抽出。
 
         Returns: { "YYYYMMDD": {"gp": gp_result_dict, "cf": cf_result_dict, "ibd": ibd_result_dict} }
@@ -331,9 +332,9 @@ class EdinetFetcher:
     async def extract_employees_by_year(
         self,
         code: str,
-        financial_data: List[Dict[str, Any]],
+        financial_data: list[dict[str, Any]],
         max_years: int,
-    ) -> Dict[str, dict]:
+    ) -> dict[str, dict]:
         """年度別に従業員数を抽出。Returns: { "YYYYMMDD": employees_result_dict }"""
         from mebuki.analysis.employees import extract_employees
 
@@ -355,9 +356,9 @@ class EdinetFetcher:
     async def extract_net_revenue_by_year(
         self,
         code: str,
-        financial_data: List[Dict[str, Any]],
+        financial_data: list[dict[str, Any]],
         max_years: int,
-    ) -> Dict[str, dict]:
+    ) -> dict[str, dict]:
         """年度別に IFRS 純収益・事業利益を抽出。Returns: { "YYYYMMDD": nr_result_dict }"""
         from mebuki.analysis.net_revenue import extract_net_revenue
 
@@ -379,9 +380,9 @@ class EdinetFetcher:
     async def extract_gross_profit_by_year(
         self,
         code: str,
-        financial_data: List[Dict[str, Any]],
+        financial_data: list[dict[str, Any]],
         max_years: int,
-    ) -> Dict[str, dict]:
+    ) -> dict[str, dict]:
         """年度別に売上総利益を抽出。Returns: { "YYYYMMDD": gp_result_dict }"""
         from mebuki.analysis.gross_profit import extract_gross_profit
 
@@ -403,9 +404,9 @@ class EdinetFetcher:
     async def extract_tax_expense_by_year(
         self,
         code: str,
-        financial_data: List[Dict[str, Any]],
+        financial_data: list[dict[str, Any]],
         max_years: int,
-    ) -> Dict[str, dict]:
+    ) -> dict[str, dict]:
         """年度別に税引前利益・法人税等を抽出。Returns: { "YYYYMMDD": tax_result_dict }"""
         from mebuki.analysis.tax_expense import extract_tax_expense
 
@@ -427,9 +428,9 @@ class EdinetFetcher:
     async def extract_interest_expense_by_year(
         self,
         code: str,
-        financial_data: List[Dict[str, Any]],
+        financial_data: list[dict[str, Any]],
         max_years: int,
-    ) -> Dict[str, dict]:
+    ) -> dict[str, dict]:
         """年度別に支払利息（金融費用）を抽出。Returns: { "YYYYMMDD": ie_result_dict }"""
         from mebuki.analysis.interest_expense import extract_interest_expense
 
@@ -451,9 +452,9 @@ class EdinetFetcher:
     async def extract_operating_profit_by_year(
         self,
         code: str,
-        financial_data: List[Dict[str, Any]],
+        financial_data: list[dict[str, Any]],
         max_years: int,
-    ) -> Dict[str, dict]:
+    ) -> dict[str, dict]:
         """年度別に営業利益（または経常利益）を抽出。Returns: { "YYYYMMDD": op_result_dict }"""
         from mebuki.analysis.operating_profit import extract_operating_profit
 

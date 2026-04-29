@@ -3,7 +3,7 @@
 """
 
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Any
 from datetime import datetime, timedelta
 
 from .converters import to_float, is_valid_value, is_valid_financial_record, extract_year_month
@@ -31,9 +31,9 @@ def _merge_record(seen: dict, key, record: dict) -> None:
 
 
 def extract_annual_data(
-    quarterly_data: List[Dict[str, Any]],
+    quarterly_data: list[dict[str, Any]],
     include_2q: bool = False
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     四半期データから年度データを抽出（FYと2Qを取得可能）
 
@@ -118,9 +118,9 @@ def extract_annual_data(
 
 
 def build_half_year_periods(
-    financial_data: List[Dict[str, Any]],
+    financial_data: list[dict[str, Any]],
     years: int = 3,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     FY と 2Q レコードを対応付けて H1/H2 の半期データリストを返す。
 
@@ -152,8 +152,8 @@ def build_half_year_periods(
     """
     today = datetime.now()
 
-    fy_by_end: Dict[str, Dict[str, Any]] = {}
-    q2_by_end: Dict[str, Dict[str, Any]] = {}
+    fy_by_end: dict[str, dict[str, Any]] = {}
+    q2_by_end: dict[str, dict[str, Any]] = {}
 
     for record in financial_data:
         per_type = record.get("CurPerType")
@@ -195,11 +195,11 @@ def build_half_year_periods(
 
     fy_ends_selected = sorted(set(fy_ends_with_fy) | set(extra_q2_only), reverse=True)
 
-    def _m(value: Any) -> Optional[float]:
+    def _m(value: Any) -> float | None:
         v = to_float(value)
         return v / MILLION_YEN if v is not None else None
 
-    def _diff_m(fy_rec: Dict, q2_rec: Dict, field: str) -> Optional[float]:
+    def _diff_m(fy_rec: dict, q2_rec: dict, field: str) -> float | None:
         fy_v = to_float(fy_rec.get(field))
         q2_v = to_float(q2_rec.get(field))
         if fy_v is None or q2_v is None:
@@ -207,12 +207,12 @@ def build_half_year_periods(
         return (fy_v - q2_v) / MILLION_YEN
 
     def _make_data(
-        sales: Optional[float],
-        op: Optional[float],
-        np_: Optional[float],
-        cfo: Optional[float],
-        cfi: Optional[float],
-    ) -> Dict[str, Optional[float]]:
+        sales: float | None,
+        op: float | None,
+        np_: float | None,
+        cfo: float | None,
+        cfi: float | None,
+    ) -> dict[str, float | None]:
         return {
             "Sales": sales,
             "OP": op,
@@ -227,7 +227,7 @@ def build_half_year_periods(
         s = fy_end.replace("-", "")
         return s[2:4] if len(s) >= 4 else s[:2]
 
-    periods: List[Dict[str, Any]] = []
+    periods: list[dict[str, Any]] = []
     for fy_end in sorted(fy_ends_selected):  # 古い順
         fy_rec = fy_by_end.get(fy_end)
         q2_rec = q2_by_end.get(fy_end)
@@ -297,7 +297,7 @@ def get_monthly_avg_stock_price(
     code: str,
     fiscal_year: str,
     fy_end_month: int = 3
-) -> Optional[float]:
+) -> float | None:
     """
     指定した会計年度の月次平均株価を取得
     
@@ -363,7 +363,7 @@ def get_fiscal_year_end_price(
     api_client,
     code: str,
     fiscal_year_end: str
-) -> Optional[float]:
+) -> float | None:
     """
     会計年度末の株価（終値）を取得
     休日の場合は直前の営業日を使用
@@ -398,7 +398,7 @@ def get_fiscal_year_end_price(
         return None
 
 
-def _calculate_quarter_end_date(fy_end: str, per_type: str) -> Optional[str]:
+def _calculate_quarter_end_date(fy_end: str, per_type: str) -> str | None:
     """
     CurFYEn（年度終了日）とCurPerType（四半期タイプ）から、実際の四半期末日を計算
     
@@ -483,9 +483,9 @@ def _calculate_quarter_end_date(fy_end: str, per_type: str) -> Optional[str]:
 
 
 def extract_quarterly_data(
-    quarterly_data: List[Dict[str, Any]],
+    quarterly_data: list[dict[str, Any]],
     quarters: int = 8
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     四半期データから直近N四半期分のデータを抽出
     
@@ -642,7 +642,7 @@ def get_quarter_end_price(
     api_client,
     code: str,
     quarter_end: str
-) -> Optional[float]:
+) -> float | None:
     """
     四半期末の株価（終値）を取得
     休日の場合は直前の営業日を使用

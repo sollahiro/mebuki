@@ -1,6 +1,6 @@
-from typing import Dict, Any, List
+from typing import Any
 
-XBRL_SECTIONS: Dict[str, Dict[str, Any]] = {
+XBRL_SECTIONS: dict[str, dict[str, Any]] = {
     'business_risks': {
         'title': '事業等のリスク',
         'xbrl_elements': ['BusinessRisksTextBlock']
@@ -27,13 +27,13 @@ XBRL_SECTIONS: Dict[str, Dict[str, Any]] = {
 # analysis/interest_bearing_debt.py で使用
 
 # 有利子負債合計タグ（直接法で使うタグ）
-INTEREST_BEARING_DEBT_TAGS: List[str] = [
+INTEREST_BEARING_DEBT_TAGS: list[str] = [
     "InterestBearingDebt",
     "InterestBearingLiabilities",
 ]
 
 # 各コンポーネントのラベルと候補タグ名（J-GAAP → IFRS の優先順）
-COMPONENT_DEFINITIONS: List[Dict[str, Any]] = [
+COMPONENT_DEFINITIONS: list[dict[str, Any]] = [
     {
         "label": "短期借入金",
         "tags": [
@@ -90,14 +90,14 @@ COMPONENT_DEFINITIONS: List[Dict[str, Any]] = [
 
 # 売上総利益合計タグ（直接法）
 # EDINET XBRL では IFRS連結は "IFRS" サフィックス付き、J-GAAP連結はサフィックスなし
-GROSS_PROFIT_DIRECT_TAGS: List[str] = [
+GROSS_PROFIT_DIRECT_TAGS: list[str] = [
     "GrossProfitIFRS",  # IFRS連結（例: 味の素, 日立）
     "GrossProfit",      # J-GAAP連結（例: ニチレイ）
 ]
 
 # 売上総利益 計算法コンポーネント（直接タグが存在しない場合のフォールバック）
 # 売上高 − 売上原価 で計算する
-GROSS_PROFIT_COMPONENT_DEFINITIONS: List[Dict[str, Any]] = [
+GROSS_PROFIT_COMPONENT_DEFINITIONS: list[dict[str, Any]] = [
     {
         "label": "売上高",
         "tags": [
@@ -123,7 +123,7 @@ GROSS_PROFIT_COMPONENT_DEFINITIONS: List[Dict[str, Any]] = [
 # analysis/cash_flow.py で使用
 
 # 営業活動によるキャッシュフロー
-CF_OPERATING_TAGS: List[str] = [
+CF_OPERATING_TAGS: list[str] = [
     "NetCashProvidedByUsedInOperatingActivities",                       # J-GAAP 連結（CF計算書）
     "NetCashProvidedByUsedInOperatingActivitiesSummaryOfBusinessResults", # J-GAAP 連結（決算短信）
     "CashFlowsFromUsedInOperationsIFRS",                                # IFRS（間接法）
@@ -132,7 +132,7 @@ CF_OPERATING_TAGS: List[str] = [
 ]
 
 # 投資活動によるキャッシュフロー
-CF_INVESTING_TAGS: List[str] = [
+CF_INVESTING_TAGS: list[str] = [
     "NetCashProvidedByUsedInInvestingActivities",                       # J-GAAP 連結（CF計算書）
     "NetCashProvidedByUsedInInvestingActivitiesSummaryOfBusinessResults", # J-GAAP 連結（決算短信）
     "CashFlowsUsedInInvestingActivitiesIFRS",                           # IFRS
@@ -144,31 +144,31 @@ CF_INVESTING_TAGS: List[str] = [
 # analysis/tax_expense.py で使用
 
 # 税引前利益
-PRETAX_INCOME_JGAAP_TAGS: List[str] = [
+PRETAX_INCOME_JGAAP_TAGS: list[str] = [
     "IncomeBeforeIncomeTaxes",
 ]
-PRETAX_INCOME_IFRS_TAGS: List[str] = [
+PRETAX_INCOME_IFRS_TAGS: list[str] = [
     "ProfitLossBeforeTaxIFRS",
 ]
 
 # 法人税等
-INCOME_TAX_JGAAP_TAGS: List[str] = [
+INCOME_TAX_JGAAP_TAGS: list[str] = [
     "IncomeTaxes",
 ]
-INCOME_TAX_IFRS_TAGS: List[str] = [
+INCOME_TAX_IFRS_TAGS: list[str] = [
     "IncomeTaxExpenseIFRS",
 ]
 
 # 営業利益（OP）タグ定義
 # analysis/operating_profit.py で使用
 
-OPERATING_PROFIT_DIRECT_TAGS: List[str] = [
+OPERATING_PROFIT_DIRECT_TAGS: list[str] = [
     "OperatingProfitLossIFRS",   # IFRS連結
     "OperatingIncomeLoss",       # J-GAAP連結（標準）
     "OperatingIncome",           # J-GAAP（旧タグ / 個別フォールバック）
 ]
 
-ORDINARY_INCOME_TAGS: List[str] = [
+ORDINARY_INCOME_TAGS: list[str] = [
     "OrdinaryIncome",            # J-GAAP 金融機関向け経常利益
     "OrdinaryIncomeLoss",        # J-GAAP 経常利益（代替）
 ]
@@ -177,17 +177,17 @@ ORDINARY_INCOME_TAGS: List[str] = [
 # analysis/interest_expense.py で使用
 
 # J-GAAP: 営業外費用の支払利息
-INTEREST_EXPENSE_JGAAP_TAGS: List[str] = [
+INTEREST_EXPENSE_JGAAP_TAGS: list[str] = [
     "InterestExpensesNOE",
 ]
 
 # IFRS: 支払利息（InterestExpensesIFRS）を優先し、存在しない場合は金融費用合計（FinanceCostsIFRS）にフォールバック
-INTEREST_EXPENSE_IFRS_TAGS: List[str] = [
+INTEREST_EXPENSE_IFRS_TAGS: list[str] = [
     "InterestExpensesIFRS",   # 支払利息（推奨）
     "FinanceCostsIFRS",       # 金融費用合計（フォールバック）
 ]
 
-AGGREGATE_IFRS_DEFINITIONS: List[Dict[str, Any]] = [
+AGGREGATE_IFRS_DEFINITIONS: list[dict[str, Any]] = [
     {
         "tag": "CurrentPortionOfLongTermDebtCLIFRS",  # 1年内長期有利子負債（社債+借入金を集約）
         "covers": ["1年内償還予定の社債", "1年内返済予定の長期借入金"],

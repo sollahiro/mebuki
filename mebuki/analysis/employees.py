@@ -8,7 +8,6 @@ contextRef が Instant 型の連結コンテキストを優先し、
 """
 
 from pathlib import Path
-from typing import Optional
 
 from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
 
@@ -50,7 +49,7 @@ def _find_value(
     ctx_map: dict,
     is_current_fn,
     is_prior_fn,
-) -> tuple[Optional[float], Optional[float]]:
+) -> tuple[float | None, float | None]:
     current = prior = None
     for ctx, val in ctx_map.items():
         if current is None and is_current_fn(ctx):

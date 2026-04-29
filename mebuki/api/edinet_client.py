@@ -5,7 +5,7 @@ import ssl
 import zipfile
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any
 
 import aiohttp
 import certifi
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class EdinetAPIClient:
     """EDINET API v2 クライアント"""
 
-    def __init__(self, api_key: Optional[str] = None, cache_dir: Optional[str] = None):
+    def __init__(self, api_key: str | None = None, cache_dir: str | None = None):
         self.api_key = api_key
         self.base_url = EDINET_API_BASE_URL
         if cache_dir:
@@ -27,8 +27,8 @@ class EdinetAPIClient:
             self.cache_dir = Path("tmp_cache") / "edinet"
 
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self._session: Optional[aiohttp.ClientSession] = None
-        self._session_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._session: aiohttp.ClientSession | None = None
+        self._session_loop: asyncio.AbstractEventLoop | None = None
         self._download_locks: dict[str, asyncio.Lock] = {}
         self._date_fetch_semaphore = asyncio.Semaphore(10)
 
@@ -58,7 +58,7 @@ class EdinetAPIClient:
         self._session = None
         self._session_loop = None
 
-    async def _request(self, endpoint: str, params: Dict[str, Any] = None, max_retries: int = 3) -> Dict[str, Any]:
+    async def _request(self, endpoint: str, params: dict[str, Any] = None, max_retries: int = 3) -> dict[str, Any]:
         """リトライ機能付きAPIリクエスト実行（JSON応答）"""
         if not self.api_key:
             raise ValueError("EDINET_API_KEY is not set")
@@ -118,7 +118,7 @@ class EdinetAPIClient:
         logger.error(f"❌ [EDINET API] All {max_retries} attempts failed. Last error: {last_exception}")
         raise last_exception
 
-    async def _request_binary(self, endpoint: str, params: Dict[str, Any] = None, max_retries: int = 3) -> bytes:
+    async def _request_binary(self, endpoint: str, params: dict[str, Any] = None, max_retries: int = 3) -> bytes:
         """リトライ機能付きAPIリクエスト実行（バイナリ応答）"""
         if not self.api_key:
             raise ValueError("EDINET_API_KEY is not set")
@@ -155,7 +155,7 @@ class EdinetAPIClient:
         """検索用キャッシュキー生成（日付ベース）"""
         return f"search_{date_str}.json"
 
-    def _load_search_cache(self, filename: str) -> Optional[List[Dict[str, Any]]]:
+    def _load_search_cache(self, filename: str) -> list[dict[str, Any]] | None:
         """キャッシュから検索結果をロード"""
         cache_path = self.cache_dir / filename
         if cache_path.exists():
@@ -166,7 +166,7 @@ class EdinetAPIClient:
                 logger.warning(f"Cache load failed: {e}")
         return None
 
-    def _save_search_cache(self, filename: str, data: List[Dict[str, Any]]) -> None:
+    def _save_search_cache(self, filename: str, data: list[dict[str, Any]]) -> None:
         """検索結果をキャッシュに保存"""
         cache_path = self.cache_dir / filename
         try:
@@ -177,11 +177,11 @@ class EdinetAPIClient:
 
     async def _search_record(
         self,
-        record: Dict[str, Any],
+        record: dict[str, Any],
         code_4digit: str,
-        doc_type_code: Optional[str],
+        doc_type_code: str | None,
         now: datetime,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """1レコード分の日付範囲探索を行い、見つかった書類を返す（なければ None）"""
         fy_end = record.get("CurFYEn", "")
         per_en = record.get("CurPerEn", "")
@@ -219,7 +219,7 @@ class EdinetAPIClient:
             if not target_doc_types:
                 return None
 
-            async def _search_dates(start: datetime, end: datetime) -> Optional[Dict[str, Any]]:
+            async def _search_dates(start: datetime, end: datetime) -> dict[str, Any] | None:
                 """start〜end の日付範囲を後方探索し、マッチした書類を返す（なければ None）"""
                 if start > end:
                     return None
@@ -237,7 +237,7 @@ class EdinetAPIClient:
                         *[self._get_documents_for_date(d) for d in batch],
                         return_exceptions=True,
                     )
-                    results_map: Dict[str, List[Dict[str, Any]]] = {}
+                    results_map: dict[str, list[dict[str, Any]]] = {}
                     for date_str, result in zip(batch, batch_results):
                         if isinstance(result, Exception):
                             logger.error(f"Error fetching docs for {date_str}: {result}")
@@ -281,11 +281,11 @@ class EdinetAPIClient:
     async def search_documents(
         self,
         code: str,
-        years: Optional[List[int]] = None,
-        doc_type_code: Optional[str] = None,
-        jquants_data: Optional[List[Dict[str, Any]]] = None,
+        years: list[int] | None = None,
+        doc_type_code: str | None = None,
+        jquants_data: list[dict[str, Any]] | None = None,
         max_documents: int = 2
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         J-QUANTSのレコードに基づいてEDINET書類を検索（期間ベース）
 
@@ -323,7 +323,7 @@ class EdinetAPIClient:
 
         return unique_docs
 
-    async def _get_documents_for_date(self, date_str: str) -> List[Dict[str, Any]]:
+    async def _get_documents_for_date(self, date_str: str) -> list[dict[str, Any]]:
         """特定の日付のドキュメント一覧を取得（キャッシュ対応）"""
         cache_key = self._get_search_cache_key(date_str)
         documents = self._load_search_cache(cache_key)
@@ -342,7 +342,7 @@ class EdinetAPIClient:
             except Exception:
                 return []
 
-    async def download_document(self, doc_id: str, doc_type: int = 1, save_dir: Optional[Path] = None) -> Optional[Path]:
+    async def download_document(self, doc_id: str, doc_type: int = 1, save_dir: Path | None = None) -> Path | None:
         """書類をダウンロード（1=XBRLのみ維持。旧2=PDFは廃止）"""
         if doc_type != 1:
             logger.warning(f"⚠️ [EDINET] ID={doc_id} の PDF ダウンロードは廃止されました。")
@@ -385,11 +385,11 @@ class EdinetAPIClient:
     async def search_recent_reports(
         self,
         code: str,
-        jquants_data: List[Dict[str, Any]],
+        jquants_data: list[dict[str, Any]],
         max_years: int = 5,
-        doc_types: Optional[List[str]] = None,
+        doc_types: list[str] | None = None,
         max_documents: int = 10
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         最新の財務データに基づき、直近N年分の報告書を自動検索
         """
@@ -418,7 +418,7 @@ class EdinetAPIClient:
             max_documents=max_documents
         )
 
-    async def fetch_latest_annual_report(self, code: str, jquants_data: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    async def fetch_latest_annual_report(self, code: str, jquants_data: list[dict[str, Any]]) -> dict[str, Any] | None:
         """最新の有価証券報告書(120)を1件取得"""
         docs = await self.search_recent_reports(code, jquants_data, max_years=10, doc_types=["120"])
         annual_reports = [d for d in docs if d.get("docTypeCode") == "120"]

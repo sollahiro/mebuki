@@ -6,7 +6,6 @@ IFRS適用の金融会社（クレディセゾン等）は J-QUANTS の Sales/OP
 （BusinessProfitIFRSSummaryOfBusinessResults）を抽出してフォールバックに使う。
 """
 from pathlib import Path
-from typing import Optional
 
 from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
 
@@ -53,7 +52,7 @@ def extract_net_revenue(xbrl_dir: Path) -> dict:
                 tag_elements[tag] = {}
             tag_elements[tag].update(ctx_map)
 
-    def _get(tag: str, patterns: list[str]) -> Optional[float]:
+    def _get(tag: str, patterns: list[str]) -> float | None:
         for ctx, val in tag_elements.get(tag, {}).items():
             if _is_target_ctx(ctx, patterns):
                 return val

@@ -13,7 +13,6 @@ XBRLインスタンス文書から連結キャッシュフロー計算書の
 """
 
 from pathlib import Path
-from typing import Optional
 
 from mebuki.analysis.xbrl_utils import parse_xbrl_value, collect_numeric_elements, find_xbrl_files
 from mebuki.constants.xbrl import CF_OPERATING_TAGS, CF_INVESTING_TAGS
@@ -48,7 +47,7 @@ def _is_consolidated_prior_duration(ctx: str) -> bool:
 
 def _find_duration_value(
     tag_elements: dict, tag: str
-) -> tuple[Optional[float], Optional[float]]:
+) -> tuple[float | None, float | None]:
     """指定タグの連結当期・前期（Duration）値を返す。"""
     if tag not in tag_elements:
         return None, None

@@ -5,12 +5,11 @@
 """
 
 from datetime import datetime
-from typing import Optional, Tuple
 
 from mebuki.constants.formats import DATE_LEN_COMPACT, DATE_LEN_HYPHENATED
 
 
-def normalize_date_format(date_str: Optional[str]) -> Optional[str]:
+def normalize_date_format(date_str: str | None) -> str | None:
     """
     日付文字列をYYYY-MM-DD形式に正規化
     
@@ -42,7 +41,7 @@ def normalize_date_format(date_str: Optional[str]) -> Optional[str]:
     return None
 
 
-def calculate_fiscal_year(fy_end: Optional[str], fy_start: Optional[str] = None) -> Optional[int]:
+def calculate_fiscal_year(fy_end: str | None, fy_start: str | None = None) -> int | None:
     """
     年度を計算。ユーザー指定により、CurFYSt（年度開始日）の年を年度とする。
     CurFYStが提供されない場合は、fy_endから推測（fy_endの年を基本とする）。
@@ -81,7 +80,7 @@ def calculate_fiscal_year(fy_end: Optional[str], fy_start: Optional[str] = None)
     return None
 
 
-def calculate_fiscal_year_from_start(fy_start: str) -> Optional[int]:
+def calculate_fiscal_year_from_start(fy_start: str) -> int | None:
     """
     年度開始日から年度を計算（単純に開始日の年を返す）
     """
@@ -91,7 +90,7 @@ def calculate_fiscal_year_from_start(fy_start: str) -> Optional[int]:
     return None
 
 
-def extract_fiscal_year_from_fy_end(fy_end: Optional[str]) -> str:
+def extract_fiscal_year_from_fy_end(fy_end: str | None) -> str:
     """
     年度終了日から年度を抽出（文字列形式）
     
@@ -107,7 +106,7 @@ def extract_fiscal_year_from_fy_end(fy_end: Optional[str]) -> str:
     return ""
 
 
-def extract_fiscal_year_number(fy_end: Optional[str]) -> Optional[int]:
+def extract_fiscal_year_number(fy_end: str | None) -> int | None:
     """
     年度終了日から年度を抽出（数値形式）
     
@@ -120,7 +119,7 @@ def extract_fiscal_year_number(fy_end: Optional[str]) -> Optional[int]:
     return calculate_fiscal_year(fy_end)
 
 
-def parse_date_string(date_str: Optional[str]) -> Optional[datetime]:
+def parse_date_string(date_str: str | None) -> datetime | None:
     """
     日付文字列をdatetimeオブジェクトに変換
     
@@ -146,7 +145,7 @@ def parse_date_string(date_str: Optional[str]) -> Optional[datetime]:
     return None
 
 
-def format_date_for_display(date_str: Optional[str]) -> str:
+def format_date_for_display(date_str: str | None) -> str:
     """
     日付文字列を表示用にフォーマット
     

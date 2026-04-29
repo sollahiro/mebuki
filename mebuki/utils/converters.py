@@ -6,7 +6,7 @@
 
 import math
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 from datetime import datetime
 
 from mebuki.constants.formats import DATE_LEN_COMPACT, DATE_LEN_HYPHENATED
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # 型変換関数
 # =============================================================================
 
-def to_float(value: Any) -> Optional[float]:
+def to_float(value: Any) -> float | None:
     """
     値をfloatに変換
     
@@ -52,7 +52,7 @@ def to_float(value: Any) -> Optional[float]:
     return None
 
 
-def to_int(value: Any) -> Optional[int]:
+def to_int(value: Any) -> int | None:
     """
     値をintに変換
     
@@ -142,7 +142,7 @@ def is_valid_value(value: Any) -> bool:
         return False
 
 
-def is_valid_financial_record(record: Dict[str, Any]) -> bool:
+def is_valid_financial_record(record: dict[str, Any]) -> bool:
     """
     財務レコードが有効かどうかを判定
     
@@ -184,7 +184,7 @@ def is_valid_financial_record(record: Dict[str, Any]) -> bool:
 # 日付変換関数
 # =============================================================================
 
-def normalize_date(date_str: str) -> Optional[str]:
+def normalize_date(date_str: str) -> str | None:
     """
     日付文字列をYYYY-MM-DD形式に正規化
 
@@ -209,7 +209,7 @@ def normalize_date(date_str: str) -> Optional[str]:
     return None
 
 
-def parse_date(date_str: str) -> Optional[datetime]:
+def parse_date(date_str: str) -> datetime | None:
     """
     日付文字列をdatetimeオブジェクトに変換
     
@@ -263,7 +263,7 @@ def format_date(dt: datetime, fmt: str = "%Y-%m-%d") -> str:
     return dt.strftime(fmt)
 
 
-def extract_year_month(date_str: str) -> tuple[Optional[int], Optional[int]]:
+def extract_year_month(date_str: str) -> tuple[int | None, int | None]:
     """
     日付文字列から年と月を抽出
     
@@ -297,7 +297,7 @@ def extract_year_month(date_str: str) -> tuple[Optional[int], Optional[int]]:
     return None, None
 
 
-def is_future_date(date_str: str, reference: Optional[datetime] = None) -> bool:
+def is_future_date(date_str: str, reference: datetime | None = None) -> bool:
     """
     日付が未来かどうかを判定
     

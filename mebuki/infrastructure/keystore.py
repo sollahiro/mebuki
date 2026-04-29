@@ -12,7 +12,6 @@ import os
 import platform
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,7 @@ def _mac_set(service: str, key: str, value: str) -> None:
     )
 
 
-def _mac_get_legacy(service: str, key: str) -> Optional[str]:
+def _mac_get_legacy(service: str, key: str) -> str | None:
     """keyring ライブラリが使っていた旧形式（-s service -a key）で検索する。"""
     result = subprocess.run(
         ["security", "find-generic-password", "-s", service, "-a", key, "-w"],
@@ -47,7 +46,7 @@ def _mac_get_legacy(service: str, key: str) -> Optional[str]:
     return None
 
 
-def _mac_get(service: str, key: str) -> Optional[str]:
+def _mac_get(service: str, key: str) -> str | None:
     account = f"{service}.{key}"
     result = subprocess.run(
         ["security", "find-generic-password", "-s", account, "-a", service, "-w"],
@@ -100,7 +99,7 @@ def _file_set(key: str, value: str) -> None:
     path.chmod(0o600)
 
 
-def _file_get(key: str) -> Optional[str]:
+def _file_get(key: str) -> str | None:
     path = _secrets_path()
     if not path.exists():
         return None
@@ -124,7 +123,7 @@ def set_password(service: str, key: str, value: str) -> None:
         _file_set(key, value)
 
 
-def get_password(service: str, key: str) -> Optional[str]:
+def get_password(service: str, key: str) -> str | None:
     """APIキーを OS キーチェーン（または設定ファイル）から取得する。"""
     if platform.system() == "Darwin":
         return _mac_get(service, key)

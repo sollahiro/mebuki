@@ -5,21 +5,21 @@
 """
 
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Any
 from datetime import datetime
 
 from ..utils.converters import to_float, is_valid_value, is_valid_financial_record, extract_year_month
 from mebuki.constants.financial import PERCENT, MILLION_YEN
 
 
-def to_millions(value: Any) -> Optional[float]:
+def to_millions(value: Any) -> float | None:
     """円単位の値を百万円単位に変換"""
     if value is None:
         return None
     return value / MILLION_YEN
 
 
-def calculate_adjustment_ratio(current_avg_sh: Optional[float], base_avg_sh: Optional[float]) -> Optional[float]:
+def calculate_adjustment_ratio(current_avg_sh: float | None, base_avg_sh: float | None) -> float | None:
     """
     株式分割等の調整倍率を計算（各年度の株式数 / 基準年度の株式数）
 
@@ -30,14 +30,14 @@ def calculate_adjustment_ratio(current_avg_sh: Optional[float], base_avg_sh: Opt
     return None
 
 
-def apply_adjustment(value: Optional[float], ratio: Optional[float]) -> Optional[float]:
+def apply_adjustment(value: float | None, ratio: float | None) -> float | None:
     """値に調整倍率を適用"""
     if value is not None and ratio is not None:
         return value * ratio
     return value
 
 
-def _calculate_profitability_metrics(np: Optional[float], op: Optional[float], eq: Optional[float], cfo: Optional[float]) -> Dict[str, Optional[float]]:
+def _calculate_profitability_metrics(np: float | None, op: float | None, eq: float | None, cfo: float | None) -> dict[str, float | None]:
     """収益性指標（ROE, ROIC, CF変換率）の計算"""
     roe = None
     if np is not None and eq is not None and eq != 0:
@@ -63,7 +63,7 @@ from ..utils.errors import (
 logger = logging.getLogger(__name__)
 
 
-def _filter_annual_data(annual_data: List[Dict[str, Any]], analysis_years: int) -> List[Dict[str, Any]]:
+def _filter_annual_data(annual_data: list[dict[str, Any]], analysis_years: int) -> list[dict[str, Any]]:
     """年数上限・未来日付除外・重複排除・バリデーションを適用してデータを絞り込む"""
     today = datetime.now()
     current_year = today.year
@@ -113,7 +113,7 @@ def _filter_annual_data(annual_data: List[Dict[str, Any]], analysis_years: int) 
     return years_data
 
 
-def _extract_raw_values(year_data: Dict[str, Any]) -> Dict[str, Any]:
+def _extract_raw_values(year_data: dict[str, Any]) -> dict[str, Any]:
     """年度データから生値を抽出する"""
     return {
         'CurPerType': year_data.get("CurPerType", ""),
@@ -137,7 +137,7 @@ def _extract_raw_values(year_data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _calculate_base_values(raw_values: Dict[str, Any]) -> Dict[str, Any]:
+def _calculate_base_values(raw_values: dict[str, Any]) -> dict[str, Any]:
     """百万円単位への変換とFCF(CFC)を計算する"""
     cfo_m = to_millions(raw_values['CFO'])
     cfi_m = to_millions(raw_values['CFI'])
@@ -167,9 +167,9 @@ def _format_financial_period(fy_end: str, per_type: str) -> str:
 
 
 def _build_year_entry(
-    year_data: Dict[str, Any],
-    latest_avg_sh: Optional[float],
-) -> Dict[str, Any]:
+    year_data: dict[str, Any],
+    latest_avg_sh: float | None,
+) -> dict[str, Any]:
     """1年分の指標エントリを組み立てる"""
     fy_end = year_data.get("CurFYEn")
     per_type = year_data.get("CurPerType", "FY")
@@ -206,7 +206,7 @@ def _build_year_entry(
     }
 
 
-def _assemble_summary(metrics: Dict[str, Any], years_metrics: List[Dict[str, Any]], analysis_years: int) -> None:
+def _assemble_summary(metrics: dict[str, Any], years_metrics: list[dict[str, Any]], analysis_years: int) -> None:
     """最新年度の要約値設定・データ可用性チェック・バリデーションを実行し metrics を更新する"""
     if years_metrics:
         latest_calc = years_metrics[0]["CalculatedData"]
@@ -228,9 +228,9 @@ def _assemble_summary(metrics: Dict[str, Any], years_metrics: List[Dict[str, Any
 
 
 def calculate_metrics_flexible(
-    annual_data: List[Dict[str, Any]],
-    analysis_years: Optional[int] = None
-) -> Dict[str, Any]:
+    annual_data: list[dict[str, Any]],
+    analysis_years: int | None = None
+) -> dict[str, Any]:
     """
     年度データから各種指標を計算（柔軟な年数対応）
     """

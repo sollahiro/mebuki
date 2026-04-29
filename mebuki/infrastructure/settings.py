@@ -2,7 +2,7 @@ import os
 import logging
 from pathlib import Path
 from mebuki.infrastructure import keystore
-from typing import Dict, Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class SettingsStore:
         
         logger.info(f"Using persistent storage at: {self.user_data_path}")
 
-        self._settings: Dict[str, Any] = {
+        self._settings: dict[str, Any] = {
             "jquantsApiKey": "",
             "edinetApiKey": "",
             "analysisYears": 5,
@@ -117,7 +117,7 @@ class SettingsStore:
             logger.error(f"Failed to save settings to {self.config_path}: {e}")
             return False
 
-    def update(self, settings: Dict[str, Any], save: bool = False) -> None:
+    def update(self, settings: dict[str, Any], save: bool = False) -> None:
         """
         設定を一括更新します。
         
@@ -163,7 +163,7 @@ class SettingsStore:
                 
         return self._settings.get(key, default)
     
-    def get_all(self) -> Dict[str, Any]:
+    def get_all(self) -> dict[str, Any]:
         """
         全設定のコピーを取得します。
         
@@ -183,7 +183,7 @@ class SettingsStore:
 
         return settings
     
-    def get_masked(self) -> Dict[str, Any]:
+    def get_masked(self) -> dict[str, Any]:
         """
         APIキーなどの機密情報をマスクした状態で全設定を取得します。
         ログ出力やフロントエンドへの返却に使用します。
@@ -204,7 +204,7 @@ class SettingsStore:
         return masked
     
     @property
-    def jquants_api_key(self) -> Optional[str]:
+    def jquants_api_key(self) -> str | None:
         """J-QUANTS APIキーを取得"""
         try:
             value = keystore.get_password("mebuki", "jquantsApiKey")
@@ -215,7 +215,7 @@ class SettingsStore:
         return self._settings.get("jquantsApiKey")
     
     @property
-    def edinet_api_key(self) -> Optional[str]:
+    def edinet_api_key(self) -> str | None:
         """EDINET APIキーを取得"""
         try:
             value = keystore.get_password("mebuki", "edinetApiKey")
@@ -226,7 +226,7 @@ class SettingsStore:
         return self._settings.get("edinetApiKey")
     
     @property
-    def analysis_years(self) -> Optional[int]:
+    def analysis_years(self) -> int | None:
         """分析年数を取得"""
         val = self._settings.get("analysisYears")
         try:

@@ -7,7 +7,7 @@ import asyncio
 import logging
 from datetime import datetime, date
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Any
 
 from mebuki import __version__
 from mebuki.api.jquants_client import JQuantsAPIClient
@@ -101,11 +101,11 @@ class DataService:
             edinet_client=self.edinet_client,
         )
 
-    async def search_companies(self, query: str) -> List[Dict[str, Any]]:
+    async def search_companies(self, query: str) -> list[dict[str, Any]]:
         """銘柄コードまたは名称で企業を検索します。"""
         return master_data_manager.search(query, limit=50)
 
-    def fetch_stock_basic_info(self, code: str) -> Dict[str, Any]:
+    def fetch_stock_basic_info(self, code: str) -> dict[str, Any]:
         """銘柄の基本情報を取得"""
         stock_info = master_data_manager.get_by_code(code)
         if not stock_info:
@@ -150,10 +150,10 @@ class DataService:
     async def get_financial_data(
         self,
         code: str,
-        scope: Optional[str] = None,
+        scope: str | None = None,
         use_cache: bool = True,
         include_2q: bool = False,
-        analysis_years: Optional[int] = None,
+        analysis_years: int | None = None,
     ) -> Any:
         """財務データ取得の統一公開API。scope=None で財務サマリー、scope="raw" で生データ。"""
         if scope == "raw":
@@ -176,7 +176,7 @@ class DataService:
         code: str,
         years: int = 3,
         use_cache: bool = True,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """H1/H2 の半期財務データを返す。"""
         from mebuki.utils.financial_data import build_half_year_periods
         from mebuki.services.edinet_fetcher import EdinetFetcher
@@ -216,7 +216,7 @@ class DataService:
             return base_periods
 
         # FY J-Quants レコードを fy_end → record で引けるようにしておく
-        fy_by_end: Dict[str, Dict] = {}
+        fy_by_end: dict[str, dict] = {}
         for r in financial_data:
             if r.get("CurPerType") == "FY":
                 fy_end_8 = r.get("CurFYEn", "").replace("-", "")
@@ -224,7 +224,7 @@ class DataService:
                     fy_by_end[fy_end_8] = r
 
         # 2Q J-Quants レコードを fy_end → record で引けるようにしておく
-        q2_by_end: Dict[str, Dict] = {}
+        q2_by_end: dict[str, dict] = {}
         for r in financial_data:
             if r.get("CurPerType") == "2Q":
                 fy_end_8 = r.get("CurFYEn", "").replace("-", "")
@@ -232,7 +232,7 @@ class DataService:
                     q2_by_end[fy_end_8] = r
 
         # H1 期間で確定した EDINET CF 値を H2 計算に引き継ぐ
-        h1_edinet_by_fy: Dict[str, Dict] = {}
+        h1_edinet_by_fy: dict[str, dict] = {}
 
         for period in base_periods:
             fy_end_8 = period["fy_end"].replace("-", "")
@@ -355,9 +355,9 @@ class DataService:
         self,
         code: str,
         max_years: int = 10,
-        doc_types: Optional[List[str]] = None,
+        doc_types: list[str] | None = None,
         max_documents: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """EDINET書類を検索"""
         fin_data = await self.api_client.get_financial_summary(code=code)
         return await self.edinet_client.search_recent_reports(
@@ -371,13 +371,13 @@ class DataService:
     async def extract_filing_content(
         self,
         code: str,
-        doc_id: Optional[str] = None,
-        sections: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        doc_id: str | None = None,
+        sections: list[str] | None = None,
+    ) -> dict[str, Any]:
         """EDINET書類からセクションを抽出"""
         requested_sections = sections or ["all"]
 
-        meta: Dict[str, Any] = {}
+        meta: dict[str, Any] = {}
         if not doc_id:
             docs = await self.search_filings(
                 code=code,
@@ -417,9 +417,9 @@ class DataService:
         code: str,
         use_cache: bool = True,
         max_documents: int = 2,
-        analysis_years: Optional[int] = None,
+        analysis_years: int | None = None,
         include_2q: bool = False,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """AI分析抜きの純粋な分析データを取得（財務指標 + 有報テキスト）"""
         cache_key = f"individual_analysis_{code}"
         analyzer = self.get_analyzer()

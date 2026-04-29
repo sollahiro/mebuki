@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from typing import Any, Dict, List
+from typing import Any
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -17,7 +17,7 @@ app = Server("mebuki-mcp-server")
 
 
 @app.list_tools()
-async def list_tools() -> List[Tool]:
+async def list_tools() -> list[Tool]:
     """利用可能なツールをリストします。"""
     return [
         Tool(
@@ -214,7 +214,7 @@ async def list_tools() -> List[Tool]:
 
 
 @app.call_tool()
-async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
+async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     """ツールの実行を処理します。"""
     try:
         if name == "find_japan_stock_code":

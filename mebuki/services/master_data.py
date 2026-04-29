@@ -6,7 +6,7 @@ import csv
 import logging
 import os
 import unicodedata
-from typing import List, Dict, Any, Optional
+from typing import Any
 from pathlib import Path
 from mebuki.infrastructure.settings import settings_store
 
@@ -133,7 +133,7 @@ class MasterDataManager:
             logger.error(f"銘柄マスタの読み込みに失敗しました: {e}", exc_info=True)
             return False
 
-    def search(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
+    def search(self, query: str, limit: int = 20) -> list[dict[str, Any]]:
         """
         コードまたは名称で銘柄を検索
         """
@@ -171,14 +171,14 @@ class MasterDataManager:
                     
         return results
 
-    def get_by_code(self, code: str) -> Optional[Dict[str, Any]]:
+    def get_by_code(self, code: str) -> dict[str, Any] | None:
         """コード指定で銘柄情報を取得"""
         self.load_if_needed()
         if not code:
             return None
         return self._code_index.get(str(code).strip())
 
-    def list_sectors(self) -> List[Dict[str, Any]]:
+    def list_sectors(self) -> list[dict[str, Any]]:
         """33業種の一覧を銘柄数付きで返す"""
         self.load_if_needed()
         counts: dict = {}
@@ -194,7 +194,7 @@ class MasterDataManager:
             for c in sorted(counts)
         ]
 
-    def search_by_sector(self, sector_query: str, limit: int = 200) -> List[Dict[str, Any]]:
+    def search_by_sector(self, sector_query: str, limit: int = 200) -> list[dict[str, Any]]:
         """業種名（部分一致）で銘柄一覧を返す"""
         self.load_if_needed()
         query_normalized = self._normalize_name(sector_query)
