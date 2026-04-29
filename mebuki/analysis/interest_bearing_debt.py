@@ -74,6 +74,11 @@ PRIOR_CONTEXT_PATTERNS = [
 ]
 
 
+def _safe_sum(vals: list[float | None]) -> float | None:
+    vs = [v for v in vals if v is not None]
+    return sum(vs) if vs else None
+
+
 def _is_consolidated_instant(ctx: str) -> bool:
     """連結の期末残高コンテキストかどうか。"""
     return (
@@ -292,10 +297,6 @@ def _extract_usgaap_from_html(htm_file: Path) -> dict[str, Any] | None:
     def _to_yen(v):
         return v * MILLION_YEN if v is not None else None
 
-    def safe_sum(vals):
-        vs = [v for v in vals if v is not None]
-        return sum(vs) if vs else None
-
     # 合計＋差引計が揃っていればUS-GAAP連結注記形式として処理（富士フイルム等）
     if st_total_current is not None and lt_net_current is not None:
         components = [
@@ -305,8 +306,8 @@ def _extract_usgaap_from_html(htm_file: Path) -> dict[str, Any] | None:
              "current": _to_yen(lt_net_current),   "prior": _to_yen(lt_net_prior)},
         ]
         return {
-            "current": safe_sum([c["current"] for c in components]),
-            "prior":   safe_sum([c["prior"]   for c in components]),
+            "current": _safe_sum([c["current"] for c in components]),
+            "prior":   _safe_sum([c["prior"]   for c in components]),
             "method":  "usgaap_html",
             "accounting_standard": "US-GAAP",
             "components": components,
@@ -331,8 +332,8 @@ def _extract_usgaap_from_html(htm_file: Path) -> dict[str, Any] | None:
     ]
 
     return {
-        "current": safe_sum([c["current"] for c in components]),
-        "prior":   safe_sum([c["prior"]   for c in components]),
+        "current": _safe_sum([c["current"] for c in components]),
+        "prior":   _safe_sum([c["prior"]   for c in components]),
         "method":  "usgaap_html",
         "accounting_standard": "US-GAAP",
         "components": components,
@@ -540,12 +541,8 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
         return {"current": None, "prior": None, "method": "not_found", "accounting_standard": accounting_standard, "components": components,
                 "reason": "有利子負債タグが見つからない"}
 
-    def safe_sum(vals):
-        vs = [v for v in vals if v is not None]
-        return sum(vs) if vs else None
-
-    total_current = safe_sum([c["current"] for c in components])
-    total_prior = safe_sum([c["prior"] for c in components])
+    total_current = _safe_sum([c["current"] for c in components])
+    total_prior = _safe_sum([c["prior"] for c in components])
 
     return {
         "current": total_current,
