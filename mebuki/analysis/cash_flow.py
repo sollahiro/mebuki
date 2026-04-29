@@ -15,7 +15,7 @@ XBRLインスタンス文書から連結キャッシュフロー計算書の
 from pathlib import Path
 
 from mebuki.analysis.xbrl_utils import parse_xbrl_value, collect_numeric_elements, find_xbrl_files
-from mebuki.constants.xbrl import CF_OPERATING_TAGS, CF_INVESTING_TAGS
+from mebuki.constants.xbrl import CF_INVESTING_TAGS, CF_OPERATING_TAGS, DURATION_CONTEXT_PATTERNS, PRIOR_DURATION_CONTEXT_PATTERNS
 
 _CF_RELEVANT_TAGS: frozenset = frozenset(
     CF_OPERATING_TAGS
@@ -31,17 +31,12 @@ _CF_RELEVANT_TAGS: frozenset = frozenset(
     ]
 )
 
-# 年次: CurrentYearDuration / 新形式半期: InterimDuration / 旧形式半期・四半期: CurrentYTDDuration
-_DURATION_CONTEXT_PATTERNS = ["CurrentYearDuration", "FilingDateDuration", "InterimDuration", "CurrentYTDDuration"]
-_PRIOR_DURATION_CONTEXT_PATTERNS = ["Prior1YearDuration", "PriorYearDuration", "Prior1InterimDuration", "Prior1YTDDuration"]
-
-
 def _is_consolidated_duration(ctx: str) -> bool:
-    return any(p in ctx for p in _DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx
+    return any(p in ctx for p in DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx
 
 
 def _is_consolidated_prior_duration(ctx: str) -> bool:
-    return any(p in ctx for p in _PRIOR_DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx
+    return any(p in ctx for p in PRIOR_DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx
 
 
 

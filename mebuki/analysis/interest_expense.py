@@ -23,8 +23,10 @@ except ImportError:
 from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files, parse_html_number
 from mebuki.constants.financial import MILLION_YEN
 from mebuki.constants.xbrl import (
-    INTEREST_EXPENSE_JGAAP_TAGS,
+    DURATION_CONTEXT_PATTERNS,
     INTEREST_EXPENSE_IFRS_TAGS,
+    INTEREST_EXPENSE_JGAAP_TAGS,
+    PRIOR_DURATION_CONTEXT_PATTERNS,
 )
 
 _IE_RELEVANT_TAGS: frozenset[str] = frozenset(
@@ -41,35 +43,20 @@ _IE_RELEVANT_TAGS: frozenset[str] = frozenset(
     ]
 )
 
-_DURATION_CONTEXT_PATTERNS = [
-    "CurrentYearDuration",
-    "FilingDateDuration",
-    "InterimDuration",
-    "CurrentYTDDuration",
-]
-
-_PRIOR_DURATION_CONTEXT_PATTERNS = [
-    "Prior1YearDuration",
-    "PriorYearDuration",
-    "Prior1InterimDuration",
-    "Prior1YTDDuration",
-]
-
-
 def _is_consolidated_duration(ctx: str) -> bool:
-    return any(p in ctx for p in _DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx
+    return any(p in ctx for p in DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx
 
 
 def _is_consolidated_prior_duration(ctx: str) -> bool:
-    return any(p in ctx for p in _PRIOR_DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx
+    return any(p in ctx for p in PRIOR_DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx
 
 
 def _is_nonconsolidated_duration(ctx: str) -> bool:
-    return any(p in ctx for p in _DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" in ctx
+    return any(p in ctx for p in DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" in ctx
 
 
 def _is_nonconsolidated_prior_duration(ctx: str) -> bool:
-    return any(p in ctx for p in _PRIOR_DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" in ctx
+    return any(p in ctx for p in PRIOR_DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" in ctx
 
 
 def _is_pure_context(ctx: str, patterns: list[str]) -> bool:
@@ -87,12 +74,12 @@ def _find_consolidated_duration_value(
     current_pure = prior_pure = None
     for ctx, val in tag_elements[tag].items():
         if _is_consolidated_duration(ctx):
-            if _is_pure_context(ctx, _DURATION_CONTEXT_PATTERNS):
+            if _is_pure_context(ctx, DURATION_CONTEXT_PATTERNS):
                 current_pure = val
             else:
                 current = val
         elif _is_consolidated_prior_duration(ctx):
-            if _is_pure_context(ctx, _PRIOR_DURATION_CONTEXT_PATTERNS):
+            if _is_pure_context(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
                 prior_pure = val
             else:
                 prior = val
@@ -112,12 +99,12 @@ def _find_nonconsolidated_duration_value(
     current_pure = prior_pure = None
     for ctx, val in tag_elements[tag].items():
         if _is_nonconsolidated_duration(ctx):
-            if _is_pure_context(ctx, _DURATION_CONTEXT_PATTERNS):
+            if _is_pure_context(ctx, DURATION_CONTEXT_PATTERNS):
                 current_pure = val
             else:
                 current = val
         elif _is_nonconsolidated_prior_duration(ctx):
-            if _is_pure_context(ctx, _PRIOR_DURATION_CONTEXT_PATTERNS):
+            if _is_pure_context(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
                 prior_pure = val
             else:
                 prior = val

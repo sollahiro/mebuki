@@ -19,7 +19,12 @@ except ImportError:
 
 from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files, parse_html_number
 from mebuki.constants.financial import MILLION_YEN
-from mebuki.constants.xbrl import OPERATING_PROFIT_DIRECT_TAGS, ORDINARY_INCOME_TAGS
+from mebuki.constants.xbrl import (
+    DURATION_CONTEXT_PATTERNS,
+    OPERATING_PROFIT_DIRECT_TAGS,
+    ORDINARY_INCOME_TAGS,
+    PRIOR_DURATION_CONTEXT_PATTERNS,
+)
 
 _OP_RELEVANT_TAGS: frozenset[str] = frozenset(
     OPERATING_PROFIT_DIRECT_TAGS
@@ -34,34 +39,20 @@ _OP_RELEVANT_TAGS: frozenset[str] = frozenset(
     ]
 )
 
-_DURATION_PATTERNS = [
-    "CurrentYearDuration",
-    "FilingDateDuration",
-    "InterimDuration",
-    "CurrentYTDDuration",
-]
-_PRIOR_DURATION_PATTERNS = [
-    "Prior1YearDuration",
-    "PriorYearDuration",
-    "Prior1InterimDuration",
-    "Prior1YTDDuration",
-]
-
-
 def _is_consolidated_duration(ctx: str) -> bool:
-    return any(p in ctx for p in _DURATION_PATTERNS) and "_NonConsolidated" not in ctx
+    return any(p in ctx for p in DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx
 
 
 def _is_prior_consolidated_duration(ctx: str) -> bool:
-    return any(p in ctx for p in _PRIOR_DURATION_PATTERNS) and "_NonConsolidated" not in ctx
+    return any(p in ctx for p in PRIOR_DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx
 
 
 def _is_nonconsolidated_duration(ctx: str) -> bool:
-    return any(p in ctx for p in _DURATION_PATTERNS) and "_NonConsolidated" in ctx
+    return any(p in ctx for p in DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" in ctx
 
 
 def _is_prior_nonconsolidated_duration(ctx: str) -> bool:
-    return any(p in ctx for p in _PRIOR_DURATION_PATTERNS) and "_NonConsolidated" in ctx
+    return any(p in ctx for p in PRIOR_DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" in ctx
 
 
 def _find_duration_value(

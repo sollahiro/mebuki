@@ -1,5 +1,21 @@
 from typing import Any
 
+# Duration（損益計算書・CF）コンテキストパターン
+# 年次: CurrentYearDuration / 新形式半期: InterimDuration / 旧形式半期・四半期: CurrentYTDDuration
+DURATION_CONTEXT_PATTERNS: list[str] = [
+    "CurrentYearDuration",
+    "FilingDateDuration",
+    "InterimDuration",
+    "CurrentYTDDuration",
+]
+
+PRIOR_DURATION_CONTEXT_PATTERNS: list[str] = [
+    "Prior1YearDuration",
+    "PriorYearDuration",
+    "Prior1InterimDuration",
+    "Prior1YTDDuration",
+]
+
 XBRL_SECTIONS: dict[str, dict[str, Any]] = {
     'business_risks': {
         'title': '事業等のリスク',

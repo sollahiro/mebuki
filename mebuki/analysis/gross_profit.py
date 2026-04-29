@@ -33,8 +33,10 @@ except ImportError:
 from mebuki.analysis.xbrl_utils import parse_xbrl_value, collect_numeric_elements, find_xbrl_files, parse_html_number
 from mebuki.constants.financial import MILLION_YEN
 from mebuki.constants.xbrl import (
-    GROSS_PROFIT_DIRECT_TAGS,
+    DURATION_CONTEXT_PATTERNS,
     GROSS_PROFIT_COMPONENT_DEFINITIONS,
+    GROSS_PROFIT_DIRECT_TAGS,
+    PRIOR_DURATION_CONTEXT_PATTERNS,
 )
 
 # XBRL解析で収集対象とするローカルタグ名のセット
@@ -51,22 +53,6 @@ _GP_RELEVANT_TAGS: frozenset[str] = frozenset(
         "BorrowingsNCLIFRS",
     ]
 )
-
-# 損益計算書（Duration）コンテキストパターン
-# 年次: CurrentYearDuration / 新形式半期: InterimDuration / 旧形式半期・四半期: CurrentYTDDuration
-DURATION_CONTEXT_PATTERNS = [
-    "CurrentYearDuration",
-    "FilingDateDuration",
-    "InterimDuration",
-    "CurrentYTDDuration",
-]
-
-PRIOR_DURATION_CONTEXT_PATTERNS = [
-    "Prior1YearDuration",
-    "PriorYearDuration",
-    "Prior1InterimDuration",
-    "Prior1YTDDuration",
-]
 
 
 def _is_consolidated_duration(ctx: str) -> bool:
