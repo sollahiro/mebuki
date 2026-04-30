@@ -247,12 +247,12 @@ class IndividualAnalyzer:
         all_metrics: dict[str, dict[str, dict]] = {}
 
         if financial_data:
-            pre_parsed_map = await self._edinet_fetcher.predownload_and_parse(
-                code, financial_data, actual_years
-            )
-            edinet_data, all_metrics = await asyncio.gather(
+            pre_parsed_map, edinet_data = await asyncio.gather(
+                self._edinet_fetcher.predownload_and_parse(code, financial_data, actual_years),
                 self._edinet_fetcher.fetch_edinet_data_async(code, financial_data, max_documents=max_documents),
-                self._edinet_fetcher.extract_all_by_year(code, financial_data, actual_years, pre_parsed_map=pre_parsed_map),
+            )
+            all_metrics = await self._edinet_fetcher.extract_all_by_year(
+                code, financial_data, actual_years, pre_parsed_map=pre_parsed_map
             )
 
         years = metrics.get("years", [])
