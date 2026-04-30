@@ -215,7 +215,7 @@ def _detect_accounting_standard(tag_elements: dict) -> str:
     return "J-GAAP"
 
 
-def extract_gross_profit(xbrl_dir: Path) -> dict:
+def extract_gross_profit(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> dict:
     """
     XBRLディレクトリから連結損益計算書の売上総利益を抽出する。
 
@@ -236,12 +236,15 @@ def extract_gross_profit(xbrl_dir: Path) -> dict:
             ]
         }
     """
-    tag_elements: dict = {}
-    for f in find_xbrl_files(xbrl_dir):
-        for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_GP_RELEVANT_TAGS).items():
-            if tag not in tag_elements:
-                tag_elements[tag] = {}
-            tag_elements[tag].update(ctx_map)
+    if pre_parsed is not None:
+        tag_elements = {tag: ctx for tag, ctx in pre_parsed.items() if tag in _GP_RELEVANT_TAGS}
+    else:
+        tag_elements = {}
+        for f in find_xbrl_files(xbrl_dir):
+            for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_GP_RELEVANT_TAGS).items():
+                if tag not in tag_elements:
+                    tag_elements[tag] = {}
+                tag_elements[tag].update(ctx_map)
 
     accounting_standard = _detect_accounting_standard(tag_elements)
 

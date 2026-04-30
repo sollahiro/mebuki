@@ -186,7 +186,7 @@ def _extract_usgaap_op_from_html(xbrl_dir: Path) -> dict | None:
     return None
 
 
-def extract_operating_profit(xbrl_dir: Path) -> dict[str, Any]:
+def extract_operating_profit(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> dict[str, Any]:
     """
     XBRLディレクトリから連結損益計算書の営業利益（または経常利益）を抽出する。
 
@@ -202,12 +202,15 @@ def extract_operating_profit(xbrl_dir: Path) -> dict[str, Any]:
             "reason":  str | None,   # not_found 時のみ
         }
     """
-    tag_elements: dict = {}
-    for f in find_xbrl_files(xbrl_dir):
-        for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_OP_RELEVANT_TAGS).items():
-            if tag not in tag_elements:
-                tag_elements[tag] = {}
-            tag_elements[tag].update(ctx_map)
+    if pre_parsed is not None:
+        tag_elements: dict = {tag: ctx for tag, ctx in pre_parsed.items() if tag in _OP_RELEVANT_TAGS}
+    else:
+        tag_elements = {}
+        for f in find_xbrl_files(xbrl_dir):
+            for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_OP_RELEVANT_TAGS).items():
+                if tag not in tag_elements:
+                    tag_elements[tag] = {}
+                tag_elements[tag].update(ctx_map)
 
     accounting_standard = _detect_accounting_standard(tag_elements)
 

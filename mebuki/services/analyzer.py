@@ -242,6 +242,9 @@ class IndividualAnalyzer:
         doc_id_by_year: dict[str, str] = {}
 
         if financial_data:
+            pre_parsed_map = await self._edinet_fetcher.predownload_and_parse(
+                code, financial_data, actual_years
+            )
             (
                 edinet_data,
                 ibd_by_year,
@@ -254,13 +257,13 @@ class IndividualAnalyzer:
                 doc_id_by_year,
             ) = await asyncio.gather(
                 self._edinet_fetcher.fetch_edinet_data_async(code, financial_data, max_documents=max_documents),
-                self._edinet_fetcher.extract_ibd_by_year(code, financial_data, actual_years),
-                self._edinet_fetcher.extract_gross_profit_by_year(code, financial_data, actual_years),
-                self._edinet_fetcher.extract_interest_expense_by_year(code, financial_data, actual_years),
-                self._edinet_fetcher.extract_tax_expense_by_year(code, financial_data, actual_years),
-                self._edinet_fetcher.extract_employees_by_year(code, financial_data, actual_years),
-                self._edinet_fetcher.extract_net_revenue_by_year(code, financial_data, actual_years),
-                self._edinet_fetcher.extract_operating_profit_by_year(code, financial_data, actual_years),
+                self._edinet_fetcher.extract_ibd_by_year(code, financial_data, actual_years, pre_parsed_map=pre_parsed_map),
+                self._edinet_fetcher.extract_gross_profit_by_year(code, financial_data, actual_years, pre_parsed_map=pre_parsed_map),
+                self._edinet_fetcher.extract_interest_expense_by_year(code, financial_data, actual_years, pre_parsed_map=pre_parsed_map),
+                self._edinet_fetcher.extract_tax_expense_by_year(code, financial_data, actual_years, pre_parsed_map=pre_parsed_map),
+                self._edinet_fetcher.extract_employees_by_year(code, financial_data, actual_years, pre_parsed_map=pre_parsed_map),
+                self._edinet_fetcher.extract_net_revenue_by_year(code, financial_data, actual_years, pre_parsed_map=pre_parsed_map),
+                self._edinet_fetcher.extract_operating_profit_by_year(code, financial_data, actual_years, pre_parsed_map=pre_parsed_map),
                 self._edinet_fetcher.get_doc_ids_by_year(code, financial_data, actual_years),
             )
 

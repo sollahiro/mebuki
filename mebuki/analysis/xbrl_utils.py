@@ -77,6 +77,24 @@ def collect_numeric_elements(
     return results
 
 
+def collect_all_numeric_elements(
+    xbrl_dir: Path,
+    nil_as_zero: bool = True,
+) -> dict[str, dict[str, float | None]]:
+    """XBRLディレクトリ内の全ファイルを一括パースし、全タグの数値要素を返す。
+
+    nil_as_zero=True（デフォルト）は有利子負債の nil 明示ゼロ検出に必要なため、
+    一括パースではデフォルトで有効にする。
+    """
+    all_elements: dict[str, dict[str, float | None]] = {}
+    for f in find_xbrl_files(xbrl_dir):
+        for tag, ctx_map in collect_numeric_elements(f, allowed_tags=None, nil_as_zero=nil_as_zero).items():
+            if tag not in all_elements:
+                all_elements[tag] = {}
+            all_elements[tag].update(ctx_map)
+    return all_elements
+
+
 def find_xbrl_files(xbrl_dir: Path) -> list[Path]:
     """XBRLディレクトリからインスタンス文書（.xml / .xbrl）を返す。
 

@@ -49,7 +49,7 @@ def _find_duration_value(
     return current, prior
 
 
-def extract_cash_flow(xbrl_dir: Path) -> dict:
+def extract_cash_flow(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> dict:
     """
     XBRLディレクトリから連結CF計算書の営業CF・投資CFを抽出する。
 
@@ -62,12 +62,15 @@ def extract_cash_flow(xbrl_dir: Path) -> dict:
             "accounting_standard": str,   # "J-GAAP" | "IFRS" | "US-GAAP"
         }
     """
-    tag_elements: dict = {}
-    for f in find_xbrl_files(xbrl_dir):
-        for tag, ctx_map in collect_numeric_elements(f, _CF_RELEVANT_TAGS).items():
-            if tag not in tag_elements:
-                tag_elements[tag] = {}
-            tag_elements[tag].update(ctx_map)
+    if pre_parsed is not None:
+        tag_elements: dict = {tag: ctx for tag, ctx in pre_parsed.items() if tag in _CF_RELEVANT_TAGS}
+    else:
+        tag_elements = {}
+        for f in find_xbrl_files(xbrl_dir):
+            for tag, ctx_map in collect_numeric_elements(f, _CF_RELEVANT_TAGS).items():
+                if tag not in tag_elements:
+                    tag_elements[tag] = {}
+                tag_elements[tag].update(ctx_map)
 
     # 会計基準判定
     usgaap_markers = {

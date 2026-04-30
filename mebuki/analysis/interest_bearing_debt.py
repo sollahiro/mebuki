@@ -394,7 +394,7 @@ def _is_usgaap_xbrl(tag_elements: dict) -> bool:
     return True
 
 
-def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
+def extract_interest_bearing_debt(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> dict:
     """
     XBRLディレクトリから有利子負債を構成要素ごとに抽出する。
 
@@ -415,12 +415,15 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
             ]
         }
     """
-    tag_elements: dict = {}
-    for f in find_xbrl_files(xbrl_dir):
-        for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_IBD_RELEVANT_TAGS, nil_as_zero=True).items():
-            if tag not in tag_elements:
-                tag_elements[tag] = {}
-            tag_elements[tag].update(ctx_map)
+    if pre_parsed is not None:
+        tag_elements = {tag: ctx for tag, ctx in pre_parsed.items() if tag in _IBD_RELEVANT_TAGS}
+    else:
+        tag_elements = {}
+        for f in find_xbrl_files(xbrl_dir):
+            for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_IBD_RELEVANT_TAGS, nil_as_zero=True).items():
+                if tag not in tag_elements:
+                    tag_elements[tag] = {}
+                tag_elements[tag].update(ctx_map)
 
     accounting_standard = _detect_accounting_standard(tag_elements)
 

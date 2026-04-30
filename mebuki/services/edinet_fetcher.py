@@ -52,27 +52,82 @@ class EdinetFetcher:
                 )
             return self._doc_cache[key]
 
+    async def predownload_and_parse(
+        self,
+        code: str,
+        financial_data: list[dict[str, Any]],
+        max_years: int,
+    ) -> dict[str, tuple[Path, dict]]:
+        """全年度のXBRL文書を一括ダウンロード・パースする。
+
+        Returns: { "YYYYMMDD": (xbrl_dir_path, pre_parsed_dict) }
+        """
+        from mebuki.analysis.xbrl_utils import collect_all_numeric_elements
+
+        if not self.edinet_client or not self.edinet_client.api_key:
+            return {}
+
+        docs = await self._get_annual_docs(code, financial_data, max_years)
+
+        async def _dl_parse(doc: dict) -> tuple[str, tuple[Path, dict] | None]:
+            fy_end_8 = doc.get("jquants_fy_end", "").replace("-", "")
+            if not fy_end_8:
+                return "", None
+            try:
+                xbrl_dir = await asyncio.wait_for(
+                    self.edinet_client.download_document(doc["docID"], 1),
+                    timeout=30.0,
+                )
+                if not xbrl_dir:
+                    return fy_end_8, None
+                xbrl_path = Path(xbrl_dir)
+                pre_parsed = collect_all_numeric_elements(xbrl_path)
+                return fy_end_8, (xbrl_path, pre_parsed)
+            except asyncio.TimeoutError:
+                logger.warning(f"[PARSE] {code} {fy_end_8}: XBRLダウンロードタイムアウト(30s)")
+                return fy_end_8, None
+            except Exception as e:
+                logger.warning(f"[PARSE] {code} {fy_end_8}: パースエラー - {e}")
+                return fy_end_8, None
+
+        _t0 = time.perf_counter()
+        raw = await asyncio.gather(*[_dl_parse(doc) for doc in docs], return_exceptions=True)
+        out: dict[str, tuple[Path, dict]] = {}
+        for res in raw:
+            if isinstance(res, Exception):
+                continue
+            k, v = res
+            if k and v is not None:
+                out[k] = v
+        logger.info(f"[PARSE] {code}: XBRL一括パース完了 {len(out)}件 {time.perf_counter() - _t0:.2f}s")
+        return out
+
     async def _run_extraction(
         self,
         doc: dict,
         code: str,
         prefix: str,
-        extract_fn: Callable[[Path], dict],
+        extract_fn: Callable,
         *,
         result_check: Callable[[dict], bool] | None = None,
+        pre_parsed_map: dict[str, tuple[Path, dict]] | None = None,
     ) -> tuple[str, dict | None]:
         fy_end_8 = doc.get("jquants_fy_end", "").replace("-", "")
         if not fy_end_8:
             return "", None
         try:
-            xbrl_dir = await asyncio.wait_for(
-                self.edinet_client.download_document(doc["docID"], 1),
-                timeout=30.0,
-            )
-            if not xbrl_dir:
-                logger.warning(f"[{prefix}] {code} {fy_end_8}: XBRLダウンロード失敗")
-                return fy_end_8, None
-            result = extract_fn(Path(xbrl_dir))
+            if pre_parsed_map is not None and fy_end_8 in pre_parsed_map:
+                xbrl_path, pre_parsed = pre_parsed_map[fy_end_8]
+                result = extract_fn(xbrl_path, pre_parsed=pre_parsed)
+            else:
+                xbrl_dir = await asyncio.wait_for(
+                    self.edinet_client.download_document(doc["docID"], 1),
+                    timeout=30.0,
+                )
+                if not xbrl_dir:
+                    logger.warning(f"[{prefix}] {code} {fy_end_8}: XBRLダウンロード失敗")
+                    return fy_end_8, None
+                result = extract_fn(Path(xbrl_dir))
             if result_check is not None and not result_check(result):
                 return fy_end_8, None
             result["docID"] = doc["docID"]
@@ -224,6 +279,8 @@ class EdinetFetcher:
         code: str,
         financial_data: list[dict[str, Any]],
         max_years: int,
+        *,
+        pre_parsed_map: dict[str, tuple[Path, dict]] | None = None,
     ) -> dict[str, dict]:
         """年度別に有利子負債を抽出。Returns: { "YYYYMMDD": ibd_result_dict }"""
         from mebuki.analysis.interest_bearing_debt import extract_interest_bearing_debt
@@ -236,7 +293,7 @@ class EdinetFetcher:
 
         _t0 = time.perf_counter()
         results = await asyncio.gather(
-            *[self._run_extraction(doc, code, "IBD", extract_interest_bearing_debt) for doc in docs],
+            *[self._run_extraction(doc, code, "IBD", extract_interest_bearing_debt, pre_parsed_map=pre_parsed_map) for doc in docs],
             return_exceptions=True,
         )
         ibd_by_year = self._collect_results(results, code, "IBD")
@@ -307,9 +364,12 @@ class EdinetFetcher:
                     logger.warning(f"[HALF-EDINET] {code} {fy_end_8}: XBRLダウンロード失敗")
                     return fy_end_8, None
                 from mebuki.analysis.interest_bearing_debt import extract_interest_bearing_debt
-                gp = extract_gross_profit(Path(xbrl_dir))
-                cf = extract_cash_flow(Path(xbrl_dir))
-                ibd = extract_interest_bearing_debt(Path(xbrl_dir))
+                from mebuki.analysis.xbrl_utils import collect_all_numeric_elements
+                xbrl_path = Path(xbrl_dir)
+                pre_parsed = collect_all_numeric_elements(xbrl_path)
+                gp = extract_gross_profit(xbrl_path, pre_parsed=pre_parsed)
+                cf = extract_cash_flow(xbrl_path, pre_parsed=pre_parsed)
+                ibd = extract_interest_bearing_debt(xbrl_path, pre_parsed=pre_parsed)
                 gp["docID"] = doc["docID"]
                 logger.info(
                     f"[HALF-EDINET] {code} {fy_end_8}: "
@@ -334,6 +394,8 @@ class EdinetFetcher:
         code: str,
         financial_data: list[dict[str, Any]],
         max_years: int,
+        *,
+        pre_parsed_map: dict[str, tuple[Path, dict]] | None = None,
     ) -> dict[str, dict]:
         """年度別に従業員数を抽出。Returns: { "YYYYMMDD": employees_result_dict }"""
         from mebuki.analysis.employees import extract_employees
@@ -346,7 +408,7 @@ class EdinetFetcher:
 
         _t0 = time.perf_counter()
         results = await asyncio.gather(
-            *[self._run_extraction(doc, code, "EMP", extract_employees) for doc in docs],
+            *[self._run_extraction(doc, code, "EMP", extract_employees, pre_parsed_map=pre_parsed_map) for doc in docs],
             return_exceptions=True,
         )
         emp_by_year = self._collect_results(results, code, "EMP")
@@ -358,6 +420,8 @@ class EdinetFetcher:
         code: str,
         financial_data: list[dict[str, Any]],
         max_years: int,
+        *,
+        pre_parsed_map: dict[str, tuple[Path, dict]] | None = None,
     ) -> dict[str, dict]:
         """年度別に IFRS 純収益・事業利益を抽出。Returns: { "YYYYMMDD": nr_result_dict }"""
         from mebuki.analysis.net_revenue import extract_net_revenue
@@ -370,7 +434,7 @@ class EdinetFetcher:
 
         _t0 = time.perf_counter()
         results = await asyncio.gather(
-            *[self._run_extraction(doc, code, "NR", extract_net_revenue, result_check=lambda r: r.get("found")) for doc in docs],
+            *[self._run_extraction(doc, code, "NR", extract_net_revenue, result_check=lambda r: r.get("found"), pre_parsed_map=pre_parsed_map) for doc in docs],
             return_exceptions=True,
         )
         nr_by_year = self._collect_results(results, code, "NR")
@@ -382,6 +446,8 @@ class EdinetFetcher:
         code: str,
         financial_data: list[dict[str, Any]],
         max_years: int,
+        *,
+        pre_parsed_map: dict[str, tuple[Path, dict]] | None = None,
     ) -> dict[str, dict]:
         """年度別に売上総利益を抽出。Returns: { "YYYYMMDD": gp_result_dict }"""
         from mebuki.analysis.gross_profit import extract_gross_profit
@@ -394,7 +460,7 @@ class EdinetFetcher:
 
         _t0 = time.perf_counter()
         results = await asyncio.gather(
-            *[self._run_extraction(doc, code, "GP", extract_gross_profit) for doc in docs],
+            *[self._run_extraction(doc, code, "GP", extract_gross_profit, pre_parsed_map=pre_parsed_map) for doc in docs],
             return_exceptions=True,
         )
         gp_by_year = self._collect_results(results, code, "GP")
@@ -406,6 +472,8 @@ class EdinetFetcher:
         code: str,
         financial_data: list[dict[str, Any]],
         max_years: int,
+        *,
+        pre_parsed_map: dict[str, tuple[Path, dict]] | None = None,
     ) -> dict[str, dict]:
         """年度別に税引前利益・法人税等を抽出。Returns: { "YYYYMMDD": tax_result_dict }"""
         from mebuki.analysis.tax_expense import extract_tax_expense
@@ -418,7 +486,7 @@ class EdinetFetcher:
 
         _t0 = time.perf_counter()
         results = await asyncio.gather(
-            *[self._run_extraction(doc, code, "TAX", extract_tax_expense) for doc in docs],
+            *[self._run_extraction(doc, code, "TAX", extract_tax_expense, pre_parsed_map=pre_parsed_map) for doc in docs],
             return_exceptions=True,
         )
         tax_by_year = self._collect_results(results, code, "TAX")
@@ -430,6 +498,8 @@ class EdinetFetcher:
         code: str,
         financial_data: list[dict[str, Any]],
         max_years: int,
+        *,
+        pre_parsed_map: dict[str, tuple[Path, dict]] | None = None,
     ) -> dict[str, dict]:
         """年度別に支払利息（金融費用）を抽出。Returns: { "YYYYMMDD": ie_result_dict }"""
         from mebuki.analysis.interest_expense import extract_interest_expense
@@ -442,7 +512,7 @@ class EdinetFetcher:
 
         _t0 = time.perf_counter()
         results = await asyncio.gather(
-            *[self._run_extraction(doc, code, "IE", extract_interest_expense) for doc in docs],
+            *[self._run_extraction(doc, code, "IE", extract_interest_expense, pre_parsed_map=pre_parsed_map) for doc in docs],
             return_exceptions=True,
         )
         ie_by_year = self._collect_results(results, code, "IE")
@@ -454,6 +524,8 @@ class EdinetFetcher:
         code: str,
         financial_data: list[dict[str, Any]],
         max_years: int,
+        *,
+        pre_parsed_map: dict[str, tuple[Path, dict]] | None = None,
     ) -> dict[str, dict]:
         """年度別に営業利益（または経常利益）を抽出。Returns: { "YYYYMMDD": op_result_dict }"""
         from mebuki.analysis.operating_profit import extract_operating_profit
@@ -466,7 +538,7 @@ class EdinetFetcher:
 
         _t0 = time.perf_counter()
         results = await asyncio.gather(
-            *[self._run_extraction(doc, code, "OP", extract_operating_profit) for doc in docs],
+            *[self._run_extraction(doc, code, "OP", extract_operating_profit, pre_parsed_map=pre_parsed_map) for doc in docs],
             return_exceptions=True,
         )
         op_by_year = self._collect_results(results, code, "OP")

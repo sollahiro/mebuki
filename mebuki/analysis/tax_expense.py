@@ -258,7 +258,7 @@ def _get_value(tag_elements: dict, tags: list[str]) -> tuple[float | None, float
     return None, None
 
 
-def extract_tax_expense(xbrl_dir: Path) -> dict:
+def extract_tax_expense(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> dict:
     """
     XBRLディレクトリから税引前利益・法人税等を抽出し実効税率を計算する。
 
@@ -274,10 +274,13 @@ def extract_tax_expense(xbrl_dir: Path) -> dict:
             "method": str,   # "computed" | "not_found"
         }
     """
-    tag_elements: dict = {}
-    for f in find_xbrl_files(xbrl_dir):
-        for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_TAX_RELEVANT_TAGS).items():
-            tag_elements.setdefault(tag, {}).update(ctx_map)
+    if pre_parsed is not None:
+        tag_elements: dict = {tag: ctx for tag, ctx in pre_parsed.items() if tag in _TAX_RELEVANT_TAGS}
+    else:
+        tag_elements = {}
+        for f in find_xbrl_files(xbrl_dir):
+            for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_TAX_RELEVANT_TAGS).items():
+                tag_elements.setdefault(tag, {}).update(ctx_map)
 
     accounting_standard = _detect_accounting_standard(tag_elements)
 

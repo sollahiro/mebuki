@@ -32,7 +32,7 @@ def _is_target_ctx(ctx: str, patterns: list[str]) -> bool:
     )
 
 
-def extract_net_revenue(xbrl_dir: Path) -> dict:
+def extract_net_revenue(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> dict:
     """
     XBRLディレクトリから IFRS 純収益と事業利益を抽出する。
 
@@ -45,12 +45,15 @@ def extract_net_revenue(xbrl_dir: Path) -> dict:
             "found": bool,
         }
     """
-    tag_elements: dict = {}
-    for f in find_xbrl_files(xbrl_dir):
-        for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_NET_REVENUE_TAGS).items():
-            if tag not in tag_elements:
-                tag_elements[tag] = {}
-            tag_elements[tag].update(ctx_map)
+    if pre_parsed is not None:
+        tag_elements: dict = {tag: ctx for tag, ctx in pre_parsed.items() if tag in _NET_REVENUE_TAGS}
+    else:
+        tag_elements = {}
+        for f in find_xbrl_files(xbrl_dir):
+            for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_NET_REVENUE_TAGS).items():
+                if tag not in tag_elements:
+                    tag_elements[tag] = {}
+                tag_elements[tag].update(ctx_map)
 
     def _get(tag: str, patterns: list[str]) -> float | None:
         for ctx, val in tag_elements.get(tag, {}).items():

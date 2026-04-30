@@ -222,7 +222,7 @@ def _extract_usgaap_ie_from_html(xbrl_dir: Path) -> dict | None:
     return None
 
 
-def extract_interest_expense(xbrl_dir: Path) -> dict:
+def extract_interest_expense(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> dict:
     """
     XBRLディレクトリから連結損益計算書の支払利息（金融費用）を抽出する。
 
@@ -235,12 +235,15 @@ def extract_interest_expense(xbrl_dir: Path) -> dict:
             "accounting_standard": str,   # "J-GAAP" | "IFRS" | "US-GAAP"
         }
     """
-    tag_elements: dict = {}
-    for f in find_xbrl_files(xbrl_dir):
-        for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_IE_RELEVANT_TAGS).items():
-            if tag not in tag_elements:
-                tag_elements[tag] = {}
-            tag_elements[tag].update(ctx_map)
+    if pre_parsed is not None:
+        tag_elements: dict = {tag: ctx for tag, ctx in pre_parsed.items() if tag in _IE_RELEVANT_TAGS}
+    else:
+        tag_elements = {}
+        for f in find_xbrl_files(xbrl_dir):
+            for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_IE_RELEVANT_TAGS).items():
+                if tag not in tag_elements:
+                    tag_elements[tag] = {}
+                tag_elements[tag].update(ctx_map)
 
     accounting_standard = _detect_accounting_standard(tag_elements)
 
