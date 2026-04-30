@@ -10,6 +10,7 @@ from datetime import datetime
 
 from ..utils.converters import to_float, is_valid_value, is_valid_financial_record, extract_year_month
 from mebuki.constants.financial import PERCENT, MILLION_YEN
+from mebuki.utils.metrics_types import RawData, CalculatedData, YearEntry, MetricsResult
 
 
 def to_millions(value: Any) -> float | None:
@@ -113,7 +114,7 @@ def _filter_annual_data(annual_data: list[dict[str, Any]], analysis_years: int) 
     return years_data
 
 
-def _extract_raw_values(year_data: dict[str, Any]) -> dict[str, Any]:
+def _extract_raw_values(year_data: dict[str, Any]) -> RawData:
     """年度データから生値を抽出する"""
     return {
         'CurPerType': year_data.get("CurPerType", ""),
@@ -137,7 +138,7 @@ def _extract_raw_values(year_data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _calculate_base_values(raw_values: dict[str, Any]) -> dict[str, Any]:
+def _calculate_base_values(raw_values: RawData) -> CalculatedData:
     """百万円単位への変換とFCF(CFC)を計算する"""
     cfo_m = to_millions(raw_values['CFO'])
     cfi_m = to_millions(raw_values['CFI'])
@@ -169,7 +170,7 @@ def _format_financial_period(fy_end: str, per_type: str) -> str:
 def _build_year_entry(
     year_data: dict[str, Any],
     latest_avg_sh: float | None,
-) -> dict[str, Any]:
+) -> YearEntry:
     """1年分の指標エントリを組み立てる"""
     fy_end = year_data.get("CurFYEn")
     per_type = year_data.get("CurPerType", "FY")
@@ -230,7 +231,7 @@ def _assemble_summary(metrics: dict[str, Any], years_metrics: list[dict[str, Any
 def calculate_metrics_flexible(
     annual_data: list[dict[str, Any]],
     analysis_years: int | None = None
-) -> dict[str, Any]:
+) -> MetricsResult:
     """
     年度データから各種指標を計算（柔軟な年数対応）
     """

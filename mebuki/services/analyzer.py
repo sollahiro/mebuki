@@ -15,6 +15,7 @@ from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.infrastructure.settings import settings_store
 from mebuki.constants.financial import PERCENT, MILLION_YEN
 from mebuki.utils.wacc import load_rf_rates, get_rf_for_date, calculate_wacc
+from mebuki.utils.metrics_types import YearEntry
 
 from .financial_fetcher import FinancialFetcher
 from .edinet_fetcher import EdinetFetcher
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 def _apply_ibd(
-    years: list[dict],
+    years: list[YearEntry],
     ibd_by_year: dict[str, dict],
     doc_id_by_year: dict[str, str],
 ) -> None:
@@ -54,7 +55,7 @@ def _apply_ibd(
 
 
 def _apply_interest_expense(
-    years: list[dict],
+    years: list[YearEntry],
     ie_by_year: dict[str, dict],
 ) -> None:
     for year in years:
@@ -65,7 +66,7 @@ def _apply_interest_expense(
 
 
 def _apply_tax(
-    years: list[dict],
+    years: list[YearEntry],
     tax_by_year: dict[str, dict],
 ) -> None:
     for year in years:
@@ -83,7 +84,7 @@ def _apply_tax(
 
 
 def _apply_gross_profit(
-    years: list[dict],
+    years: list[YearEntry],
     gp_by_year: dict[str, dict],
 ) -> None:
     for year in years:
@@ -110,7 +111,7 @@ def _apply_gross_profit(
 
 
 def _apply_operating_profit(
-    years: list[dict],
+    years: list[YearEntry],
     op_by_year: dict[str, dict],
 ) -> None:
     for year in years:
@@ -131,7 +132,7 @@ def _apply_operating_profit(
 
 
 def _apply_net_revenue(
-    years: list[dict],
+    years: list[YearEntry],
     nr_by_year: dict[str, dict],
 ) -> None:
     for year in years:
@@ -161,7 +162,7 @@ def _apply_net_revenue(
 
 
 def _apply_employees(
-    years: list[dict],
+    years: list[YearEntry],
     emp_by_year: dict[str, dict],
 ) -> None:
     for year in years:
@@ -171,7 +172,7 @@ def _apply_employees(
             year["CalculatedData"]["Employees"] = emp["current"]
 
 
-def _apply_wacc(years: list[dict], rf_rates: dict) -> None:
+def _apply_wacc(years: list[YearEntry], rf_rates: dict) -> None:
     for year in years:
         cd = year["CalculatedData"]
         rf = get_rf_for_date(rf_rates, year.get("fy_end", ""))

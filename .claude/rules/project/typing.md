@@ -67,5 +67,36 @@ def validate(metrics: dict[str, Any]) -> tuple[bool, str | None]:
 | ケース | 使うもの |
 |---|---|
 | JSON / キャッシュ dict の構造を型付けしたい | `TypedDict` |
+| レイヤー間で受け渡す複雑なドメイン辞書を型付けしたい | `TypedDict` |
 | ロジックを持つオブジェクト、または immutable な値 | `dataclass` |
 | 一時的な戻り値で型が単純（2〜3フィールド） | `tuple[X, Y]` |
+
+## `TypedDict` の置き場所
+
+複数モジュールが共有するドメイン TypedDict は **`mebuki/utils/`** に独立ファイルとして置く。
+
+```
+mebuki/utils/metrics_types.py  # 財務指標系（YearEntry, CalculatedData 等）
+```
+
+- `analysis/` と `services/` の両方からインポート可能（循環なし）
+- 単一モジュール内でしか使わない TypedDict はそのファイル内に定義してよい
+
+## 段階的に組み立てる辞書には `total=False`
+
+`_apply_*` 関数のように後からフィールドを追加する辞書は `total=False` を使う。
+静的解析でキーの存在が保証できないためで、意図的な選択。
+
+```python
+# ✅ 段階的に拡充される辞書
+class CalculatedData(TypedDict, total=False):
+    Sales: float | None
+    GrossProfit: float | None   # _apply_gross_profit で追加
+    WACC: float | None          # _apply_wacc で追加
+
+# ✅ 常に全フィールドが揃う辞書
+class YearEntry(TypedDict):     # total=True（デフォルト）
+    fy_end: str | None
+    RawData: RawData
+    CalculatedData: CalculatedData
+```
