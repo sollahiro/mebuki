@@ -9,6 +9,7 @@ import logging
 import asyncio
 from typing import Any
 from pathlib import Path
+from collections.abc import Callable
 
 from mebuki.api.jquants_client import JQuantsAPIClient
 from mebuki.api.edinet_client import EdinetAPIClient
@@ -172,6 +173,17 @@ def _apply_employees(
             year["CalculatedData"]["Employees"] = emp["current"]
 
 
+_METRIC_APPLIERS: list[Callable[[list[YearEntry], dict], None]] = [
+    lambda years, m: _apply_ibd(years, m.get("ibd", {}), m.get("doc_ids", {})),
+    lambda years, m: _apply_interest_expense(years, m.get("ie", {})),
+    lambda years, m: _apply_tax(years, m.get("tax", {})),
+    lambda years, m: _apply_gross_profit(years, m.get("gp", {})),
+    lambda years, m: _apply_operating_profit(years, m.get("op", {})),
+    lambda years, m: _apply_net_revenue(years, m.get("nr", {})),
+    lambda years, m: _apply_employees(years, m.get("emp", {})),
+]
+
+
 def _apply_wacc(years: list[YearEntry], rf_rates: dict) -> None:
     for year in years:
         cd = year["CalculatedData"]
@@ -232,52 +244,22 @@ class IndividualAnalyzer:
         metrics = await self._financial_fetcher.calculate_metrics(code, annual_data, actual_years)
 
         edinet_data: dict = {}
-        ibd_by_year: dict[str, dict] = {}
-        gp_by_year: dict[str, dict] = {}
-        ie_by_year: dict[str, dict] = {}
-        tax_by_year: dict[str, dict] = {}
-        emp_by_year: dict[str, dict] = {}
-        nr_by_year: dict[str, dict] = {}
-        op_by_year: dict[str, dict] = {}
-        doc_id_by_year: dict[str, str] = {}
+        all_metrics: dict[str, dict[str, dict]] = {}
 
         if financial_data:
             pre_parsed_map = await self._edinet_fetcher.predownload_and_parse(
                 code, financial_data, actual_years
             )
-            (
-                edinet_data,
-                ibd_by_year,
-                gp_by_year,
-                ie_by_year,
-                tax_by_year,
-                emp_by_year,
-                nr_by_year,
-                op_by_year,
-                doc_id_by_year,
-            ) = await asyncio.gather(
+            edinet_data, all_metrics = await asyncio.gather(
                 self._edinet_fetcher.fetch_edinet_data_async(code, financial_data, max_documents=max_documents),
-                self._edinet_fetcher.extract_ibd_by_year(code, financial_data, actual_years, pre_parsed_map=pre_parsed_map),
-                self._edinet_fetcher.extract_gross_profit_by_year(code, financial_data, actual_years, pre_parsed_map=pre_parsed_map),
-                self._edinet_fetcher.extract_interest_expense_by_year(code, financial_data, actual_years, pre_parsed_map=pre_parsed_map),
-                self._edinet_fetcher.extract_tax_expense_by_year(code, financial_data, actual_years, pre_parsed_map=pre_parsed_map),
-                self._edinet_fetcher.extract_employees_by_year(code, financial_data, actual_years, pre_parsed_map=pre_parsed_map),
-                self._edinet_fetcher.extract_net_revenue_by_year(code, financial_data, actual_years, pre_parsed_map=pre_parsed_map),
-                self._edinet_fetcher.extract_operating_profit_by_year(code, financial_data, actual_years, pre_parsed_map=pre_parsed_map),
-                self._edinet_fetcher.get_doc_ids_by_year(code, financial_data, actual_years),
+                self._edinet_fetcher.extract_all_by_year(code, financial_data, actual_years, pre_parsed_map=pre_parsed_map),
             )
 
         years = metrics.get("years", [])
 
-        if financial_data and metrics:
-            _apply_ibd(years, ibd_by_year, doc_id_by_year)
-            _apply_interest_expense(years, ie_by_year)
-            _apply_tax(years, tax_by_year)
-            _apply_gross_profit(years, gp_by_year)
-            _apply_operating_profit(years, op_by_year)
+        for apply_fn in _METRIC_APPLIERS:
+            apply_fn(years, all_metrics)
 
-        _apply_net_revenue(years, nr_by_year)
-        _apply_employees(years, emp_by_year)
         _apply_wacc(years, load_rf_rates(settings_store.cache_dir))
 
         return {
