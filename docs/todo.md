@@ -34,6 +34,7 @@
 - `analysis/interest_bearing_debt.py`（556行）は会計基準検出・XBRL 解析・HTML パースを1ファイルに抱えており分割候補
 - ~~`services/analyzer.py` が各 analysis モジュールに直接依存。新しい財務指標を追加するたびにこのファイルを触ることになる~~ → `ExtractorSpec` レジストリに統合済（2026-05-01）
 
+
 ---
 
 ## パフォーマンス — B+

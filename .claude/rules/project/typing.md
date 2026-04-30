@@ -60,7 +60,68 @@ def validate(metrics: dict[str, Any]) -> tuple[bool, str | None]:
 
 ## `Any` の使用を最小限に
 
-`Any` を使う場合は、型が本当に不定である理由がある箇所のみ。辞書の値型が `str | float | None` のように絞れる場合は `Any` を使わない。
+`Any` を使う場合は、型が本当に不定である理由がある箇所のみ。
+
+### `Any` を使ってよい箇所
+
+| 箇所 | 理由 |
+|---|---|
+| 外部 API レスポンス（J-QUANTS / EDINET）の `dict[str, Any]` | JSON の値型が実行時にしか判明しない |
+| 任意型を受け入れる検証関数の引数（`is_nan`, `is_valid_value`） | `float`, `str`, `None` など全型を動的に処理する |
+| MCP プロトコルの `arguments: dict[str, Any]` | プロトコル仕様で型が規定されていない |
+
+### `Any` を使ってはいけない箇所（具体例）
+
+```python
+# ❌ 値が float | None に絞れるのに Any
+def calculate_wacc(...) -> dict[str, Any]: ...
+
+# ✅
+def calculate_wacc(...) -> dict[str, float | None]: ...
+
+# ❌ XBRL パース結果の値が float に絞れるのに Any
+def collect_numeric_elements(...) -> dict[str, Any]: ...
+
+# ✅
+def collect_numeric_elements(...) -> dict[str, dict[str, float]]: ...
+
+# ❌ 変換関数の引数が str | float | int | None に絞れるのに Any
+def to_float(value: Any) -> float | None: ...
+
+# ✅
+def to_float(value: str | float | int | None) -> float | None: ...
+
+# ❌ 戻り値が dict | list のどちらかに決まるのに Any
+async def get_financial_data(...) -> Any: ...
+
+# ✅
+async def get_financial_data(...) -> dict[str, Any] | list[dict[str, Any]]: ...
+```
+
+### 定数ファイルの構造化 dict には TypedDict を使う
+
+```python
+# ❌ constants/xbrl.py で Any を使う
+COMPONENT_DEFINITIONS: list[dict[str, Any]] = [...]
+
+# ✅ 内部用 TypedDict を同ファイルに定義する
+class _ComponentDef(TypedDict):
+    label: str
+    tags: list[str]
+
+COMPONENT_DEFINITIONS: list[_ComponentDef] = [...]
+```
+
+オプションフィールドがある場合は `NotRequired` を使う（`total=False` は全フィールドをオプションにするため不適切）。
+
+```python
+from typing import NotRequired, TypedDict
+
+class _AggregateIFRSDef(TypedDict):
+    tag: str
+    covers: list[str]
+    label: NotRequired[str]  # 一部のエントリにしか存在しないフィールド
+```
 
 ## `TypedDict` と `dataclass` の使い分け
 
@@ -81,6 +142,7 @@ mebuki/utils/metrics_types.py  # 財務指標系（YearEntry, CalculatedData 等
 
 - `analysis/` と `services/` の両方からインポート可能（循環なし）
 - 単一モジュール内でしか使わない TypedDict はそのファイル内に定義してよい
+- `constants/` ファイル内の構造化定数を型付けする TypedDict も同ファイル内に定義してよい（`_` プレフィックスで内部用と明示）
 
 ## 段階的に組み立てる辞書には `total=False`
 

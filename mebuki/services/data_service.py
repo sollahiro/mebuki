@@ -154,7 +154,7 @@ class DataService:
         use_cache: bool = True,
         include_2q: bool = False,
         analysis_years: int | None = None,
-    ) -> Any:
+    ) -> dict[str, Any] | list[dict[str, Any]]:
         """財務データ取得の統一公開API。scope=None で財務サマリー、scope="raw" で生データ。"""
         if scope == "raw":
             raw_data = await self.api_client.get_financial_summary(code=code)

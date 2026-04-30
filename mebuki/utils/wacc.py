@@ -11,7 +11,6 @@ import logging
 import re
 import urllib.request
 from datetime import date, timedelta
-from typing import Any
 
 from mebuki.constants.financial import (
     PERCENT,
@@ -121,7 +120,7 @@ def calculate_wacc(
     ie: float | None,
     tc_pct: float | None,
     rf: float,
-) -> dict[str, Any]:
+) -> dict[str, float | None]:
     """WACC・CostOfEquity・CostOfDebt を計算して dict で返す。
 
     Args:

@@ -13,7 +13,7 @@ from mebuki.constants.financial import PERCENT, MILLION_YEN
 from mebuki.utils.metrics_types import RawData, CalculatedData, YearEntry, MetricsResult
 
 
-def to_millions(value: Any) -> float | None:
+def to_millions(value: float | None) -> float | None:
     """円単位の値を百万円単位に変換"""
     if value is None:
         return None

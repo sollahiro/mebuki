@@ -1,4 +1,21 @@
-from typing import Any
+from typing import NotRequired, TypedDict
+
+
+class _XBRLSection(TypedDict):
+    title: str
+    xbrl_elements: list[str]
+
+
+class _ComponentDef(TypedDict):
+    label: str
+    tags: list[str]
+
+
+class _AggregateIFRSDef(TypedDict, total=False):
+    tag: str
+    covers: list[str]
+    label: str
+
 
 # Duration（損益計算書・CF）コンテキストパターン
 # 年次: CurrentYearDuration / 新形式半期: InterimDuration / 旧形式半期・四半期: CurrentYTDDuration
@@ -16,7 +33,7 @@ PRIOR_DURATION_CONTEXT_PATTERNS: list[str] = [
     "Prior1YTDDuration",
 ]
 
-XBRL_SECTIONS: dict[str, dict[str, Any]] = {
+XBRL_SECTIONS: dict[str, _XBRLSection] = {
     'business_risks': {
         'title': '事業等のリスク',
         'xbrl_elements': ['BusinessRisksTextBlock']
@@ -49,7 +66,7 @@ INTEREST_BEARING_DEBT_TAGS: list[str] = [
 ]
 
 # 各コンポーネントのラベルと候補タグ名（J-GAAP → IFRS の優先順）
-COMPONENT_DEFINITIONS: list[dict[str, Any]] = [
+COMPONENT_DEFINITIONS: list[_ComponentDef] = [
     {
         "label": "短期借入金",
         "tags": [
@@ -113,7 +130,7 @@ GROSS_PROFIT_DIRECT_TAGS: list[str] = [
 
 # 売上総利益 計算法コンポーネント（直接タグが存在しない場合のフォールバック）
 # 売上高 − 売上原価 で計算する
-GROSS_PROFIT_COMPONENT_DEFINITIONS: list[dict[str, Any]] = [
+GROSS_PROFIT_COMPONENT_DEFINITIONS: list[_ComponentDef] = [
     {
         "label": "売上高",
         "tags": [
@@ -203,7 +220,7 @@ INTEREST_EXPENSE_IFRS_TAGS: list[str] = [
     "FinanceCostsIFRS",       # 金融費用合計（フォールバック）
 ]
 
-AGGREGATE_IFRS_DEFINITIONS: list[dict[str, Any]] = [
+AGGREGATE_IFRS_DEFINITIONS: list[_AggregateIFRSDef] = [
     {
         "tag": "CurrentPortionOfLongTermDebtCLIFRS",  # 1年内長期有利子負債（社債+借入金を集約）
         "covers": ["1年内償還予定の社債", "1年内返済予定の長期借入金"],

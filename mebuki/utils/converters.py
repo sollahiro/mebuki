@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # 型変換関数
 # =============================================================================
 
-def to_float(value: Any) -> float | None:
+def to_float(value: str | float | int | None) -> float | None:
     """
     値をfloatに変換
     
@@ -52,7 +52,7 @@ def to_float(value: Any) -> float | None:
     return None
 
 
-def to_int(value: Any) -> int | None:
+def to_int(value: str | float | int | None) -> int | None:
     """
     値をintに変換
     
