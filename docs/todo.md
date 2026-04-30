@@ -1,0 +1,169 @@
+# コードベース構成採点レポート
+
+バージョン: v2.19.1  
+評価日: 2026-04-30
+
+---
+
+## 採点サマリー
+
+| 次元 | スコア |
+|---|---|
+| 保守性 | A− |
+| パフォーマンス | B+ |
+| テスト | B− |
+| 型安全性 | B |
+| CLI/MCP パリティ | A |
+| DRY | A− |
+| **総合** | **B+** |
+
+---
+
+## 保守性 — A−
+
+### 強み
+
+- 依存方向が明確（`app → services → api/analysis/infrastructure/utils`）で逆流なし。`tests/test_dependency_rules.py` で自動検証されている
+- 平均ファイルサイズ約166行。一画面に収まるファイルが多く読むコストが低い
+- 定数を `mebuki/constants/` に集約。マジックナンバーがほぼない
+- `CLAUDE.md` + `.claude/rules/*.md` で規約が明文化されており、将来の変更者が迷いにくい
+
+### 弱み
+
+- `utils/financial_data.py`（677行）が重力井戸化している可能性。データ抽出・重複排除・集計が混在しており変更時の影響範囲が読みにくい
+- `analysis/interest_bearing_debt.py`（553行）は会計基準検出・XBRL 解析・HTML パースを1ファイルに抱えており分割候補
+- `services/analyzer.py` が各 analysis モジュールに直接依存。新しい財務指標を追加するたびにこのファイルを触ることになる
+
+---
+
+## パフォーマンス — B+
+
+### 強み
+
+- API クライアントは全て async（aiohttp）。CLI からは `asyncio.run()` で呼んでおり構造は正しい
+- ファイルベースキャッシュ（7日 TTL）＋メモリキャッシュ（メタデータ）の2段構成
+- 429 レートリミットに 60秒 wait で対応
+- タイムアウト管理が実装済（analyze: 180秒、filings: 60秒）
+- EDINET の ZIP 取得はキャッシュ済みで同一 filing の再ダウンロードなし
+
+### 弱み
+
+- API 呼び出しが逐次実行。analyze 時に J-QUANTS + EDINET を `asyncio.gather` で並列化できれば体感速度は改善できる
+- XBRL のパース結果がキャッシュされていない。同一 filing を複数の分析モジュールが処理する場合、XML の parse が重複する
+- `financial_data.py` の annual/半期データ構築ループで dedup 処理の計算量が高い可能性
+
+---
+
+## テスト — B−
+
+### 強み
+
+- XBRL 解析系のユニットテストが厚い（テストコード全体の64%）。最も複雑な `interest_bearing_debt.py` に 799行のテストがある
+- 依存規則テスト（`tests/test_dependency_rules.py`）で CI 時にアーキテクチャ退行を検出できる
+- MCP/CLI のコントラクトテスト（ツール名・引数が壊れていないか）が存在する
+
+### 弱み
+
+- `services/data_service.py`（449行）と `services/portfolio_service.py`（314行）のテストが存在しない。サービス層はビジネスロジックの核心なのにカバレッジが薄い
+- 非同期パスのテストが少ない
+- CLI の統合テストがほぼない（contract テストのみ）
+
+### テストファイル一覧
+
+| ファイル | 行数 | 対象 |
+|---|---|---|
+| `test_xbrl_interest_bearing_debt.py` | 799 | IBD 抽出（会計基準横断） |
+| `test_analyzer_apply_functions.py` | 415 | Analyzer のメトリクス適用関数 |
+| `test_xbrl_tax_expense.py` | 268 | 実効税率計算 |
+| `test_xbrl_gross_profit.py` | 263 | 売上総利益 context マッチング |
+| `test_xbrl_interest_expense.py` | 258 | 支払利息抽出 |
+| `test_jquants_utils_fix.py` | 98 | J-QUANTS レスポンスパース |
+| `test_dup_deduplication.py` | 93 | データ重複排除 |
+| `test_xbrl_refactor_unit.py` | 83 | XBRL ユーティリティ |
+| `test_cli_analyze_years.py` | 75 | CLI パラメーター |
+| `test_dependency_rules.py` | 52 | アーキテクチャ依存規則 |
+| `test_calculator_update.py` | 36 | メトリクス計算 |
+| `test_mcp_contract.py` | 26 | MCP ツールインターフェース |
+| `test_cli_contract.py` | 10 | CLI 引数コントラクト |
+
+---
+
+## 型安全性 — B
+
+### 強み
+
+- 関数シグネチャに戻り値型が揃っており `Optional` の代わりに `X | None` 構文を使用
+- Python 3.11+ の組み込み型（`list[str]`、`dict[K, V]`）で統一
+
+### 弱み
+
+- 辞書が深くネストしている箇所（`calculator.py` や `analyzer.py` が返す結果辞書など）に `TypedDict` が使われていない
+- 値型が `str | float | None` 程度に絞れる場合でも `Any` で代替している箇所がある
+
+---
+
+## CLI/MCP パリティ — A
+
+`.claude/rules/project/mcp-cli-parity.md` に対応表が明文化されており、9ツール中7ツールが CLI と対応。  
+残り2つ（`config`、`mcp install`）はユーザー設定・インストーラー用途で MCP から除外するのは合理的。
+
+---
+
+## DRY — A−
+
+XBRL の context ヘルパーが `analysis/context_helpers.py` に集約され、parse/collect/find の共通処理が `analysis/xbrl_utils.py` に分離されており重複は少ない。  
+減点は `services/edinet_fetcher.py` と `api/edinet_client.py` の責任境界が若干曖昧な点のみ。
+
+---
+
+## ファイルサイズ分布（上位15件）
+
+| ファイル | 行数 | 主な懸念 |
+|---|---|---|
+| `utils/financial_data.py` | 677 | 抽出・集計・dedup が混在 |
+| `analysis/interest_bearing_debt.py` | 553 | 3会計基準 + XBRL/HTML が混在 |
+| `analysis/xbrl_parser.py` | 517 | - |
+| `services/edinet_fetcher.py` | 474 | - |
+| `services/data_service.py` | 449 | シングルトンが複数の関心を持つ |
+| `api/edinet_client.py` | 427 | - |
+| `app/mcp_server.py` | 354 | - |
+| `analysis/gross_profit.py` | 352 | - |
+| `app/cli/analyze.py` | 345 | - |
+| `analysis/tax_expense.py` | 327 | - |
+| `utils/converters.py` | 321 | - |
+| `services/portfolio_service.py` | 314 | テスト不在 |
+| `app/cli/mcp.py` | 304 | - |
+| `services/analyzer.py` | 289 | analysis モジュール全依存 |
+| `analysis/interest_expense.py` | 278 | - |
+
+---
+
+## 優先改善候補
+
+コスト対効果の高い順に列挙する。
+
+### ~~1. サービス層のテスト追加~~ ✅ 完了 (2026-04-30)
+
+`tests/test_data_service.py`（20件）と `tests/test_portfolio_service.py`（24件）を追加。  
+計44件すべてパス。
+
+### ~~2. `financial_data.py` の整理~~ ✅ 完了 (2026-04-30)
+
+デッドコード（`extract_quarterly_data`・`_calculate_quarter_end_date`）を削除し 677行 → 437行に削減。  
+株価取得関数（`get_monthly_avg_stock_price` 等）は将来実装のため残置。
+
+### 3. 結果辞書への TypedDict 導入（優先度: 中）
+
+`analyzer.py` が返す `CalculatedData` 辞書などに `TypedDict` を定義することで、  
+キーミスや型の不一致を静的解析で検出できるようになる。
+
+### 4. J-QUANTS + EDINET の並列化（優先度: 中）
+
+analyze 実行時に両 API を `asyncio.gather` で並列実行することで  
+ネットワーク待ち時間を削減できる。
+
+### 5. XBRL パース結果のセッションキャッシュ（優先度: 低）
+
+同一 filing を複数の分析モジュール（IBD、支払利息、売上総利益など）が  
+それぞれ XML parse しているため、セッション内で parse 結果を共有することで  
+重複 I/O を削減できる。
