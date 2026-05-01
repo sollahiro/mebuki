@@ -8,13 +8,19 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass
-from importlib import import_module
 from pathlib import Path
 from typing import Any
 from collections.abc import Callable, AsyncGenerator
 
 from mebuki.api.jquants_client import JQuantsAPIClient
 from mebuki.api.edinet_client import EdinetAPIClient
+from mebuki.analysis.employees import extract_employees
+from mebuki.analysis.gross_profit import extract_gross_profit
+from mebuki.analysis.interest_bearing_debt import extract_interest_bearing_debt
+from mebuki.analysis.interest_expense import extract_interest_expense
+from mebuki.analysis.net_revenue import extract_net_revenue
+from mebuki.analysis.operating_profit import extract_operating_profit
+from mebuki.analysis.tax_expense import extract_tax_expense
 from mebuki.utils.jquants_utils import prepare_edinet_search_data
 
 logger = logging.getLogger(__name__)
@@ -24,22 +30,18 @@ logger = logging.getLogger(__name__)
 class ExtractorSpec:
     key: str
     label: str
-    module: str
-    fn_name: str
+    extract_fn: Callable
     result_check: Callable[[dict], bool] | None = None
-
-    def load_fn(self) -> Callable:
-        return getattr(import_module(self.module), self.fn_name)
 
 
 _EXTRACTOR_SPECS: list[ExtractorSpec] = [
-    ExtractorSpec("ibd", "IBD", "mebuki.analysis.interest_bearing_debt", "extract_interest_bearing_debt"),
-    ExtractorSpec("gp", "GP", "mebuki.analysis.gross_profit", "extract_gross_profit"),
-    ExtractorSpec("ie", "IE", "mebuki.analysis.interest_expense", "extract_interest_expense"),
-    ExtractorSpec("tax", "TAX", "mebuki.analysis.tax_expense", "extract_tax_expense"),
-    ExtractorSpec("emp", "EMP", "mebuki.analysis.employees", "extract_employees"),
-    ExtractorSpec("nr", "NR", "mebuki.analysis.net_revenue", "extract_net_revenue", result_check=lambda r: r.get("found")),
-    ExtractorSpec("op", "OP", "mebuki.analysis.operating_profit", "extract_operating_profit"),
+    ExtractorSpec("ibd", "IBD", extract_interest_bearing_debt),
+    ExtractorSpec("gp", "GP", extract_gross_profit),
+    ExtractorSpec("ie", "IE", extract_interest_expense),
+    ExtractorSpec("tax", "TAX", extract_tax_expense),
+    ExtractorSpec("emp", "EMP", extract_employees),
+    ExtractorSpec("nr", "NR", extract_net_revenue, result_check=lambda r: r.get("found")),
+    ExtractorSpec("op", "OP", extract_operating_profit),
 ]
 
 _SPEC_BY_KEY: dict[str, ExtractorSpec] = {spec.key: spec for spec in _EXTRACTOR_SPECS}
@@ -367,12 +369,21 @@ class EdinetFetcher:
     ) -> dict[str, dict]:
         if not self.edinet_client or not self.edinet_client.api_key:
             return {}
-        extract_fn = spec.load_fn()
         docs = await self._get_annual_docs(code, financial_data, max_years)
         logger.info(f"[{spec.label}] {code}: {len(docs)}件のEDINET文書を検索")
         _t0 = time.perf_counter()
         results = await asyncio.gather(
-            *[self._run_extraction(doc, code, spec.label, extract_fn, result_check=spec.result_check, pre_parsed_map=pre_parsed_map) for doc in docs],
+            *[
+                self._run_extraction(
+                    doc,
+                    code,
+                    spec.label,
+                    spec.extract_fn,
+                    result_check=spec.result_check,
+                    pre_parsed_map=pre_parsed_map,
+                )
+                for doc in docs
+            ],
             return_exceptions=True,
         )
         by_year = self._collect_results(results, code, spec.label)
