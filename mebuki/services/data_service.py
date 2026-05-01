@@ -5,31 +5,24 @@
 
 import asyncio
 import logging
-from datetime import datetime, date
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from mebuki import __version__
 from mebuki.api.jquants_client import JQuantsAPIClient
 from mebuki.api.edinet_client import EdinetAPIClient
-from mebuki.analysis.xbrl_parser import XBRLParser
 from mebuki.infrastructure.settings import settings_store
 from mebuki.utils.cache import CacheManager
-from mebuki.utils.fiscal_year import parse_date_string
 
 _CACHE_VERSION = ".".join(__version__.split(".")[:2])
 
 from .analyzer import IndividualAnalyzer
-from .master_data import master_data_manager
+from .company_info_service import CompanyInfoService
+from .earnings_calendar_service import EarningsCalendarService
+from .filing_service import FilingService
 
 logger = logging.getLogger(__name__)
-
-_EARNINGS_CALENDAR_FQ_FILTER = {"本決算", "第２四半期"}
-
-
-def _parse_calendar_date(date_str: str) -> date:
-    dt = parse_date_string(date_str)
-    return dt.date() if dt is not None else date(2000, 1, 1)
 
 
 class DataService:
@@ -46,38 +39,24 @@ class DataService:
             cache_dir=settings_store.cache_dir,
             enabled=settings_store.cache_enabled,
         )
+        self.company_info_service = CompanyInfoService()
+        self.earnings_calendar_service = EarningsCalendarService(
+            self.api_client,
+            self.cache_manager,
+        )
+        self.filing_service = FilingService(self.api_client, self.edinet_client)
+
+    def _sync_child_services(self) -> None:
+        """テストや再初期化で差し替えられた共有依存を委譲先にも反映する。"""
+        self.earnings_calendar_service.api_client = self.api_client
+        self.earnings_calendar_service.cache_manager = self.cache_manager
+        self.filing_service.api_client = self.api_client
+        self.filing_service.edinet_client = self.edinet_client
 
     async def _refresh_earnings_calendar_if_needed(self) -> None:
         """1日1回、決算カレンダーのストアを更新する"""
-        today = date.today()
-        today_str = today.isoformat()
-        if self.cache_manager.get("earnings_calendar_last_fetched") == today_str:
-            return
-
-        try:
-            raw = await self.api_client.get_earnings_calendar()
-            valid_new = [
-                e for e in raw
-                if _parse_calendar_date(e.get("Date", "")) >= today
-                and e.get("FQ") in _EARNINGS_CALENDAR_FQ_FILTER
-            ]
-
-            existing = self.cache_manager.get("earnings_calendar_store") or []
-            existing_valid = [
-                e for e in existing
-                if _parse_calendar_date(e.get("Date", "")) >= today
-            ]
-            existing_keys = {(e["Date"], e["Code"]) for e in existing_valid}
-            for entry in valid_new:
-                key = (entry.get("Date"), entry.get("Code"))
-                if key not in existing_keys:
-                    existing_valid.append(entry)
-                    existing_keys.add(key)
-
-            self.cache_manager.set("earnings_calendar_store", existing_valid)
-            self.cache_manager.set("earnings_calendar_last_fetched", today_str)
-        except Exception as e:
-            logger.warning(f"決算カレンダーの更新に失敗（処理を続行）: {e}")
+        self._sync_child_services()
+        await self.earnings_calendar_service.refresh_if_needed()
 
     async def close(self) -> None:
         """全APIクライアントのセッションをクローズする"""
@@ -93,6 +72,11 @@ class DataService:
         self.cache_manager.cache_dir = Path(settings_store.cache_dir)
         self.cache_manager.enabled = settings_store.cache_enabled
         self.cache_manager.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.earnings_calendar_service = EarningsCalendarService(
+            self.api_client,
+            self.cache_manager,
+        )
+        self.filing_service = FilingService(self.api_client, self.edinet_client)
 
     def get_analyzer(self) -> IndividualAnalyzer:
         """IndividualAnalyzerのインスタンスを取得"""
@@ -103,49 +87,15 @@ class DataService:
 
     async def search_companies(self, query: str) -> list[dict[str, Any]]:
         """銘柄コードまたは名称で企業を検索します。"""
-        return master_data_manager.search(query, limit=50)
+        return await self.company_info_service.search_companies(query)
 
     def fetch_stock_basic_info(self, code: str) -> dict[str, Any]:
         """銘柄の基本情報を取得"""
-        stock_info = master_data_manager.get_by_code(code)
-        if not stock_info:
-            logger.warning(f"銘柄情報が見つかりません: {code}")
-            return {
-                "name": "",
-                "industry": "",
-                "market": "",
-                "code": code,
-            }
-
-        return {
-            "name": stock_info.get("CoName"),
-            "name_en": stock_info.get("CoNameEn", ""),
-            "industry": stock_info.get("S33Nm"),
-            "sector_33": stock_info.get("S33"),
-            "sector_33_name": stock_info.get("S33Nm"),
-            "sector_17": stock_info.get("S17"),
-            "sector_17_name": stock_info.get("S17Nm"),
-            "market": stock_info.get("MktNm", ""),
-            "market_name": stock_info.get("MktNm", ""),
-            "code": code,
-        }
+        return self.company_info_service.fetch_stock_basic_info(code)
 
     def _attach_upcoming_earnings(self, result: dict, code: str) -> None:
         """決算スケジュールを result に付与する（該当なければ何もしない）"""
-        store = self.cache_manager.get("earnings_calendar_store") or []
-        today = date.today()
-        for entry in store:
-            if (
-                entry.get("Code", "").startswith(code[:4])
-                and _parse_calendar_date(entry.get("Date", "")) >= today
-            ):
-                result["upcoming_earnings"] = {
-                    "date": entry.get("Date"),
-                    "FQ": entry.get("FQ"),
-                    "SectorNm": entry.get("SectorNm"),
-                    "Section": entry.get("Section"),
-                }
-                break
+        self.earnings_calendar_service.attach_upcoming_earnings(result, code)
 
     async def get_financial_data(
         self,
@@ -359,12 +309,9 @@ class DataService:
         max_documents: int = 10,
     ) -> list[dict[str, Any]]:
         """EDINET書類を検索"""
-        fin_data = await self.api_client.get_financial_summary(code=code)
-        from mebuki.services.edinet_fetcher import EdinetFetcher
-        edinet_fetcher = EdinetFetcher(self.api_client, self.edinet_client)
-        return await edinet_fetcher.search_recent_reports(
+        self._sync_child_services()
+        return await self.filing_service.search_filings(
             code=code,
-            jquants_data=fin_data,
             max_years=max_years,
             doc_types=doc_types,
             max_documents=max_documents,
@@ -377,42 +324,12 @@ class DataService:
         sections: list[str] | None = None,
     ) -> dict[str, Any]:
         """EDINET書類からセクションを抽出"""
-        requested_sections = sections or ["all"]
-
-        meta: dict[str, Any] = {}
-        if not doc_id:
-            docs = await self.search_filings(
-                code=code,
-                max_years=5,
-                doc_types=["120", "140"],
-                max_documents=5,
-            )
-            if not docs:
-                raise ValueError(f"No Securities Report found for {code}")
-            doc = docs[0]
-            doc_id = doc["docID"]
-            meta = {
-                "fiscal_year": doc.get("fiscal_year"),
-                "period_type": doc.get("period_type"),
-                "jquants_fy_end": doc.get("jquants_fy_end"),
-            }
-
-        xbrl_dir = await self.edinet_client.download_document(doc_id, 1)
-        if not xbrl_dir:
-            raise ValueError("Document not found or download failed")
-
-        parser = XBRLParser()
-        all_sections = parser.extract_sections_by_type(xbrl_dir)
-
-        base = {"doc_id": doc_id, **meta}
-        if "all" in requested_sections:
-            return {**base, "sections": all_sections}
-
-        result = {}
-        for section in requested_sections:
-            if section in all_sections:
-                result[section] = all_sections[section]
-        return {**base, "sections": result}
+        self._sync_child_services()
+        return await self.filing_service.extract_filing_content(
+            code=code,
+            doc_id=doc_id,
+            sections=sections,
+        )
 
     async def get_raw_analysis_data(
         self,
