@@ -66,8 +66,8 @@
 ### 弱み
 
 - ~~`services/data_service.py`（449行）と `services/portfolio_service.py`（314行）のテストが存在しない~~ → 計44件追加済（2026-04-30）
-- 非同期パスのテストが少ない
-- CLI の統合テストがほぼない（contract テストのみ）
+- 非同期パスのテストが少ない（`IndividualAnalyzer.fetch_analysis_data` の EDINET 並列取得パスは追加済: 2026-05-01）
+- CLI の統合テストが少ない（`main()` 経由の主要 JSON パスは追加済: 2026-05-01）
 
 ### テストファイル一覧
 
