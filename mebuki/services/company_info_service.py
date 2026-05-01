@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from .master_data import master_data_manager
+from mebuki.utils.master_types import StockSearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 class CompanyInfoService:
     """銘柄検索・基本情報取得を担当するサービス"""
 
-    async def search_companies(self, query: str) -> list[dict[str, Any]]:
+    async def search_companies(self, query: str) -> list[StockSearchResult]:
         """銘柄コードまたは名称で企業を検索します。"""
         return master_data_manager.search(query, limit=50)
 

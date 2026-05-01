@@ -68,5 +68,5 @@ class SectorAllocation(TypedDict):
     sector_name: str
     ticker_count: int
     tickers: list[str]
-    total_cost: int
+    total_cost: float
     ratio: float

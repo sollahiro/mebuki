@@ -48,7 +48,7 @@ _EXTRACTOR_SPECS: list[ExtractorSpec] = [
     ExtractorSpec("ie", "IE", extract_interest_expense),
     ExtractorSpec("tax", "TAX", extract_tax_expense),
     ExtractorSpec("emp", "EMP", extract_employees),
-    ExtractorSpec("nr", "NR", extract_net_revenue, result_check=lambda r: r.get("found")),
+    ExtractorSpec("nr", "NR", extract_net_revenue, result_check=lambda r: bool(r.get("found"))),
     ExtractorSpec("op", "OP", extract_operating_profit),
 ]
 
@@ -158,6 +158,7 @@ class EdinetFetcher:
 
         if not self.edinet_client or not self.edinet_client.api_key:
             return {}
+        client = self.edinet_client
 
         docs = await self._get_annual_docs(code, financial_data, max_years)
 
@@ -167,7 +168,7 @@ class EdinetFetcher:
                 return "", None
             try:
                 xbrl_dir = await asyncio.wait_for(
-                    self.edinet_client.download_document(doc["docID"], 1),
+                    client.download_document(doc["docID"], 1),
                     timeout=30.0,
                 )
                 if not xbrl_dir:
@@ -207,13 +208,16 @@ class EdinetFetcher:
         fy_end_8 = _fy_end_key(doc.get("jquants_fy_end"))
         if not fy_end_8:
             return "", None
+        if self.edinet_client is None:
+            return fy_end_8, None
+        client = self.edinet_client
         try:
             if pre_parsed_map is not None and fy_end_8 in pre_parsed_map:
                 xbrl_path, pre_parsed = pre_parsed_map[fy_end_8]
                 result = extract_fn(xbrl_path, pre_parsed=pre_parsed)
             else:
                 xbrl_dir = await asyncio.wait_for(
-                    self.edinet_client.download_document(doc["docID"], 1),
+                    client.download_document(doc["docID"], 1),
                     timeout=30.0,
                 )
                 if not xbrl_dir:
@@ -363,6 +367,7 @@ class EdinetFetcher:
         """年度別にEDINET有価証券報告書のdocIDを返す。Returns: { "YYYYMMDD": docID }"""
         if not self.edinet_client or not self.edinet_client.api_key:
             return {}
+        client = self.edinet_client
         docs = await self._get_annual_docs(code, financial_data, max_years)
         result: dict[str, str] = {}
         for doc in docs:
@@ -450,6 +455,7 @@ class EdinetFetcher:
 
         if not self.edinet_client or not self.edinet_client.api_key:
             return {}
+        client = self.edinet_client
 
         # 2Qレコードのみ抽出（未来の開示日を除外して最新max_years件）
         from datetime import datetime as _dt
@@ -479,7 +485,7 @@ class EdinetFetcher:
         if not q2_records:
             return {}
 
-        docs = await self.edinet_client.search_documents(
+        docs = await client.search_documents(
             code=code,
             jquants_data=q2_records,
             max_documents=max_years,
@@ -492,7 +498,7 @@ class EdinetFetcher:
                 return "", None
             try:
                 xbrl_dir = await asyncio.wait_for(
-                    self.edinet_client.download_document(doc["docID"], 1),
+                    client.download_document(doc["docID"], 1),
                     timeout=30.0,
                 )
                 if not xbrl_dir:
@@ -502,7 +508,7 @@ class EdinetFetcher:
                 from mebuki.analysis.xbrl_utils import collect_all_numeric_elements
                 xbrl_path = Path(xbrl_dir)
                 pre_parsed = collect_all_numeric_elements(xbrl_path)
-                gp = extract_gross_profit(xbrl_path, pre_parsed=pre_parsed)
+                gp = dict(extract_gross_profit(xbrl_path, pre_parsed=pre_parsed))
                 cf = extract_cash_flow(xbrl_path, pre_parsed=pre_parsed)
                 ibd = extract_interest_bearing_debt(xbrl_path, pre_parsed=pre_parsed)
                 gp["docID"] = doc["docID"]

@@ -32,7 +32,7 @@ class EdinetAPIClient:
         self._download_locks: dict[str, asyncio.Lock] = {}
         self._date_fetch_semaphore = asyncio.Semaphore(10)
 
-    def update_api_key(self, api_key: str) -> None:
+    def update_api_key(self, api_key: str | None) -> None:
         """APIキーを更新します。"""
         self.api_key = api_key.strip() if api_key else ""
         self._session = None
@@ -58,7 +58,12 @@ class EdinetAPIClient:
         self._session = None
         self._session_loop = None
 
-    async def _request(self, endpoint: str, params: dict[str, Any] = None, max_retries: int = 3) -> dict[str, Any]:
+    async def _request(
+        self,
+        endpoint: str,
+        params: dict[str, Any] | None = None,
+        max_retries: int = 3,
+    ) -> dict[str, Any]:
         """リトライ機能付きAPIリクエスト実行（JSON応答）"""
         if not self.api_key:
             raise ValueError("EDINET_API_KEY is not set")
@@ -67,7 +72,7 @@ class EdinetAPIClient:
         params = dict(params or {})
         params["Subscription-Key"] = self.api_key
 
-        last_exception = None
+        last_exception: BaseException | None = None
         session = await self._get_session()
         timeout = aiohttp.ClientTimeout(total=30)
 
@@ -116,9 +121,16 @@ class EdinetAPIClient:
                     raise
 
         logger.error(f"❌ [EDINET API] All {max_retries} attempts failed. Last error: {last_exception}")
-        raise last_exception
+        if last_exception is not None:
+            raise last_exception
+        raise aiohttp.ClientError("EDINET APIリトライ回数上限に達しました。")
 
-    async def _request_binary(self, endpoint: str, params: dict[str, Any] = None, max_retries: int = 3) -> bytes:
+    async def _request_binary(
+        self,
+        endpoint: str,
+        params: dict[str, Any] | None = None,
+        max_retries: int = 3,
+    ) -> bytes:
         """リトライ機能付きAPIリクエスト実行（バイナリ応答）"""
         if not self.api_key:
             raise ValueError("EDINET_API_KEY is not set")
@@ -127,7 +139,7 @@ class EdinetAPIClient:
         params = dict(params or {})
         params["Subscription-Key"] = self.api_key
 
-        last_exception = None
+        last_exception: BaseException | None = None
         session = await self._get_session()
         timeout = aiohttp.ClientTimeout(total=120)
 
@@ -149,7 +161,9 @@ class EdinetAPIClient:
                     continue
                 raise
 
-        raise last_exception
+        if last_exception is not None:
+            raise last_exception
+        raise aiohttp.ClientError("EDINET APIバイナリ取得のリトライ回数上限に達しました。")
 
     def _get_search_cache_key(self, date_str: str) -> str:
         """検索用キャッシュキー生成（日付ベース）"""
@@ -239,7 +253,7 @@ class EdinetAPIClient:
                     )
                     results_map: dict[str, list[dict[str, Any]]] = {}
                     for date_str, result in zip(batch, batch_results):
-                        if isinstance(result, Exception):
+                        if isinstance(result, BaseException):
                             logger.error(f"Error fetching docs for {date_str}: {result}")
                             results_map[date_str] = []
                         else:
@@ -303,9 +317,9 @@ class EdinetAPIClient:
             return_exceptions=True,
         )
 
-        all_documents = []
+        all_documents: list[dict[str, Any]] = []
         for result in record_results:
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 logger.warning(f"[EDINET] Record search error: {result}")
             elif result is not None:
                 all_documents.append(result)

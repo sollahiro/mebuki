@@ -253,9 +253,9 @@ class PortfolioService:
                     "tickers": [],
                     "total_cost": 0.0,
                 }
-            sectors[sector_name]["ticker_count"] += 1
+            sectors[sector_name]["ticker_count"] = int(sectors[sector_name]["ticker_count"]) + 1
             sectors[sector_name]["tickers"].append(code)
-            sectors[sector_name]["total_cost"] += cost
+            sectors[sector_name]["total_cost"] = float(sectors[sector_name]["total_cost"]) + cost
 
         result: list[SectorAllocation] = []
         for s in sorted(sectors.values(), key=lambda x: x["total_cost"], reverse=True):
@@ -264,7 +264,7 @@ class PortfolioService:
                 "sector_name": s["sector_name"],
                 "ticker_count": s["ticker_count"],
                 "tickers": s["tickers"],
-                "total_cost": round(s["total_cost"]),
+                "total_cost": float(round(s["total_cost"])),
                 "ratio": ratio,
             })
 

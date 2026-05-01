@@ -13,6 +13,7 @@ from mebuki.api.jquants_client import JQuantsAPIClient
 from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.infrastructure.settings import settings_store
 from mebuki.utils.cache import CacheManager
+from mebuki.utils.master_types import StockSearchResult
 
 _CACHE_VERSION = ".".join(__version__.split(".")[:2])
 
@@ -98,7 +99,7 @@ class DataService:
             edinet_client=self.edinet_client,
         )
 
-    async def search_companies(self, query: str) -> list[dict[str, Any]]:
+    async def search_companies(self, query: str) -> list[StockSearchResult]:
         """銘柄コードまたは名称で企業を検索します。"""
         return await self.company_info_service.search_companies(query)
 

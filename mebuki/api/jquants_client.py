@@ -38,7 +38,7 @@ class JQuantsAPIClient:
         self._session: aiohttp.ClientSession | None = None
         self._session_loop: asyncio.AbstractEventLoop | None = None
 
-    def update_api_key(self, api_key: str) -> None:
+    def update_api_key(self, api_key: str | None) -> None:
         """APIキーを更新し、セッションを次回リクエスト時に再作成します。"""
         self.api_key = api_key.strip() if api_key else ""
         # セッションを破棄して次回アクセス時に新しいキーで再作成させる
@@ -262,4 +262,3 @@ class JQuantsAPIClient:
                 - Section: 市場区分
         """
         return await self._get_all_pages("/equities/earnings-calendar")
-
