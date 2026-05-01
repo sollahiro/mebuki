@@ -12,21 +12,74 @@ from mebuki.constants.financial import MILLION_YEN
 
 logger = logging.getLogger(__name__)
 
+_DedupKey = str | tuple[str, str]
 
-def _merge_record(seen: dict, key, record: dict) -> None:
+
+def _is_mergeable_value(value: object) -> bool:
+    return is_valid_value(value) or (isinstance(value, str) and value != "")
+
+
+def _merge_record(
+    seen: dict[_DedupKey, dict[str, Any]],
+    field_dates: dict[_DedupKey, dict[str, str]],
+    key: _DedupKey,
+    record: dict[str, Any],
+) -> None:
     """重複排除辞書にレコードをマージする。
 
-    初出キーはそのまま登録し、既出キーは有効な値で既存レコードを上書きする。
-    DiscDate は常に最新値に更新する。
+    有効な値は、そのフィールドに対して最も新しい DiscDate の値を採用する。
+    欠損・空・0 は有効値を上書きしない。DiscDate は常に最新値に更新する。
     """
+    disc_date = str(record.get("DiscDate", ""))
     if key not in seen:
         seen[key] = record.copy()
-    else:
-        existing = seen[key]
-        for k, v in record.items():
-            if is_valid_value(v) or (isinstance(v, str) and v != ""):
-                existing[k] = v
+        field_dates[key] = {
+            field: disc_date
+            for field, value in record.items()
+            if _is_mergeable_value(value)
+        }
+        return
+
+    existing = seen[key]
+    dates = field_dates[key]
+
+    if disc_date >= str(existing.get("DiscDate", "")):
         existing["DiscDate"] = record.get("DiscDate", existing.get("DiscDate"))
+
+    for field, value in record.items():
+        if field == "DiscDate" or not _is_mergeable_value(value):
+            continue
+        if field not in dates or disc_date >= dates[field]:
+            existing[field] = value
+            dates[field] = disc_date
+
+
+def _period_sort_key(record: dict[str, Any]) -> tuple[str, int]:
+    return (record.get("CurFYEn", ""), 0 if record.get("CurPerType") == "FY" else 1)
+
+
+def _latest_by_fy_end(
+    records: dict[str, dict[str, Any]],
+    limit: int,
+) -> list[str]:
+    return sorted(records.keys(), reverse=True)[:limit]
+
+
+def _latest_q2_only_ends(
+    q2_by_end: dict[str, dict[str, Any]],
+    newest_fy: str,
+) -> list[str]:
+    return [fy_end for fy_end in q2_by_end if fy_end > newest_fy]
+
+
+def _upsert_latest_record(
+    records_by_end: dict[str, dict[str, Any]],
+    fy_end: str,
+    record: dict[str, Any],
+) -> None:
+    existing = records_by_end.get(fy_end)
+    if not existing or record.get("DiscDate", "") >= existing.get("DiscDate", ""):
+        records_by_end[fy_end] = record
 
 
 def extract_annual_data(
@@ -76,25 +129,15 @@ def extract_annual_data(
 
         return True
 
-    annual_data = []
+    seen_years: dict[_DedupKey, dict[str, Any]] = {}
+    field_dates: dict[_DedupKey, dict[str, str]] = {}
     for record in quarterly_data:
         period_type = record.get("CurPerType")
         if period_type != "FY" and not (include_2q and period_type == "2Q"):
             continue
         if not _should_include(record):
             continue
-        annual_data.append(record)
-    
-    # 年度終了日（CurFYEn）でソート（古い順）
-    # 古い順にマージしていくことで、より新しい開示日にある有効な値で上書きしていきます
-    annual_data.sort(
-        key=lambda x: (x.get("CurFYEn", ""), x.get("DiscDate", "")),
-        reverse=False
-    )
-    
-    # include_2q=True の場合は (CurFYEn, CurPerType) をキーにして FY と 2Q を別エントリとして保持する
-    seen_years = {}
-    for record in annual_data:
+
         fy_end = record.get("CurFYEn")
         if not fy_end:
             continue
@@ -102,15 +145,12 @@ def extract_annual_data(
         per_type = record.get("CurPerType", "FY")
         dedup_key = (fy_end, per_type) if include_2q else fy_end
 
-        _merge_record(seen_years, dedup_key, record)
+        _merge_record(seen_years, field_dates, dedup_key, record)
 
     # マージ後のデータを新しい順（降順）に並べ替えて返す
     # 同一 CurFYEn では FY を 2Q より後（新しい側）に並べる
     unique_annual_data = list(seen_years.values())
-    unique_annual_data.sort(
-        key=lambda x: (x.get("CurFYEn", ""), 0 if x.get("CurPerType") == "FY" else 1),
-        reverse=True
-    )
+    unique_annual_data.sort(key=_period_sort_key, reverse=True)
 
     return unique_annual_data
 
@@ -177,24 +217,20 @@ def build_half_year_periods(
             pass
 
         if per_type == "FY":
-            existing = fy_by_end.get(fy_end)
-            if not existing or record.get("DiscDate", "") >= existing.get("DiscDate", ""):
-                fy_by_end[fy_end] = record
+            _upsert_latest_record(fy_by_end, fy_end, record)
         elif per_type == "2Q":
-            existing = q2_by_end.get(fy_end)
-            if not existing or record.get("DiscDate", "") >= existing.get("DiscDate", ""):
-                q2_by_end[fy_end] = record
+            _upsert_latest_record(q2_by_end, fy_end, record)
 
     # FY レコードが存在する期間を最新 years 件取得
-    fy_ends_with_fy = sorted(fy_by_end.keys(), reverse=True)[:years]
+    fy_ends_with_fy = _latest_by_fy_end(fy_by_end, years)
 
     # FY 未開示だが 2Q が存在する最新期間を追加（例: 当期 FY 開示前の H1）
     newest_fy = fy_ends_with_fy[0] if fy_ends_with_fy else ""
-    extra_q2_only = [e for e in q2_by_end if e > newest_fy]
+    extra_q2_only = _latest_q2_only_ends(q2_by_end, newest_fy)
 
     fy_ends_selected = sorted(set(fy_ends_with_fy) | set(extra_q2_only), reverse=True)
 
-    def _m(value: Any) -> float | None:
+    def _m(value: str | float | int | None) -> float | None:
         v = to_float(value)
         return v / MILLION_YEN if v is not None else None
 
@@ -434,4 +470,3 @@ def get_quarter_end_price(
     except Exception as e:
         # エラーが発生した場合はNoneを返す
         return None
-

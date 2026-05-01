@@ -51,7 +51,7 @@
 
 - API 呼び出しが逐次実行。analyze 時に J-QUANTS + EDINET を `asyncio.gather` で並列化できれば体感速度は改善できる
 - ~~XBRL のパース結果がキャッシュされていない。同一 filing を複数の分析モジュールが処理する場合、XML の parse が重複する~~ → セッションキャッシュ済（2026-05-01）
-- `financial_data.py` の annual/半期データ構築ループで dedup 処理の計算量が高い可能性
+- ~~`financial_data.py` の annual/半期データ構築ループで dedup 処理の計算量が高い可能性~~ → `extract_annual_data` の全件事前ソートを廃止し、フィールド別採用日を持つ1パスマージへ変更済（2026-05-01）
 
 ---
 
@@ -115,7 +115,8 @@
 
 XBRL の context ヘルパーが `analysis/context_helpers.py` に Duration・Instant 両系統で集約され、parse/collect/find の共通処理が `analysis/xbrl_utils.py` に分離されており重複は少ない。  
 `edinet_fetcher.py` の7つのボイラープレートメソッドも `ExtractorSpec` レジストリ＋汎用 `_extract_metric_by_year` に統合済（2026-05-01）。  
-残る減点は `services/edinet_fetcher.py` と `api/edinet_client.py` の責任境界が若干曖昧な点のみ。
+`services/edinet_fetcher.py` と `api/edinet_client.py` の責任境界は整理済（2026-05-01）。  
+J-QUANTS年度データを使った直近報告書選定は `EdinetFetcher` に移し、`EdinetAPIClient` はレコード単位検索・日次書類取得・XBRLダウンロードに集中。
 
 ---
 

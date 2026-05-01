@@ -74,10 +74,65 @@ class EdinetFetcher:
             self._doc_locks[key] = asyncio.Lock()
         async with self._doc_locks[key]:
             if key not in self._doc_cache:
-                self._doc_cache[key] = await self.edinet_client.search_recent_reports(
-                    code, financial_data, max_years, ["120"], max_years,
+                self._doc_cache[key] = await self.search_recent_reports(
+                    code=code,
+                    jquants_data=financial_data,
+                    max_years=max_years,
+                    doc_types=["120"],
+                    max_documents=max_years,
                 )
             return self._doc_cache[key]
+
+    async def search_recent_reports(
+        self,
+        code: str,
+        jquants_data: list[dict[str, Any]],
+        max_years: int = 5,
+        doc_types: list[str] | None = None,
+        max_documents: int = 10,
+    ) -> list[dict[str, Any]]:
+        """J-QUANTS年度データをもとに、直近N年分のEDINET書類を検索する。
+
+        EDINET API client はレコード単位の検索だけを担当し、J-QUANTS側の
+        年度抽出・対象期間選定はサービス層で行う。
+        """
+        if not self.edinet_client or not self.edinet_client.api_key or not jquants_data:
+            return []
+
+        annual_data_idx, years_list = prepare_edinet_search_data(
+            jquants_data,
+            max_records=max_years * 3,
+        )
+        target_years = years_list[:max_years]
+        recent_data = [
+            record for record in annual_data_idx
+            if record.get("fiscal_year") in target_years
+        ]
+
+        return await self.edinet_client.search_documents(
+            code=code,
+            years=target_years,
+            jquants_data=recent_data,
+            doc_type_code=doc_types[0] if doc_types and len(doc_types) == 1 else None,
+            max_documents=max_documents,
+        )
+
+    async def fetch_latest_annual_report(
+        self,
+        code: str,
+        jquants_data: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        """最新の有価証券報告書(120)を1件取得する。"""
+        docs = await self.search_recent_reports(
+            code,
+            jquants_data,
+            max_years=10,
+            doc_types=["120"],
+        )
+        annual_reports = [doc for doc in docs if doc.get("docTypeCode") == "120"]
+        if annual_reports:
+            return sorted(annual_reports, key=lambda x: x.get("submitDateTime", ""), reverse=True)[0]
+        return None
 
     async def predownload_and_parse(
         self,

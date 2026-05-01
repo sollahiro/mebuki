@@ -360,7 +360,9 @@ class DataService:
     ) -> list[dict[str, Any]]:
         """EDINET書類を検索"""
         fin_data = await self.api_client.get_financial_summary(code=code)
-        return await self.edinet_client.search_recent_reports(
+        from mebuki.services.edinet_fetcher import EdinetFetcher
+        edinet_fetcher = EdinetFetcher(self.api_client, self.edinet_client)
+        return await edinet_fetcher.search_recent_reports(
             code=code,
             jquants_data=fin_data,
             max_years=max_years,
