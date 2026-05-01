@@ -3,10 +3,19 @@
 """
 import logging
 from datetime import datetime
-from typing import Any
 
 from mebuki.infrastructure.helpers import validate_stock_code
 from mebuki.infrastructure.portfolio_store import portfolio_store
+from mebuki.utils.portfolio_types import (
+    AddHoldingResult,
+    ConsolidatedHolding,
+    PortfolioItem,
+    PortfolioLot,
+    SectorAllocation,
+    SellHoldingResult,
+    StatusResult,
+    WatchMutationResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +48,7 @@ class PortfolioService:
     # ウォッチリスト操作
     # ──────────────────────────────
 
-    def add_watch(self, code: str, name: str = "") -> dict[str, Any]:
+    def add_watch(self, code: str, name: str = "") -> WatchMutationResult:
         """銘柄をウォッチリストに追加する"""
         code = validate_stock_code(code)
         existing = portfolio_store.find(code, "", "")
@@ -47,7 +56,7 @@ class PortfolioService:
             return {"status": "already_exists", "item": existing}
 
         name = _resolve_name(code, name)
-        item = {
+        item: PortfolioItem = {
             "ticker_code": code,
             "name": name,
             "status": "watch",
@@ -60,14 +69,14 @@ class PortfolioService:
         portfolio_store.save()
         return {"status": "added", "item": item}
 
-    def remove_watch(self, code: str) -> dict[str, Any]:
+    def remove_watch(self, code: str) -> StatusResult:
         """ウォッチリストから銘柄を削除する"""
         code = validate_stock_code(code)
         removed = portfolio_store.remove(code, "", "")
         portfolio_store.save()
         return {"status": "removed" if removed else "not_found"}
 
-    def get_watchlist(self) -> list[dict[str, Any]]:
+    def get_watchlist(self) -> list[PortfolioItem]:
         """ウォッチリスト（status="watch"）を返す"""
         return portfolio_store.find_all_by_status("watch")
 
@@ -84,7 +93,7 @@ class PortfolioService:
         account_type: str = "特定",
         bought_at: str = "",
         name: str = "",
-    ) -> dict[str, Any]:
+    ) -> AddHoldingResult:
         """保有銘柄（ロット）を追加する。同一ポジション既存なら lots に追記。"""
         code = validate_stock_code(code)
         _validate_account_type(account_type)
@@ -98,7 +107,7 @@ class PortfolioService:
         if not bought_at:
             bought_at = datetime.now().date().isoformat()
 
-        lot = {
+        lot: PortfolioLot = {
             "quantity": quantity,
             "cost_price": float(cost_price),
             "bought_at": bought_at,
@@ -109,7 +118,7 @@ class PortfolioService:
             existing["lots"].append(lot)
             portfolio_store.upsert(existing)
         else:
-            item = {
+            item: PortfolioItem = {
                 "ticker_code": code,
                 "name": name,
                 "status": "holding",
@@ -134,7 +143,7 @@ class PortfolioService:
         quantity: int,
         broker: str = "",
         account_type: str = "特定",
-    ) -> dict[str, Any]:
+    ) -> SellHoldingResult:
         """総平均法で売却処理を行う"""
         code = validate_stock_code(code)
         _validate_account_type(account_type)
@@ -178,7 +187,7 @@ class PortfolioService:
                 watch_entry = portfolio_store.find(code, "", "")
                 if not watch_entry:
                     name = position.get("name", "")
-                    watch_item = {
+                    watch_item: PortfolioItem = {
                         "ticker_code": code,
                         "name": name,
                         "status": "watch",
@@ -199,7 +208,7 @@ class PortfolioService:
         code: str,
         broker: str = "",
         account_type: str = "特定",
-    ) -> dict[str, Any]:
+    ) -> StatusResult:
         """保有エントリを強制削除する（売却処理なし）"""
         code = validate_stock_code(code)
         _validate_account_type(account_type)
@@ -207,7 +216,7 @@ class PortfolioService:
         portfolio_store.save()
         return {"status": "removed" if removed else "not_found"}
 
-    def get_holdings(self) -> list[dict[str, Any]]:
+    def get_holdings(self) -> list[PortfolioItem]:
         """全保有エントリを返す"""
         return portfolio_store.find_all_by_status("holding")
 
@@ -215,7 +224,7 @@ class PortfolioService:
     # 名寄せビュー
     # ──────────────────────────────
 
-    def get_sector_allocation(self) -> list[dict[str, Any]]:
+    def get_sector_allocation(self) -> list[SectorAllocation]:
         """保有銘柄をセクター別に集計して返す"""
         from mebuki.services.data_service import data_service
 
@@ -223,7 +232,7 @@ class PortfolioService:
         if not consolidated:
             return []
 
-        sectors: dict[str, dict[str, Any]] = {}
+        sectors: dict[str, SectorAllocation] = {}
         total_cost = 0.0
 
         for item in consolidated:
@@ -248,7 +257,7 @@ class PortfolioService:
             sectors[sector_name]["tickers"].append(code)
             sectors[sector_name]["total_cost"] += cost
 
-        result = []
+        result: list[SectorAllocation] = []
         for s in sorted(sectors.values(), key=lambda x: x["total_cost"], reverse=True):
             ratio = round(s["total_cost"] / total_cost * 100, 1) if total_cost > 0 else 0.0
             result.append({
@@ -261,17 +270,17 @@ class PortfolioService:
 
         return result
 
-    def get_consolidated(self) -> list[dict[str, Any]]:
+    def get_consolidated(self) -> list[ConsolidatedHolding]:
         """ticker 単位で保有を集計した名寄せビューを返す"""
         holdings = self.get_holdings()
 
         # ticker_code でグループ化
-        groups: dict[str, list[dict[str, Any]]] = {}
+        groups: dict[str, list[PortfolioItem]] = {}
         for item in holdings:
             tc = item["ticker_code"]
             groups.setdefault(tc, []).append(item)
 
-        result = []
+        result: list[ConsolidatedHolding] = []
         for tc, items in groups.items():
             total_quantity = 0
             total_cost = 0.0

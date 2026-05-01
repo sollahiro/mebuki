@@ -9,7 +9,6 @@
 """
 
 from pathlib import Path
-from typing import Any
 
 try:
     from bs4 import BeautifulSoup
@@ -26,6 +25,7 @@ from mebuki.analysis.context_helpers import (
 from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files, parse_html_number
 from mebuki.constants.financial import MILLION_YEN
 from mebuki.constants.xbrl import OPERATING_PROFIT_DIRECT_TAGS, ORDINARY_INCOME_TAGS
+from mebuki.utils.xbrl_result_types import OperatingProfitResult
 
 _OP_RELEVANT_TAGS: frozenset[str] = frozenset(
     OPERATING_PROFIT_DIRECT_TAGS
@@ -42,7 +42,7 @@ _OP_RELEVANT_TAGS: frozenset[str] = frozenset(
 
 
 def _find_duration_value(
-    tag_elements: dict, tag: str, consolidated: bool
+    tag_elements: dict[str, dict[str, float]], tag: str, consolidated: bool
 ) -> tuple[float | None, float | None]:
     if tag not in tag_elements:
         return None, None
@@ -58,7 +58,7 @@ def _find_duration_value(
 
 
 def _try_tags(
-    tag_elements: dict, tags: list[str], consolidated: bool
+    tag_elements: dict[str, dict[str, float]], tags: list[str], consolidated: bool
 ) -> tuple[str | None, float | None, float | None]:
     """指定した連結/個別モードでタグリストを試す。"""
     for tag in tags:
@@ -68,7 +68,7 @@ def _try_tags(
     return None, None, None
 
 
-def _detect_accounting_standard(tag_elements: dict) -> str:
+def _detect_accounting_standard(tag_elements: dict[str, dict[str, float]]) -> str:
     usgaap_tags = {
         "TotalAssetsUSGAAPSummaryOfBusinessResults",
         "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
@@ -88,7 +88,7 @@ def _detect_accounting_standard(tag_elements: dict) -> str:
     return "J-GAAP"
 
 
-def _extract_usgaap_op_from_html(xbrl_dir: Path) -> dict | None:
+def _extract_usgaap_op_from_html(xbrl_dir: Path) -> OperatingProfitResult | None:
     if not _BS4_AVAILABLE:
         return None
 
@@ -186,7 +186,11 @@ def _extract_usgaap_op_from_html(xbrl_dir: Path) -> dict | None:
     return None
 
 
-def extract_operating_profit(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> dict[str, Any]:
+def extract_operating_profit(
+    xbrl_dir: Path,
+    *,
+    pre_parsed: dict[str, dict[str, float]] | None = None,
+) -> OperatingProfitResult:
     """
     XBRLディレクトリから連結損益計算書の営業利益（または経常利益）を抽出する。
 
@@ -203,7 +207,9 @@ def extract_operating_profit(xbrl_dir: Path, *, pre_parsed: dict | None = None) 
         }
     """
     if pre_parsed is not None:
-        tag_elements: dict = {tag: ctx for tag, ctx in pre_parsed.items() if tag in _OP_RELEVANT_TAGS}
+        tag_elements: dict[str, dict[str, float]] = {
+            tag: ctx for tag, ctx in pre_parsed.items() if tag in _OP_RELEVANT_TAGS
+        }
     else:
         tag_elements = {}
         for f in find_xbrl_files(xbrl_dir):

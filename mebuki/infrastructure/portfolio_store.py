@@ -6,11 +6,12 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Any
+from typing import cast
 from collections.abc import Iterator
 from datetime import datetime
 
 from mebuki.infrastructure.settings import settings_store
+from mebuki.utils.portfolio_types import PortfolioItem
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ class PortfolioStore:
 
     def __init__(self):
         self.portfolio_path: Path = settings_store.user_data_path / "portfolio.json"
-        self._items: list[dict[str, Any]] = []
+        self._items: list[PortfolioItem] = []
         self._load_from_file()
         logger.info(f"Initialized PortfolioStore with path: {self.portfolio_path}")
 
@@ -62,7 +63,7 @@ class PortfolioStore:
             with self._file_lock():
                 with open(self.portfolio_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-            self._items = data.get("items", [])
+            self._items = cast(list[PortfolioItem], data.get("items", []))
             logger.info(f"Loaded {len(self._items)} portfolio items from {self.portfolio_path}")
         except Exception as e:
             try:
@@ -74,7 +75,7 @@ class PortfolioStore:
                 pass
             logger.error(f"Failed to load portfolio from {self.portfolio_path}: {e}")
 
-    def find(self, ticker_code: str, broker: str, account_type: str) -> dict[str, Any] | None:
+    def find(self, ticker_code: str, broker: str, account_type: str) -> PortfolioItem | None:
         """一意キーでアイテムを検索する"""
         for item in self._items:
             if (item["ticker_code"] == ticker_code
@@ -83,15 +84,15 @@ class PortfolioStore:
                 return item
         return None
 
-    def find_all_by_ticker(self, ticker_code: str) -> list[dict[str, Any]]:
+    def find_all_by_ticker(self, ticker_code: str) -> list[PortfolioItem]:
         """ticker_code に一致する全アイテムを返す"""
         return [item for item in self._items if item["ticker_code"] == ticker_code]
 
-    def find_all_by_status(self, status: str) -> list[dict[str, Any]]:
+    def find_all_by_status(self, status: str) -> list[PortfolioItem]:
         """status に一致する全アイテムを返す"""
         return [item for item in self._items if item.get("status") == status]
 
-    def upsert(self, item: dict[str, Any]) -> None:
+    def upsert(self, item: PortfolioItem) -> None:
         """アイテムを追加または更新する（一意キーで照合）"""
         ticker_code = item["ticker_code"]
         broker = item["broker"]

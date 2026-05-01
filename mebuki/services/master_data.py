@@ -6,9 +6,9 @@ import csv
 import logging
 import os
 import unicodedata
-from typing import Any
 from pathlib import Path
 from mebuki.infrastructure.settings import settings_store
+from mebuki.utils.master_types import MasterStock, SectorSummary, StockSearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +17,8 @@ class MasterDataManager:
     
     def __init__(self):
         self._is_loaded = False
-        self._code_index: dict = {}
+        self._master_data: list[MasterStock] = []
+        self._code_index: dict[str, MasterStock] = {}
         
     def _normalize_name(self, name: str) -> str:
         """
@@ -88,7 +89,7 @@ class MasterDataManager:
             # 4. 検索用データの事前処理
             # 許可する市場区分（個別株のみ）
             allowed_markets = ["プライム", "スタンダード", "グロース"]
-            processed_data = []
+            processed_data: list[MasterStock] = []
             
             for row in raw_data:
                 market = row.get("市場・商品区分", "")
@@ -133,7 +134,7 @@ class MasterDataManager:
             logger.error(f"銘柄マスタの読み込みに失敗しました: {e}", exc_info=True)
             return False
 
-    def search(self, query: str, limit: int = 20) -> list[dict[str, Any]]:
+    def search(self, query: str, limit: int = 20) -> list[StockSearchResult]:
         """
         コードまたは名称で銘柄を検索
         """
@@ -143,7 +144,7 @@ class MasterDataManager:
             return []
             
         query_normalized = self._normalize_name(query)
-        results = []
+        results: list[StockSearchResult] = []
         
         for item in self._master_data:
             code = item.get("Code", "")
@@ -171,18 +172,18 @@ class MasterDataManager:
                     
         return results
 
-    def get_by_code(self, code: str) -> dict[str, Any] | None:
+    def get_by_code(self, code: str) -> MasterStock | None:
         """コード指定で銘柄情報を取得"""
         self.load_if_needed()
         if not code:
             return None
         return self._code_index.get(str(code).strip())
 
-    def list_sectors(self) -> list[dict[str, Any]]:
+    def list_sectors(self) -> list[SectorSummary]:
         """33業種の一覧を銘柄数付きで返す"""
         self.load_if_needed()
-        counts: dict = {}
-        names: dict = {}
+        counts: dict[str, int] = {}
+        names: dict[str, str] = {}
         for item in self._master_data:
             code = item.get("S33", "")
             name = item.get("S33Nm", "")
@@ -194,11 +195,11 @@ class MasterDataManager:
             for c in sorted(counts)
         ]
 
-    def search_by_sector(self, sector_query: str, limit: int = 200) -> list[dict[str, Any]]:
+    def search_by_sector(self, sector_query: str, limit: int = 200) -> list[StockSearchResult]:
         """業種名（部分一致）で銘柄一覧を返す"""
         self.load_if_needed()
         query_normalized = self._normalize_name(sector_query)
-        results = []
+        results: list[StockSearchResult] = []
         for item in self._master_data:
             sector_name = item.get("S33Nm", "")
             if query_normalized in self._normalize_name(sector_name):
