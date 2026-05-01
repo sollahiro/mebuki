@@ -19,6 +19,10 @@ logger = logging.getLogger(__name__)
 _CACHE_VERSION = ".".join(__version__.split(".")[:2])
 
 
+def _fy_end_key(value: object) -> str:
+    return value.replace("-", "") if isinstance(value, str) else ""
+
+
 class HalfYearDataService:
     """H1/H2 の半期財務データ構築と EDINET 補完を担当するサービス"""
 
@@ -70,7 +74,7 @@ class HalfYearDataService:
         fy_by_end: dict[str, dict] = {}
         for r in financial_data:
             if r.get("CurPerType") == "FY":
-                fy_end_8 = r.get("CurFYEn", "").replace("-", "")
+                fy_end_8 = _fy_end_key(r.get("CurFYEn"))
                 if fy_end_8:
                     fy_by_end[fy_end_8] = r
 
@@ -78,7 +82,7 @@ class HalfYearDataService:
         q2_by_end: dict[str, dict] = {}
         for r in financial_data:
             if r.get("CurPerType") == "2Q":
-                fy_end_8 = r.get("CurFYEn", "").replace("-", "")
+                fy_end_8 = _fy_end_key(r.get("CurFYEn"))
                 if fy_end_8:
                     q2_by_end[fy_end_8] = r
 
@@ -86,7 +90,7 @@ class HalfYearDataService:
         h1_edinet_by_fy: dict[str, dict] = {}
 
         for period in base_periods:
-            fy_end_8 = period["fy_end"].replace("-", "")
+            fy_end_8 = _fy_end_key(period.get("fy_end"))
             half = period["half"]
             data = period["data"]
 

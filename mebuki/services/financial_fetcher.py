@@ -11,6 +11,7 @@ from typing import Any
 from mebuki.api.jquants_client import JQuantsAPIClient
 from mebuki.utils.financial_data import extract_annual_data
 from mebuki.analysis.calculator import calculate_metrics_flexible
+from mebuki.utils.metrics_types import MetricsResult
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,7 @@ class FinancialFetcher:
         code: str,
         annual_data: list[dict[str, Any]],
         analysis_years: int,
-    ) -> dict[str, Any] | None:
+    ) -> MetricsResult | None:
         """指標を計算"""
         try:
             return calculate_metrics_flexible(annual_data, analysis_years)

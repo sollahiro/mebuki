@@ -9,7 +9,7 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeAlias
 from collections.abc import Callable, AsyncGenerator
 
 from mebuki.api.jquants_client import JQuantsAPIClient
@@ -24,6 +24,14 @@ from mebuki.analysis.tax_expense import extract_tax_expense
 from mebuki.utils.jquants_utils import prepare_edinet_search_data
 
 logger = logging.getLogger(__name__)
+
+_PreParsedMap: TypeAlias = dict[str, tuple[Path, dict[str, dict[str, float]]]]
+_MetricByYear: TypeAlias = dict[str, dict[str, Any]]
+_AllMetrics: TypeAlias = dict[str, dict[str, Any]]
+
+
+def _fy_end_key(value: object) -> str:
+    return value.replace("-", "") if isinstance(value, str) else ""
 
 
 @dataclass(frozen=True)
@@ -141,7 +149,7 @@ class EdinetFetcher:
         code: str,
         financial_data: list[dict[str, Any]],
         max_years: int,
-    ) -> dict[str, tuple[Path, dict]]:
+    ) -> _PreParsedMap:
         """全年度のXBRL文書を一括ダウンロード・パースする。
 
         Returns: { "YYYYMMDD": (xbrl_dir_path, pre_parsed_dict) }
@@ -153,8 +161,8 @@ class EdinetFetcher:
 
         docs = await self._get_annual_docs(code, financial_data, max_years)
 
-        async def _dl_parse(doc: dict) -> tuple[str, tuple[Path, dict] | None]:
-            fy_end_8 = doc.get("jquants_fy_end", "").replace("-", "")
+        async def _dl_parse(doc: dict[str, Any]) -> tuple[str, tuple[Path, dict[str, dict[str, float]]] | None]:
+            fy_end_8 = _fy_end_key(doc.get("jquants_fy_end"))
             if not fy_end_8:
                 return "", None
             try:
@@ -176,9 +184,9 @@ class EdinetFetcher:
 
         _t0 = time.perf_counter()
         raw = await asyncio.gather(*[_dl_parse(doc) for doc in docs], return_exceptions=True)
-        out: dict[str, tuple[Path, dict]] = {}
+        out: _PreParsedMap = {}
         for res in raw:
-            if isinstance(res, Exception):
+            if isinstance(res, BaseException):
                 continue
             k, v = res
             if k and v is not None:
@@ -188,15 +196,15 @@ class EdinetFetcher:
 
     async def _run_extraction(
         self,
-        doc: dict,
+        doc: dict[str, Any],
         code: str,
         prefix: str,
         extract_fn: Callable,
         *,
         result_check: Callable[[dict], bool] | None = None,
-        pre_parsed_map: dict[str, tuple[Path, dict]] | None = None,
-    ) -> tuple[str, dict | None]:
-        fy_end_8 = doc.get("jquants_fy_end", "").replace("-", "")
+        pre_parsed_map: _PreParsedMap | None = None,
+    ) -> tuple[str, dict[str, Any] | None]:
+        fy_end_8 = _fy_end_key(doc.get("jquants_fy_end"))
         if not fy_end_8:
             return "", None
         try:
@@ -224,10 +232,15 @@ class EdinetFetcher:
             logger.warning(f"[{prefix}] {code} {fy_end_8}: 抽出エラー - {e}")
             return fy_end_8, None
 
-    def _collect_results(self, results: list, code: str, prefix: str) -> dict:
-        out: dict = {}
+    def _collect_results(
+        self,
+        results: list[tuple[str, dict[str, Any] | None] | BaseException],
+        code: str,
+        prefix: str,
+    ) -> _MetricByYear:
+        out: _MetricByYear = {}
         for res in results:
-            if isinstance(res, Exception):
+            if isinstance(res, BaseException):
                 logger.warning(f"[{prefix}] {code} gather エラー: {res}")
                 continue
             k, v = res
@@ -322,7 +335,7 @@ class EdinetFetcher:
         """指定年度の有価証券報告書を取得"""
         results = {}
         async for data in self.fetch_edinet_reports_stream(
-            code, jquants_annual_data, max_documents
+            code, jquants_annual_data or [], max_documents
         ):
             fy_key = data["fy_key"]
             report = data["report"]
@@ -353,7 +366,7 @@ class EdinetFetcher:
         docs = await self._get_annual_docs(code, financial_data, max_years)
         result: dict[str, str] = {}
         for doc in docs:
-            fy_end = doc.get("jquants_fy_end", "").replace("-", "")
+            fy_end = _fy_end_key(doc.get("jquants_fy_end"))
             if fy_end:
                 result[fy_end] = doc["docID"]
         return result
@@ -365,8 +378,8 @@ class EdinetFetcher:
         financial_data: list[dict[str, Any]],
         max_years: int,
         *,
-        pre_parsed_map: dict[str, tuple[Path, dict]] | None = None,
-    ) -> dict[str, dict]:
+        pre_parsed_map: _PreParsedMap | None = None,
+    ) -> _MetricByYear:
         if not self.edinet_client or not self.edinet_client.api_key:
             return {}
         docs = await self._get_annual_docs(code, financial_data, max_years)
@@ -396,19 +409,19 @@ class EdinetFetcher:
         financial_data: list[dict[str, Any]],
         max_years: int,
         *,
-        pre_parsed_map: dict[str, tuple[Path, dict]] | None = None,
-    ) -> dict[str, dict[str, dict]]:
+        pre_parsed_map: _PreParsedMap | None = None,
+    ) -> _AllMetrics:
         """全メトリクスを並列抽出。Returns: {"ibd": {...}, "gp": {...}, ..., "doc_ids": {...}}"""
-        tasks: list = [
+        metric_results = await asyncio.gather(*[
             self._extract_metric_by_year(spec, code, financial_data, max_years, pre_parsed_map=pre_parsed_map)
             for spec in _EXTRACTOR_SPECS
-        ] + [self.get_doc_ids_by_year(code, financial_data, max_years)]
-        results = await asyncio.gather(*tasks)
-        out: dict[str, dict[str, dict]] = {
+        ])
+        doc_ids = await self.get_doc_ids_by_year(code, financial_data, max_years)
+        out: _AllMetrics = {
             spec.key: result
-            for spec, result in zip(_EXTRACTOR_SPECS, results)
+            for spec, result in zip(_EXTRACTOR_SPECS, metric_results)
         }
-        out["doc_ids"] = results[-1]
+        out["doc_ids"] = doc_ids
         return out
 
     async def extract_ibd_by_year(
@@ -417,7 +430,7 @@ class EdinetFetcher:
         financial_data: list[dict[str, Any]],
         max_years: int,
         *,
-        pre_parsed_map: dict[str, tuple[Path, dict]] | None = None,
+        pre_parsed_map: _PreParsedMap | None = None,
     ) -> dict[str, dict]:
         """年度別に有利子負債を抽出。Returns: { "YYYYMMDD": ibd_result_dict }"""
         return await self._extract_metric_by_year(_SPEC_BY_KEY["ibd"], code, financial_data, max_years, pre_parsed_map=pre_parsed_map)
@@ -474,7 +487,7 @@ class EdinetFetcher:
         logger.info(f"[HALF-EDINET] {code}: {len(docs)}件の2Q文書を検索")
 
         async def _process_doc(doc: dict) -> tuple[str, dict | None]:
-            fy_end_8 = doc.get("jquants_fy_end", "").replace("-", "")
+            fy_end_8 = _fy_end_key(doc.get("jquants_fy_end"))
             if not fy_end_8:
                 return "", None
             try:
@@ -517,7 +530,7 @@ class EdinetFetcher:
         financial_data: list[dict[str, Any]],
         max_years: int,
         *,
-        pre_parsed_map: dict[str, tuple[Path, dict]] | None = None,
+        pre_parsed_map: _PreParsedMap | None = None,
     ) -> dict[str, dict]:
         """年度別に従業員数を抽出。Returns: { "YYYYMMDD": employees_result_dict }"""
         return await self._extract_metric_by_year(_SPEC_BY_KEY["emp"], code, financial_data, max_years, pre_parsed_map=pre_parsed_map)
@@ -528,7 +541,7 @@ class EdinetFetcher:
         financial_data: list[dict[str, Any]],
         max_years: int,
         *,
-        pre_parsed_map: dict[str, tuple[Path, dict]] | None = None,
+        pre_parsed_map: _PreParsedMap | None = None,
     ) -> dict[str, dict]:
         """年度別に IFRS 純収益・事業利益を抽出。Returns: { "YYYYMMDD": nr_result_dict }"""
         return await self._extract_metric_by_year(_SPEC_BY_KEY["nr"], code, financial_data, max_years, pre_parsed_map=pre_parsed_map)
@@ -539,7 +552,7 @@ class EdinetFetcher:
         financial_data: list[dict[str, Any]],
         max_years: int,
         *,
-        pre_parsed_map: dict[str, tuple[Path, dict]] | None = None,
+        pre_parsed_map: _PreParsedMap | None = None,
     ) -> dict[str, dict]:
         """年度別に売上総利益を抽出。Returns: { "YYYYMMDD": gp_result_dict }"""
         return await self._extract_metric_by_year(_SPEC_BY_KEY["gp"], code, financial_data, max_years, pre_parsed_map=pre_parsed_map)
@@ -550,7 +563,7 @@ class EdinetFetcher:
         financial_data: list[dict[str, Any]],
         max_years: int,
         *,
-        pre_parsed_map: dict[str, tuple[Path, dict]] | None = None,
+        pre_parsed_map: _PreParsedMap | None = None,
     ) -> dict[str, dict]:
         """年度別に税引前利益・法人税等を抽出。Returns: { "YYYYMMDD": tax_result_dict }"""
         return await self._extract_metric_by_year(_SPEC_BY_KEY["tax"], code, financial_data, max_years, pre_parsed_map=pre_parsed_map)
@@ -561,7 +574,7 @@ class EdinetFetcher:
         financial_data: list[dict[str, Any]],
         max_years: int,
         *,
-        pre_parsed_map: dict[str, tuple[Path, dict]] | None = None,
+        pre_parsed_map: _PreParsedMap | None = None,
     ) -> dict[str, dict]:
         """年度別に支払利息（金融費用）を抽出。Returns: { "YYYYMMDD": ie_result_dict }"""
         return await self._extract_metric_by_year(_SPEC_BY_KEY["ie"], code, financial_data, max_years, pre_parsed_map=pre_parsed_map)
@@ -572,7 +585,7 @@ class EdinetFetcher:
         financial_data: list[dict[str, Any]],
         max_years: int,
         *,
-        pre_parsed_map: dict[str, tuple[Path, dict]] | None = None,
+        pre_parsed_map: _PreParsedMap | None = None,
     ) -> dict[str, dict]:
         """年度別に営業利益（または経常利益）を抽出。Returns: { "YYYYMMDD": op_result_dict }"""
         return await self._extract_metric_by_year(_SPEC_BY_KEY["op"], code, financial_data, max_years, pre_parsed_map=pre_parsed_map)

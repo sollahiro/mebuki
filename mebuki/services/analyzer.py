@@ -7,7 +7,7 @@ FinancialFetcher / EdinetFetcher を組み合わせてオーケストレーシ�
 
 import logging
 import asyncio
-from typing import Any
+from typing import Any, cast
 from pathlib import Path
 from collections.abc import Callable
 
@@ -16,12 +16,17 @@ from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.infrastructure.settings import settings_store
 from mebuki.constants.financial import PERCENT, MILLION_YEN
 from mebuki.utils.wacc import load_rf_rates, get_rf_for_date, calculate_wacc
-from mebuki.utils.metrics_types import YearEntry
+from mebuki.utils.metrics_types import CalculatedData, YearEntry
 
 from .financial_fetcher import FinancialFetcher
 from .edinet_fetcher import EdinetFetcher
 
 logger = logging.getLogger(__name__)
+
+
+def _fy_end_key(year: YearEntry) -> str:
+    fy_end = year.get("fy_end")
+    return fy_end.replace("-", "") if fy_end is not None else ""
 
 
 def _apply_ibd(
@@ -30,7 +35,7 @@ def _apply_ibd(
     doc_id_by_year: dict[str, str],
 ) -> None:
     for year in years:
-        fy_end_key = year.get("fy_end", "").replace("-", "")
+        fy_end_key = _fy_end_key(year)
         doc_id = doc_id_by_year.get(fy_end_key)
         if doc_id:
             year["CalculatedData"]["IBDDocID"] = doc_id
@@ -60,7 +65,7 @@ def _apply_interest_expense(
     ie_by_year: dict[str, dict],
 ) -> None:
     for year in years:
-        fy_end_key = year.get("fy_end", "").replace("-", "")
+        fy_end_key = _fy_end_key(year)
         ie = ie_by_year.get(fy_end_key)
         if ie and ie.get("current") is not None:
             year["CalculatedData"]["InterestExpense"] = ie["current"] / MILLION_YEN
@@ -71,7 +76,7 @@ def _apply_tax(
     tax_by_year: dict[str, dict],
 ) -> None:
     for year in years:
-        fy_end_key = year.get("fy_end", "").replace("-", "")
+        fy_end_key = _fy_end_key(year)
         tax = tax_by_year.get(fy_end_key)
         if not tax or tax.get("method") not in ("computed", "usgaap_html"):
             continue
@@ -89,14 +94,14 @@ def _apply_gross_profit(
     gp_by_year: dict[str, dict],
 ) -> None:
     for year in years:
-        fy_end_key = year.get("fy_end", "").replace("-", "")
+        fy_end_key = _fy_end_key(year)
         gp = gp_by_year.get(fy_end_key)
         if not gp or gp.get("current") is None:
             continue
         gp_m = gp["current"] / MILLION_YEN
         # Sales の直後に挿入するため dict を再構築
         old_cd = year["CalculatedData"]
-        new_cd: dict = {}
+        new_cd: dict[str, Any] = {}
         for k, v in old_cd.items():
             new_cd[k] = v
             if k == "Sales":
@@ -108,7 +113,7 @@ def _apply_gross_profit(
             new_cd["GrossProfitMethod"] = gp.get("method", "unknown")
             sales = new_cd.get("Sales")
             new_cd["GrossProfitMargin"] = gp_m / sales * PERCENT if sales else None
-        year["CalculatedData"] = new_cd
+        year["CalculatedData"] = cast(CalculatedData, new_cd)
 
 
 def _apply_operating_profit(
@@ -116,7 +121,7 @@ def _apply_operating_profit(
     op_by_year: dict[str, dict],
 ) -> None:
     for year in years:
-        fy_end_key = year.get("fy_end", "").replace("-", "")
+        fy_end_key = _fy_end_key(year)
         op = op_by_year.get(fy_end_key)
         if not op or op.get("current") is None:
             continue
@@ -137,7 +142,7 @@ def _apply_net_revenue(
     nr_by_year: dict[str, dict],
 ) -> None:
     for year in years:
-        fy_end_key = year.get("fy_end", "").replace("-", "")
+        fy_end_key = _fy_end_key(year)
         nr = nr_by_year.get(fy_end_key)
         if not nr or not nr.get("found"):
             continue
@@ -167,7 +172,7 @@ def _apply_employees(
     emp_by_year: dict[str, dict],
 ) -> None:
     for year in years:
-        fy_end_key = year.get("fy_end", "").replace("-", "")
+        fy_end_key = _fy_end_key(year)
         emp = emp_by_year.get(fy_end_key)
         if emp and emp.get("current") is not None:
             year["CalculatedData"]["Employees"] = emp["current"]
@@ -187,14 +192,18 @@ _METRIC_APPLIERS: list[Callable[[list[YearEntry], dict], None]] = [
 def _apply_wacc(years: list[YearEntry], rf_rates: dict) -> None:
     for year in years:
         cd = year["CalculatedData"]
-        rf = get_rf_for_date(rf_rates, year.get("fy_end", ""))
-        cd.update(calculate_wacc(
+        fy_end = year.get("fy_end") or ""
+        rf = get_rf_for_date(rf_rates, fy_end)
+        wacc = calculate_wacc(
             eq=cd.get("Eq"),
             ibd=cd.get("InterestBearingDebt"),
             ie=cd.get("InterestExpense"),
             tc_pct=cd.get("EffectiveTaxRate"),
             rf=rf,
-        ))
+        )
+        cd["CostOfEquity"] = wacc["CostOfEquity"]
+        cd["CostOfDebt"] = wacc["CostOfDebt"]
+        cd["WACC"] = wacc["WACC"]
 
 
 class IndividualAnalyzer:
@@ -242,9 +251,11 @@ class IndividualAnalyzer:
         actual_years = min(available_years, analysis_years) if analysis_years else available_years
 
         metrics = await self._financial_fetcher.calculate_metrics(code, annual_data, actual_years)
+        if not metrics:
+            return {}
 
         edinet_data: dict = {}
-        all_metrics: dict[str, dict[str, dict]] = {}
+        all_metrics: dict[str, dict[str, Any]] = {}
 
         if financial_data:
             pre_parsed_map, edinet_data = await asyncio.gather(
@@ -255,7 +266,7 @@ class IndividualAnalyzer:
                 code, financial_data, actual_years, pre_parsed_map=pre_parsed_map
             )
 
-        years = metrics.get("years", [])
+        years: list[YearEntry] = metrics.get("years", [])
 
         for apply_fn in _METRIC_APPLIERS:
             apply_fn(years, all_metrics)
