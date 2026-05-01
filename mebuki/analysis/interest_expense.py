@@ -26,7 +26,12 @@ from mebuki.analysis.context_helpers import (
     _is_nonconsolidated_duration,
     _is_nonconsolidated_prior_duration,
 )
-from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files, parse_html_number
+from mebuki.analysis.xbrl_utils import (
+    collect_numeric_elements,
+    find_xbrl_files,
+    parse_html_int_attribute,
+    parse_html_number,
+)
 from mebuki.constants.financial import MILLION_YEN
 from mebuki.constants.xbrl import (
     DURATION_CONTEXT_PATTERNS,
@@ -166,7 +171,7 @@ def _extract_usgaap_ie_from_html(xbrl_dir: Path) -> dict | None:
             col_offset = 0
             for cell in cells:
                 text = cell.get_text(strip=True)
-                span = int(str(cell.get("colspan") or "1"))
+                span = parse_html_int_attribute(cell, "colspan")
                 last_col = col_offset + span - 1
                 if "当連結" in text or ("当期" in text and "前期" not in text):
                     current_col_idx = last_col

@@ -35,7 +35,13 @@ from mebuki.analysis.context_helpers import (
     _is_nonconsolidated_duration,
     _is_nonconsolidated_prior_duration,
 )
-from mebuki.analysis.xbrl_utils import parse_xbrl_value, collect_numeric_elements, find_xbrl_files, parse_html_number
+from mebuki.analysis.xbrl_utils import (
+    parse_xbrl_value,
+    collect_numeric_elements,
+    find_xbrl_files,
+    parse_html_int_attribute,
+    parse_html_number,
+)
 from mebuki.constants.financial import MILLION_YEN
 from mebuki.constants.xbrl import (
     GROSS_PROFIT_COMPONENT_DEFINITIONS,
@@ -130,7 +136,7 @@ def _extract_usgaap_gp_from_html(xbrl_dir: Path) -> GrossProfitResult | None:
             col_offset = 0
             for cell in cells:
                 text = cell.get_text(strip=True)
-                span = int(cell.get("colspan", 1))
+                span = parse_html_int_attribute(cell, "colspan")
                 # colspan=2 の場合、合計値は右側（最終）列に入る
                 last_col = col_offset + span - 1
                 if "当連結" in text or "当期" in text:

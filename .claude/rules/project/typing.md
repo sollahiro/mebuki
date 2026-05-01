@@ -28,7 +28,7 @@ def foo(items: list[str]) -> dict[str, Any] | None: ...
 from typing import Any          # 組み込みに同等物がない
 
 # ✅ collections.abc へ移す（typing の同名型は非推奨エイリアス）
-from collections.abc import Callable, Iterator, AsyncGenerator, Generator
+from collections.abc import Callable, Iterator, AsyncGenerator, Generator, Sequence
 ```
 
 | 古い書き方 | 新しい書き方 |
@@ -37,13 +37,14 @@ from collections.abc import Callable, Iterator, AsyncGenerator, Generator
 | `from typing import Iterator` | `from collections.abc import Iterator` |
 | `from typing import AsyncGenerator` | `from collections.abc import AsyncGenerator` |
 | `from typing import Generator` | `from collections.abc import Generator` |
+| `from typing import Sequence` | `from collections.abc import Sequence` |
 
 ## インポート行の最終形
 
 ```python
 # ✅ typing から残すのは Any のみ（不要なら typing 自体を消す）
 from typing import Any
-from collections.abc import Callable  # Callable を使う場合のみ
+from collections.abc import Callable, Sequence  # 使う場合のみ
 ```
 
 ## 戻り値型は必ず書く
@@ -161,4 +162,98 @@ class YearEntry(TypedDict):     # total=True（デフォルト）
     fy_end: str | None
     RawData: RawData
     CalculatedData: CalculatedData
+```
+
+### `total=False` の TypedDict は `.get()` で読む
+
+`total=False` や `NotRequired` のキーは、静的解析上「存在しない可能性がある」。
+値が `None` でよい計算では `dict["key"]` ではなく `.get("key")` を使う。
+
+```python
+# ❌ RawData は total=False なのでキー欠落の可能性がある
+cfo_m = to_millions(raw_values["CFO"])
+
+# ✅ 欠落時は None として扱う
+cfo_m = to_millions(raw_values.get("CFO"))
+```
+
+## `None` を含む値は演算・比較の前に絞る
+
+`float | None` や `int | None` は、演算子の直前で対象の変数自体を `is not None` で絞る。
+入力値を絞っていても、変換関数の戻り値までは型チェッカーが追跡できない場合がある。
+
+```python
+cfo_m = to_millions(raw_values.get("CFO"))
+cfi_m = to_millions(raw_values.get("CFI"))
+
+# ❌ cfo_m / cfi_m は float | None
+cfc = cfo_m + cfi_m
+
+# ✅ 演算する変数を直接ガードする
+cfc = (cfo_m + cfi_m) if cfo_m is not None and cfi_m is not None else None
+```
+
+日付変換も同様に、`extract_year_month()` の戻り値は `int | None` として扱う。
+
+```python
+year, month = extract_year_month(fy_end)
+if year is not None and month is not None and year == today.year and month > today.month:
+    ...
+```
+
+## 可変コレクションを読取専用で受ける場合は `Sequence`
+
+`list` は不変（invariant）なので、`list[YearEntry]` は `list[dict[str, Any]]` に渡せない。
+関数が要素の読み取りだけを行うなら、引数は `Sequence[T]` にする。
+
+```python
+from collections.abc import Sequence
+
+# ❌ 読み取りだけなのに list 型を広く受けようとしている
+def summarize(years: list[dict[str, Any]]) -> None: ...
+
+# ✅ 呼び出し側の list[YearEntry] をそのまま受けられる
+def summarize(years: Sequence[YearEntry]) -> None: ...
+```
+
+## 戻り値 TypedDict は変数注釈で推論を助ける
+
+段階的に組み立てる戻り値や、後からキーを追加する辞書は、変数定義時に TypedDict 型を付ける。
+注釈がないと `dict[str, Unknown]` や広すぎる union に推論されることがある。
+
+```python
+# ❌ 戻り値型 MetricsResult へ割り当てられないことがある
+metrics = {
+    "code": latest.get("Code"),
+    "analysis_years": len(years_data),
+}
+
+# ✅
+metrics: MetricsResult = {
+    "code": latest.get("Code"),
+    "analysis_years": len(years_data),
+}
+```
+
+一時的に `None` から始める複数値は、返却前に `tuple[...] | None` としてまとめて絞る。
+
+```python
+found: tuple[str, str] | None = None
+...
+if found is None:
+    return None
+label, method = found  # ここでは str
+```
+
+## 外部ライブラリの属性値は型を絞ってから変換する
+
+BeautifulSoup の `Tag.get()` は型定義上 `str` 以外（list / None など）も返し得る。
+`int(tag.get("colspan", 1))` のように直接変換せず、helper で `isinstance` による型絞りを行う。
+
+```python
+# ❌ Tag.get() の戻り値を int() に直接渡す
+span = int(cell.get("colspan", 1))
+
+# ✅ mebuki.analysis.xbrl_utils の helper を使う
+span = parse_html_int_attribute(cell, "colspan")
 ```

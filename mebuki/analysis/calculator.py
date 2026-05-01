@@ -6,6 +6,7 @@
 
 import logging
 from typing import Any
+from collections.abc import Sequence
 from datetime import datetime
 
 from ..utils.converters import to_float, is_valid_value, is_valid_financial_record, extract_year_month
@@ -87,7 +88,9 @@ def _filter_annual_data(annual_data: list[dict[str, Any]], analysis_years: int) 
         # 未来の年度データを除外
         try:
             y, m = extract_year_month(fy_end)
-            if y is not None and (y > current_year or (y == current_year and m > current_month)):
+            if y is not None and m is not None and (
+                y > current_year or (y == current_year and m > current_month)
+            ):
                 continue
         except (ValueError, IndexError):
             pass
@@ -140,27 +143,30 @@ def _extract_raw_values(year_data: dict[str, Any]) -> RawData:
 
 def _calculate_base_values(raw_values: RawData) -> CalculatedData:
     """百万円単位への変換とFCF(CFC)を計算する"""
-    cfo_m = to_millions(raw_values['CFO'])
-    cfi_m = to_millions(raw_values['CFI'])
+    cfo = raw_values.get('CFO')
+    cfi = raw_values.get('CFI')
+    payout_ratio_ann = raw_values.get('PayoutRatioAnn')
+    cfo_m = to_millions(cfo)
+    cfi_m = to_millions(cfi)
     return {
-        'Sales': to_millions(raw_values['Sales']),
-        'OP': to_millions(raw_values['OP']),
-        'NP': to_millions(raw_values['NP']),
-        'Eq': to_millions(raw_values['Eq']),
+        'Sales': to_millions(raw_values.get('Sales')),
+        'OP': to_millions(raw_values.get('OP')),
+        'NP': to_millions(raw_values.get('NP')),
+        'Eq': to_millions(raw_values.get('Eq')),
         'CFO': cfo_m,
         'CFI': cfi_m,
-        'CashEq': to_millions(raw_values['CashEq']),
-        'PayoutRatio': raw_values['PayoutRatioAnn'] * PERCENT if raw_values['PayoutRatioAnn'] is not None else None,
-        'CFC': (cfo_m + cfi_m) if (raw_values['CFO'] is not None and raw_values['CFI'] is not None) else None
+        'CashEq': to_millions(raw_values.get('CashEq')),
+        'PayoutRatio': payout_ratio_ann * PERCENT if payout_ratio_ann is not None else None,
+        'CFC': (cfo_m + cfi_m) if (cfo_m is not None and cfi_m is not None) else None
     }
 
 
-def _format_financial_period(fy_end: str, per_type: str) -> str:
+def _format_financial_period(fy_end: str | None, per_type: str) -> str:
     """決算期の文字列を返す（例: "2024年03月期" / "2024年03月期 (2Q)"）"""
     period = ""
     if fy_end:
         year, month = extract_year_month(fy_end)
-        if year is not None:
+        if year is not None and month is not None:
             period = f"{year}年{month:02d}月期"
     if per_type == "2Q":
         period += " (2Q)"
@@ -180,7 +186,10 @@ def _build_year_entry(
 
     # 収益性指標
     profit_metrics = _calculate_profitability_metrics(
-        calc_values['NP'], calc_values['OP'], calc_values['Eq'], calc_values['CFO']
+        calc_values.get('NP'),
+        calc_values.get('OP'),
+        calc_values.get('Eq'),
+        calc_values.get('CFO'),
     )
     calc_values.update({
         'ROE': profit_metrics['roe'],
@@ -188,11 +197,11 @@ def _build_year_entry(
     })
 
     # 株式分割調整
-    ratio = calculate_adjustment_ratio(raw_values['AvgSh'], latest_avg_sh)
+    ratio = calculate_adjustment_ratio(raw_values.get('AvgSh'), latest_avg_sh)
     calc_values.update({
         'AdjustmentRatio': ratio,
-        'AdjustedEPS': apply_adjustment(raw_values['EPS'], ratio),
-        'AdjustedBPS': apply_adjustment(raw_values['BPS'], ratio)
+        'AdjustedEPS': apply_adjustment(raw_values.get('EPS'), ratio),
+        'AdjustedBPS': apply_adjustment(raw_values.get('BPS'), ratio)
     })
 
     # 2Qは6ヶ月分のEPS/BPSのため、比率系指標は無効
@@ -207,7 +216,7 @@ def _build_year_entry(
     }
 
 
-def _assemble_summary(metrics: dict[str, Any], years_metrics: list[dict[str, Any]], analysis_years: int) -> None:
+def _assemble_summary(metrics: dict[str, Any], years_metrics: Sequence[YearEntry], analysis_years: int) -> None:
     """最新年度の要約値設定・データ可用性チェック・バリデーションを実行し metrics を更新する"""
     if years_metrics:
         latest_calc = years_metrics[0]["CalculatedData"]
@@ -248,7 +257,7 @@ def calculate_metrics_flexible(
     latest = years_data[0]
     latest_avg_sh = to_float(latest.get("AvgSh"))
 
-    metrics = {
+    metrics: MetricsResult = {
         "code": latest.get("Code"),
         "latest_fy_end": latest.get("CurFYEn"),
         "analysis_years": len(years_data),
@@ -260,5 +269,3 @@ def calculate_metrics_flexible(
 
     _assemble_summary(metrics, years_metrics, analysis_years)
     return metrics
-
-

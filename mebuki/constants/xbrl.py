@@ -11,10 +11,10 @@ class _ComponentDef(TypedDict):
     tags: list[str]
 
 
-class _AggregateIFRSDef(TypedDict, total=False):
+class _AggregateIFRSDef(TypedDict):
     tag: str
     covers: list[str]
-    label: str
+    label: NotRequired[str]
 
 
 # Duration（損益計算書・CF）コンテキストパターン

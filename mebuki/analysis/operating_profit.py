@@ -22,7 +22,12 @@ from mebuki.analysis.context_helpers import (
     _is_nonconsolidated_duration,
     _is_nonconsolidated_prior_duration,
 )
-from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files, parse_html_number
+from mebuki.analysis.xbrl_utils import (
+    collect_numeric_elements,
+    find_xbrl_files,
+    parse_html_int_attribute,
+    parse_html_number,
+)
 from mebuki.constants.financial import MILLION_YEN
 from mebuki.constants.xbrl import OPERATING_PROFIT_DIRECT_TAGS, ORDINARY_INCOME_TAGS
 from mebuki.utils.xbrl_result_types import OperatingProfitResult
@@ -106,13 +111,14 @@ def _extract_usgaap_op_from_html(xbrl_dir: Path) -> OperatingProfitResult | None
 
     content = target_file.read_text(encoding="utf-8", errors="ignore")
     search_labels = [("営業利益", "operating_profit", "営業利益"), ("経常利益", "ordinary_income", "経常利益")]
-    found_text = found_method = found_label = None
+    found: tuple[str, str, str] | None = None
     for label_text, method, label in search_labels:
         if label_text in content:
-            found_text, found_method, found_label = label_text, method, label
+            found = (label_text, method, label)
             break
-    if found_text is None:
+    if found is None:
         return None
+    found_text, _found_method, found_label = found
 
     soup = BeautifulSoup(content, "html.parser")
     _HEADER_MARKERS = ("前連結", "当連結", "前期", "当期", "第")
@@ -133,7 +139,7 @@ def _extract_usgaap_op_from_html(xbrl_dir: Path) -> OperatingProfitResult | None
             col_offset = 0
             for cell in cells:
                 text = cell.get_text(strip=True)
-                span = int(cell.get("colspan", 1))
+                span = parse_html_int_attribute(cell, "colspan")
                 last_col = col_offset + span - 1
                 if "当連結" in text or "当期" in text:
                     current_col_idx = last_col
