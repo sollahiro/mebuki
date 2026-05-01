@@ -9,6 +9,12 @@ contextRef が Instant 型の連結コンテキストを優先し、
 
 from pathlib import Path
 
+from mebuki.analysis.context_helpers import (
+    _is_consolidated_instant,
+    _is_consolidated_prior_instant,
+    _is_nonconsolidated_instant,
+    _is_nonconsolidated_prior_instant,
+)
 from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
 
 EMPLOYEE_TAGS = [
@@ -16,33 +22,7 @@ EMPLOYEE_TAGS = [
     "NumberOfGroupEmployees",  # グループ従業員数（代替）
 ]
 
-INSTANT_CONTEXT_PATTERNS = [
-    "CurrentYearInstant",
-    "FilingDateInstant",
-]
-
-PRIOR_CONTEXT_PATTERNS = [
-    "Prior1YearInstant",
-    "PriorYearInstant",
-]
-
 _RELEVANT_TAGS: frozenset[str] = frozenset(EMPLOYEE_TAGS)
-
-
-def _is_consolidated_instant(ctx: str) -> bool:
-    return any(p in ctx for p in INSTANT_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx
-
-
-def _is_consolidated_prior(ctx: str) -> bool:
-    return any(p in ctx for p in PRIOR_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx
-
-
-def _is_nonconsolidated_instant(ctx: str) -> bool:
-    return any(p in ctx for p in INSTANT_CONTEXT_PATTERNS) and "_NonConsolidated" in ctx
-
-
-def _is_nonconsolidated_prior(ctx: str) -> bool:
-    return any(p in ctx for p in PRIOR_CONTEXT_PATTERNS) and "_NonConsolidated" in ctx
 
 
 def _find_value(
@@ -86,11 +66,11 @@ def extract_employees(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> dict
             continue
         ctx_map = tag_elements[tag]
 
-        current, prior = _find_value(ctx_map, _is_consolidated_instant, _is_consolidated_prior)
+        current, prior = _find_value(ctx_map, _is_consolidated_instant, _is_consolidated_prior_instant)
         if current is not None or prior is not None:
             return {"current": current, "prior": prior, "method": "direct", "scope": "consolidated"}
 
-        current, prior = _find_value(ctx_map, _is_nonconsolidated_instant, _is_nonconsolidated_prior)
+        current, prior = _find_value(ctx_map, _is_nonconsolidated_instant, _is_nonconsolidated_prior_instant)
         if current is not None or prior is not None:
             return {"current": current, "prior": prior, "method": "direct", "scope": "nonconsolidated"}
 

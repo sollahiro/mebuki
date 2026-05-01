@@ -33,6 +33,22 @@ PRIOR_DURATION_CONTEXT_PATTERNS: list[str] = [
     "Prior1YTDDuration",
 ]
 
+# Instant（貸借対照表）コンテキストパターン
+# 四半期・半期報告書にも対応
+INSTANT_CONTEXT_PATTERNS: list[str] = [
+    "CurrentYearInstant",
+    "CurrentQuarterInstant",
+    "InterimInstant",
+    "FilingDateInstant",
+]
+
+PRIOR_INSTANT_CONTEXT_PATTERNS: list[str] = [
+    "Prior1YearInstant",
+    "PriorYearInstant",
+    "Prior1QuarterInstant",
+    "Prior1InterimInstant",
+]
+
 XBRL_SECTIONS: dict[str, _XBRLSection] = {
     'business_risks': {
         'title': '事業等のリスク',
