@@ -216,7 +216,7 @@ def _build_year_entry(
     }
 
 
-def _assemble_summary(metrics: dict[str, Any], years_metrics: Sequence[YearEntry], analysis_years: int) -> None:
+def _assemble_summary(metrics: MetricsResult, years_metrics: Sequence[YearEntry], analysis_years: int) -> None:
     """最新年度の要約値設定・データ可用性チェック・バリデーションを実行し metrics を更新する"""
     if years_metrics:
         latest_calc = years_metrics[0]["CalculatedData"]

@@ -3,6 +3,7 @@
 """
 
 from typing import Any
+from collections.abc import Mapping
 from enum import Enum
 
 
@@ -15,7 +16,7 @@ class DataAvailability(Enum):
 
 
 def check_data_availability(
-    metrics: dict[str, Any],
+    metrics: Mapping[str, Any],
     required_years: int
 ) -> DataAvailability:
     """
@@ -42,7 +43,7 @@ def check_data_availability(
 
 
 def get_data_availability_message(
-    metrics: dict[str, Any],
+    metrics: Mapping[str, Any],
     required_years: int
 ) -> str:
     """
@@ -67,7 +68,7 @@ def get_data_availability_message(
 
 
 def validate_metrics_for_analysis(
-    metrics: dict[str, Any],
+    metrics: Mapping[str, Any],
     required_years: int = 2
 ) -> tuple[bool, str | None]:
     """
@@ -92,4 +93,3 @@ def validate_metrics_for_analysis(
         return False, "主要指標（FCF、ROE、EPS）のデータが不足しています"
     
     return True, None
-

@@ -28,7 +28,7 @@ def foo(items: list[str]) -> dict[str, Any] | None: ...
 from typing import Any          # 組み込みに同等物がない
 
 # ✅ collections.abc へ移す（typing の同名型は非推奨エイリアス）
-from collections.abc import Callable, Iterator, AsyncGenerator, Generator, Sequence
+from collections.abc import Callable, Iterator, AsyncGenerator, Generator, Mapping, Sequence
 ```
 
 | 古い書き方 | 新しい書き方 |
@@ -37,6 +37,7 @@ from collections.abc import Callable, Iterator, AsyncGenerator, Generator, Seque
 | `from typing import Iterator` | `from collections.abc import Iterator` |
 | `from typing import AsyncGenerator` | `from collections.abc import AsyncGenerator` |
 | `from typing import Generator` | `from collections.abc import Generator` |
+| `from typing import Mapping` | `from collections.abc import Mapping` |
 | `from typing import Sequence` | `from collections.abc import Sequence` |
 
 ## インポート行の最終形
@@ -44,7 +45,7 @@ from collections.abc import Callable, Iterator, AsyncGenerator, Generator, Seque
 ```python
 # ✅ typing から残すのは Any のみ（不要なら typing 自体を消す）
 from typing import Any
-from collections.abc import Callable, Sequence  # 使う場合のみ
+from collections.abc import Callable, Mapping, Sequence  # 使う場合のみ
 ```
 
 ## 戻り値型は必ず書く
@@ -214,6 +215,19 @@ def summarize(years: list[dict[str, Any]]) -> None: ...
 
 # ✅ 呼び出し側の list[YearEntry] をそのまま受けられる
 def summarize(years: Sequence[YearEntry]) -> None: ...
+```
+
+辞書も読み取り専用なら `dict[str, Any]` ではなく `Mapping[str, Any]` を使う。
+これにより `TypedDict` を通常の辞書として読める。
+
+```python
+from collections.abc import Mapping
+
+# ❌ TypedDict を渡しにくい
+def validate(metrics: dict[str, Any]) -> bool: ...
+
+# ✅ MetricsResult などの TypedDict を受けられる
+def validate(metrics: Mapping[str, Any]) -> bool: ...
 ```
 
 ## 戻り値 TypedDict は変数注釈で推論を助ける
