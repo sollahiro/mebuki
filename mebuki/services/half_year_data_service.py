@@ -11,6 +11,7 @@ from mebuki.constants.financial import MILLION_YEN
 from mebuki.utils.cache import CacheManager
 from mebuki.utils.converters import to_float
 from mebuki.utils.financial_data import build_half_year_periods
+from mebuki.utils.output_serializer import serialize_half_year_periods
 
 from .edinet_fetcher import EdinetFetcher
 
@@ -57,13 +58,14 @@ class HalfYearDataService:
         code: str,
         years: int = 3,
         use_cache: bool = True,
+        include_debug_fields: bool = False,
     ) -> list[dict[str, Any]]:
         """H1/H2 の半期財務データを返す。"""
         cache_key = f"half_year_periods_{code}_{years}"
         if use_cache:
             cached = self.cache_manager.get(cache_key)
             if cached and cached.get("_cache_version") == _CACHE_VERSION:
-                return cached["periods"]
+                return serialize_half_year_periods(cached["periods"], include_debug_fields=include_debug_fields)
 
         financial_data = await self.api_client.get_financial_summary(
             code=code,
@@ -89,7 +91,7 @@ class HalfYearDataService:
             )
         except Exception as e:
             logger.warning(f"[HALF] {code}: EDINET補完スキップ - {e}")
-            return base_periods
+            return serialize_half_year_periods(base_periods, include_debug_fields=include_debug_fields)
 
         # FY J-Quants レコードを fy_end → record で引けるようにしておく
         fy_by_end: dict[str, dict] = {}
@@ -246,4 +248,4 @@ class HalfYearDataService:
             "_cache_version": _CACHE_VERSION,
             "periods": base_periods,
         })
-        return base_periods
+        return serialize_half_year_periods(base_periods, include_debug_fields=include_debug_fields)

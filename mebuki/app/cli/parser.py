@@ -24,6 +24,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--half", action="store_true",
         help="上半期(H1)・下半期(H2)の半期推移を表示する"
     )
+    analyze_parser.add_argument(
+        "--include-debug-fields", dest="include_debug_fields", action="store_true",
+        help="MetricSources・IBDComponents 等のデバッグフィールドを JSON に含める"
+    )
 
     # filings
     filings_parser = subparsers.add_parser("filings", help="EDINET書類一覧を取得")

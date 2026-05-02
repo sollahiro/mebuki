@@ -14,6 +14,7 @@ from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.infrastructure.settings import settings_store
 from mebuki.utils.cache import CacheManager
 from mebuki.utils.master_types import StockSearchResult
+from mebuki.utils.output_serializer import serialize_metrics_result
 
 _CACHE_VERSION = f"{'.'.join(__version__.split('.')[:2])}:metrics-v2"
 
@@ -24,6 +25,12 @@ from .filing_service import FilingService
 from .half_year_data_service import HalfYearDataService
 
 logger = logging.getLogger(__name__)
+
+
+def _apply_debug_filter(result: dict[str, Any], include_debug_fields: bool) -> dict[str, Any]:
+    if include_debug_fields or not result.get("metrics"):
+        return result
+    return {**result, "metrics": serialize_metrics_result(result["metrics"])}
 
 
 class DataService:
@@ -118,6 +125,7 @@ class DataService:
         use_cache: bool = True,
         include_2q: bool = False,
         analysis_years: int | None = None,
+        include_debug_fields: bool = False,
     ) -> dict[str, Any] | list[dict[str, Any]]:
         """財務データ取得の統一公開API。scope=None で財務サマリー、scope="raw" で生データ。"""
         if scope == "raw":
@@ -127,7 +135,7 @@ class DataService:
                 for record in raw_data
             ]
 
-        result = await self.get_raw_analysis_data(code, use_cache=use_cache, include_2q=include_2q, analysis_years=analysis_years)
+        result = await self.get_raw_analysis_data(code, use_cache=use_cache, include_2q=include_2q, analysis_years=analysis_years, include_debug_fields=include_debug_fields)
         try:
             await self._refresh_earnings_calendar_if_needed()
             self._attach_upcoming_earnings(result, code)
@@ -140,6 +148,7 @@ class DataService:
         code: str,
         years: int = 3,
         use_cache: bool = True,
+        include_debug_fields: bool = False,
     ) -> list[dict[str, Any]]:
         """H1/H2 の半期財務データを返す。"""
         self._sync_child_services()
@@ -147,6 +156,7 @@ class DataService:
             code=code,
             years=years,
             use_cache=use_cache,
+            include_debug_fields=include_debug_fields,
         )
 
     async def search_filings(
@@ -186,6 +196,7 @@ class DataService:
         max_documents: int = 2,
         analysis_years: int | None = None,
         include_2q: bool = False,
+        include_debug_fields: bool = False,
     ) -> dict[str, Any]:
         """AI分析抜きの純粋な分析データを取得（財務指標 + 有報テキスト）"""
         cache_key = f"individual_analysis_{code}"
@@ -194,7 +205,8 @@ class DataService:
         if use_cache:
             cached = self.cache_manager.get(cache_key)
             if cached and cached.get("_cache_version") == _CACHE_VERSION:
-                return {k: v for k, v in cached.items() if k != "_cache_version" and k != "llm_financial_analysis"}
+                result = {k: v for k, v in cached.items() if k != "_cache_version" and k != "llm_financial_analysis"}
+                return _apply_debug_filter(result, include_debug_fields)
 
         result = await analyzer.fetch_analysis_data(code, analysis_years, max_documents, include_2q=include_2q)
         if not result:
@@ -209,7 +221,8 @@ class DataService:
             "analyzed_at": datetime.now().isoformat(),
         }
         self.cache_manager.set(cache_key, formatted)
-        return {k: v for k, v in formatted.items() if k != "_cache_version"}
+        output = {k: v for k, v in formatted.items() if k != "_cache_version"}
+        return _apply_debug_filter(output, include_debug_fields)
 
 
 # シングルトンインスタンス

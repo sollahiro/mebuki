@@ -44,10 +44,12 @@ async def cmd_analyze(args):
         print(f"エラー: {e}", file=sys.stderr)
         return
 
+    include_debug = getattr(args, "include_debug_fields", False)
+
     # --scope が指定された場合はスコープ別取得
     if getattr(args, "scope", None):
         try:
-            result = await data_service.get_financial_data(code, scope=args.scope, use_cache=not args.no_cache)
+            result = await data_service.get_financial_data(code, scope=args.scope, use_cache=not args.no_cache, include_debug_fields=include_debug)
             print(json.dumps(result, indent=2, ensure_ascii=False))
         except ValueError as e:
             print(f"エラー: {e}", file=sys.stderr)
@@ -71,7 +73,7 @@ async def cmd_analyze(args):
             print(f"分析対象期間: 直近 {half_years} 年分 (上半期 / 下半期)", file=sys.stderr)
 
             periods = await data_service.get_half_year_periods(
-                code, years=half_years, use_cache=not args.no_cache
+                code, years=half_years, use_cache=not args.no_cache, include_debug_fields=include_debug
             )
             if not periods:
                 print("エラー: 財務データの取得に失敗しました。APIキーが正しく設定されているか確認してください。", file=sys.stderr)
@@ -140,7 +142,7 @@ async def cmd_analyze(args):
         print(f"分析対象期間: {years_label}", file=sys.stderr)
         # data_service を使って生の財務データを取得
         result = await data_service.get_raw_analysis_data(
-            code, use_cache=not args.no_cache, analysis_years=years_to_analyze,
+            code, use_cache=not args.no_cache, analysis_years=years_to_analyze, include_debug_fields=include_debug,
         )
 
         if not result or not result.get("metrics"):

@@ -376,7 +376,38 @@ class TestHalfYearDataService:
         assert result[0]["data"]["Sales"] == 45.0
         assert result[0]["data"]["CFC"] == 4.0
         assert result[0]["data"]["FreeCF"] == result[0]["data"]["CFC"]
-        assert result[0]["data"]["MetricSources"]["CFC"]["method"] == "CFO + CFI"
         assert result[1]["data"]["Sales"] == 55.0
         assert result[1]["data"]["CFC"] == 5.0
         assert result[1]["data"]["FreeCF"] == result[1]["data"]["CFC"]
+
+    @pytest.mark.asyncio
+    async def test_edinet_failure_excludes_debug_fields_by_default(self, tmp_path):
+        service = self._make_service(tmp_path)
+        service.api_client.get_financial_summary.return_value = [self._fy_record(), self._q2_record()]
+
+        with patch("mebuki.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
+            fetcher = fetcher_cls.return_value
+            fetcher.extract_half_year_edinet_data.side_effect = RuntimeError("edinet down")
+            fetcher.extract_gross_profit_by_year.return_value = {}
+            fetcher.extract_ibd_by_year.return_value = {}
+
+            result = await service.get_half_year_periods("72030", years=1, use_cache=False)
+
+        for period in result:
+            assert "MetricSources" not in period["data"]
+
+    @pytest.mark.asyncio
+    async def test_edinet_failure_includes_debug_fields_when_requested(self, tmp_path):
+        service = self._make_service(tmp_path)
+        service.api_client.get_financial_summary.return_value = [self._fy_record(), self._q2_record()]
+
+        with patch("mebuki.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
+            fetcher = fetcher_cls.return_value
+            fetcher.extract_half_year_edinet_data.side_effect = RuntimeError("edinet down")
+            fetcher.extract_gross_profit_by_year.return_value = {}
+            fetcher.extract_ibd_by_year.return_value = {}
+
+            result = await service.get_half_year_periods("72030", years=1, use_cache=False, include_debug_fields=True)
+
+        assert "MetricSources" in result[0]["data"]
+        assert result[0]["data"]["MetricSources"]["CFC"]["method"] == "CFO + CFI"

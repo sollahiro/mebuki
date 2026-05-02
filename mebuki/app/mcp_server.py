@@ -71,6 +71,11 @@ async def list_tools() -> list[Tool]:
                         "default": True,
                         "description": "If false, bypass cache and re-fetch the latest data from J-QUANTS and EDINET. Use when you want up-to-date figures or when ROIC/IBD fields are missing.",
                     },
+                    "include_debug_fields": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "If true, include debug fields (MetricSources, IBDComponents, GrossProfitMethod, IBDAccountingStandard) in the output. Omit for standard analysis.",
+                    },
                 },
                 "required": ["code"],
             },
@@ -245,15 +250,16 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             use_cache = arguments.get("use_cache", True)
             half = arguments.get("half", False)
             years = int(arguments["years"]) if "years" in arguments else None
+            include_debug_fields = bool(arguments.get("include_debug_fields", False))
             try:
                 if half:
                     result = await asyncio.wait_for(
-                        data_service.get_half_year_periods(code, years=years or 3, use_cache=use_cache),
+                        data_service.get_half_year_periods(code, years=years or 3, use_cache=use_cache, include_debug_fields=include_debug_fields),
                         timeout=60.0,
                     )
                 else:
                     result = await asyncio.wait_for(
-                        data_service.get_financial_data(code, scope=scope, use_cache=use_cache, analysis_years=years),
+                        data_service.get_financial_data(code, scope=scope, use_cache=use_cache, analysis_years=years, include_debug_fields=include_debug_fields),
                         timeout=180.0,
                     )
             except asyncio.TimeoutError:

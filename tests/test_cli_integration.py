@@ -54,6 +54,7 @@ def test_main_analyze_outputs_json_and_closes_service(monkeypatch, capsys) -> No
         "72030",
         use_cache=False,
         analysis_years=2,
+        include_debug_fields=False,
     )
     data_service.close.assert_awaited_once()
 
