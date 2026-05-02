@@ -99,7 +99,7 @@ async def cmd_analyze(args):
                 ("ROIC (%)",           lambda d: d.get("ROIC")),
                 ("営業CF (百万)",      lambda d: d.get("CFO")),
                 ("投資CF (百万)",      lambda d: d.get("CFI")),
-                ("フリーCF (百万)",    lambda d: d.get("FreeCF")),
+                ("フリーCF (百万)",    lambda d: d.get("CFC", d.get("FreeCF"))),
                 ("DocID",              lambda d: d.get("DocID")),
             ]
 

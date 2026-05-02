@@ -29,6 +29,27 @@ def _fy_end_key(year: YearEntry) -> str:
     return fy_end.replace("-", "") if fy_end is not None else ""
 
 
+def _set_metric_source(
+    cd: CalculatedData,
+    metric: str,
+    *,
+    source: str,
+    unit: str,
+    method: str | None = None,
+    doc_id: str | None = None,
+    label: str | None = None,
+) -> None:
+    sources = cd.setdefault("MetricSources", {})
+    item: dict[str, str | None] = {"source": source, "unit": unit}
+    if method is not None:
+        item["method"] = method
+    if doc_id is not None:
+        item["docID"] = doc_id
+    if label is not None:
+        item["label"] = label
+    sources[metric] = item
+
+
 def _apply_ibd(
     years: list[YearEntry],
     ibd_by_year: dict[str, dict],
@@ -37,13 +58,14 @@ def _apply_ibd(
     for year in years:
         fy_end_key = _fy_end_key(year)
         doc_id = doc_id_by_year.get(fy_end_key)
+        cd = year["CalculatedData"]
         if doc_id:
-            year["CalculatedData"]["DocID"] = doc_id
+            cd["DocID"] = doc_id
+            _set_metric_source(cd, "DocID", source="edinet", unit="id", doc_id=doc_id)
         ibd = ibd_by_year.get(fy_end_key)
         if not ibd or ibd.get("current") is None:
             continue
         ibd_m = ibd["current"] / MILLION_YEN
-        cd = year["CalculatedData"]
         cd["InterestBearingDebt"] = ibd_m
         cd["IBDComponents"] = [
             {
@@ -54,10 +76,20 @@ def _apply_ibd(
             for c in ibd.get("components", [])
         ]
         cd["IBDAccountingStandard"] = ibd.get("accounting_standard", "unknown")
+        _set_metric_source(
+            cd,
+            "InterestBearingDebt",
+            source="edinet",
+            unit="million_yen",
+            method=ibd.get("method"),
+            doc_id=doc_id,
+            label=ibd.get("accounting_standard"),
+        )
         np_ = cd.get("NP")
         eq = cd.get("Eq")
         if np_ is not None and eq is not None and (eq + ibd_m) != 0:
             cd["ROIC"] = np_ / (eq + ibd_m) * PERCENT
+            _set_metric_source(cd, "ROIC", source="derived", unit="percent", method="NP / (Eq + InterestBearingDebt)")
 
 
 def _apply_interest_expense(
@@ -68,7 +100,16 @@ def _apply_interest_expense(
         fy_end_key = _fy_end_key(year)
         ie = ie_by_year.get(fy_end_key)
         if ie and ie.get("current") is not None:
-            year["CalculatedData"]["InterestExpense"] = ie["current"] / MILLION_YEN
+            cd = year["CalculatedData"]
+            cd["InterestExpense"] = ie["current"] / MILLION_YEN
+            _set_metric_source(
+                cd,
+                "InterestExpense",
+                source="edinet",
+                unit="million_yen",
+                method=ie.get("method"),
+                doc_id=ie.get("docID"),
+            )
 
 
 def _apply_tax(
@@ -83,10 +124,13 @@ def _apply_tax(
         cd = year["CalculatedData"]
         if tax.get("pretax_income") is not None:
             cd["PretaxIncome"] = tax["pretax_income"] / MILLION_YEN
+            _set_metric_source(cd, "PretaxIncome", source="edinet", unit="million_yen", method=tax.get("method"), doc_id=tax.get("docID"))
         if tax.get("income_tax") is not None:
             cd["IncomeTax"] = tax["income_tax"] / MILLION_YEN
+            _set_metric_source(cd, "IncomeTax", source="edinet", unit="million_yen", method=tax.get("method"), doc_id=tax.get("docID"))
         if tax.get("effective_tax_rate") is not None:
             cd["EffectiveTaxRate"] = tax["effective_tax_rate"] * PERCENT
+            _set_metric_source(cd, "EffectiveTaxRate", source="derived", unit="percent", method=tax.get("method"), doc_id=tax.get("docID"))
 
 
 def _apply_gross_profit(
@@ -113,7 +157,17 @@ def _apply_gross_profit(
             new_cd["GrossProfitMethod"] = gp.get("method", "unknown")
             sales = new_cd.get("Sales")
             new_cd["GrossProfitMargin"] = gp_m / sales * PERCENT if sales else None
-        year["CalculatedData"] = cast(CalculatedData, new_cd)
+        cast_cd = cast(CalculatedData, new_cd)
+        _set_metric_source(
+            cast_cd,
+            "GrossProfit",
+            source="edinet",
+            unit="million_yen",
+            method=gp.get("method", "unknown"),
+            doc_id=gp.get("docID"),
+        )
+        _set_metric_source(cast_cd, "GrossProfitMargin", source="derived", unit="percent", method="GrossProfit / Sales")
+        year["CalculatedData"] = cast_cd
 
 
 def _apply_operating_profit(
@@ -132,9 +186,19 @@ def _apply_operating_profit(
         cd["OP"] = op_m
         if op.get("label") == "経常利益":
             cd["OPLabel"] = "経常利益"
+        _set_metric_source(
+            cd,
+            "OP",
+            source="edinet",
+            unit="million_yen",
+            method=op.get("method"),
+            doc_id=op.get("docID"),
+            label=op.get("label"),
+        )
         sales = cd.get("Sales")
         if sales:
             cd["OperatingMargin"] = op_m / sales * PERCENT
+            _set_metric_source(cd, "OperatingMargin", source="derived", unit="percent", method="OP / Sales")
 
 
 def _apply_net_revenue(
@@ -153,18 +217,22 @@ def _apply_net_revenue(
             cd["Sales"] = nr_m
             rd["Sales"] = nr["net_revenue"]
             cd["SalesLabel"] = "純収益"
+            _set_metric_source(cd, "Sales", source="edinet", unit="million_yen", method=nr.get("method"), doc_id=nr.get("docID"), label="純収益")
             # GrossProfitMargin を Sales 確定後に再計算
             gp = cd.get("GrossProfit")
             if gp is not None:
                 cd["GrossProfitMargin"] = gp / nr_m * PERCENT
+                _set_metric_source(cd, "GrossProfitMargin", source="derived", unit="percent", method="GrossProfit / Sales")
         if cd.get("OP") is None and nr.get("business_profit") is not None:
             bp_m = nr["business_profit"] / MILLION_YEN
             cd["OP"] = bp_m
             rd["OP"] = nr["business_profit"]
             cd["OPLabel"] = "事業利益"
+            _set_metric_source(cd, "OP", source="edinet", unit="million_yen", method=nr.get("method"), doc_id=nr.get("docID"), label="事業利益")
             sales = cd.get("Sales")
             if sales:
                 cd["OperatingMargin"] = bp_m / sales * PERCENT
+                _set_metric_source(cd, "OperatingMargin", source="derived", unit="percent", method="OP / Sales")
 
 
 def _apply_employees(
@@ -175,7 +243,9 @@ def _apply_employees(
         fy_end_key = _fy_end_key(year)
         emp = emp_by_year.get(fy_end_key)
         if emp and emp.get("current") is not None:
-            year["CalculatedData"]["Employees"] = emp["current"]
+            cd = year["CalculatedData"]
+            cd["Employees"] = emp["current"]
+            _set_metric_source(cd, "Employees", source="edinet", unit="persons", method=emp.get("method"), doc_id=emp.get("docID"), label=emp.get("scope"))
 
 
 _METRIC_APPLIERS: list[Callable[[list[YearEntry], dict], None]] = [
@@ -204,6 +274,9 @@ def _apply_wacc(years: list[YearEntry], rf_rates: dict) -> None:
         cd["CostOfEquity"] = wacc["CostOfEquity"]
         cd["CostOfDebt"] = wacc["CostOfDebt"]
         cd["WACC"] = wacc["WACC"]
+        _set_metric_source(cd, "CostOfEquity", source="mof", unit="percent", method="Rf + beta * MRP")
+        _set_metric_source(cd, "CostOfDebt", source="derived", unit="percent", method="InterestExpense / InterestBearingDebt")
+        _set_metric_source(cd, "WACC", source="derived", unit="percent", method="weighted average cost of capital")
 
 
 class IndividualAnalyzer:

@@ -70,6 +70,7 @@ flowchart TD
 | `NP` | J-QUANTS | 百万円 | 基礎値 |
 | `Eq` | J-QUANTS | 百万円 | 基礎値、ROE/ROIC/WACCに利用 |
 | `CFO`, `CFI`, `CFC` | J-QUANTS | 百万円 | 半期ではH1をEDINET 2Q、H2をFY-H1で補完 |
+| `FreeCF` | 互換名 | 百万円 | 半期データでは `CFC` と同値。新規参照は `CFC` 推奨 |
 | `GrossProfit` | EDINET XBRL/HTML | 百万円 | 直接タグ、売上高-売上原価、US-GAAP HTMLなどで補完 |
 | `InterestBearingDebt` | EDINET XBRL/HTML | 百万円 | 直接タグ、構成要素積み上げ、IFRS集約タグ、US-GAAP HTML |
 | `InterestExpense` | EDINET XBRL/HTML | 百万円 | WACCの負債コストに利用 |
@@ -81,13 +82,54 @@ flowchart TD
 | `CostOfDebt` | EDINET IE/IBD | % | `InterestExpense / InterestBearingDebt` |
 | `WACC` | 上記統合 | % | Eq、IBD、IE、実効税率、Rfから計算 |
 | `DocID` | EDINET | 文字列 | 指標の根拠書類 |
+| `MetricSources` | mebuki内部メタデータ | object | 指標ごとの `source`, `method`, `docID`, `unit`, `label` を保持 |
 
 ### 指標上の課題
 
 - `CalculatedData` は段階的に拡張されるため、どの指標がどのステップで入るかを知らないと追いにくい。
 - 単位はおおむね百万円/%だが、XBRL抽出器の戻り値は円、呼び出し側で百万円変換する。境界が暗黙。
-- `CFC` と半期側の `FreeCF` のように、似た概念の名称が混在している。
-- 出所/手法 (`GrossProfitMethod`, `IBDAccountingStandard`, `SalesLabel`, `OPLabel`) は一部のみ明示される。全指標で一貫していない。
+- `FreeCF` は半期データの互換名として残す。新規実装・表示は `CFC` を優先する。
+- 出所/手法は `MetricSources` に集約し、既存の `GrossProfitMethod`, `IBDAccountingStandard`, `SalesLabel`, `OPLabel` は互換キーとして残す。
+
+### `MetricSources` の形
+
+`CalculatedData.MetricSources` は指標名をキーにしたメタデータ辞書。
+
+```json
+{
+  "GrossProfit": {
+    "source": "edinet",
+    "method": "direct",
+    "docID": "S100...",
+    "unit": "million_yen"
+  },
+  "ROIC": {
+    "source": "derived",
+    "method": "NP / (Eq + InterestBearingDebt)",
+    "unit": "percent"
+  }
+}
+```
+
+主な `source`:
+
+| source | 意味 |
+|---|---|
+| `jquants` | J-QUANTS 財務サマリー由来 |
+| `edinet` | EDINET XBRL/HTML由来 |
+| `mof` | 財務省CSV由来 |
+| `derived` | mebuki内部計算 |
+
+主な `unit`:
+
+| unit | 意味 |
+|---|---|
+| `million_yen` | 百万円 |
+| `percent` | % |
+| `yen` | 円 |
+| `persons` | 人 |
+| `ratio` | 比率 |
+| `id` | 識別子 |
 
 ## 4. EDINET/XBRLの現状
 
@@ -157,10 +199,10 @@ MCPとCLIは大枠では対応している。
    空結果は短め、ヒットありは長めなど。現状の `cache prune` は手動整理なので、取得時にも自然に古いものを無視できるとよい。
 
 3. `CalculatedData` の出所メタデータを整える  
-   例: `sources: {"GrossProfit": {"source": "edinet", "docID": "...", "method": "direct"}}` のような形を検討する。
+   `MetricSources` として追加済み。既存互換キーは残す。
 
 4. `CFC` / `FreeCF` の命名整理  
-   年次と半期で同じ概念なら統一、違うならドキュメントに明示する。
+   半期にも `CFC` を追加済み。`FreeCF` は互換名として残す。
 
 ### 設計してから進める
 
@@ -170,10 +212,13 @@ MCPとCLIは大枠では対応している。
 2. XBRL抽出器の戻り値TypedDict化  
    `current`, `prior`, `method`, `docID`, `components` などをモジュールごとに型定義する。`dict[str, Any]` を減らす。
 
-3. 年次/半期のEDINET補完ロジック統合  
+3. Pyrightの正式導入判断
+   `pyrightconfig.json` はあるが、現状の `uv run pyright` では実行ファイルが見つからない。今すぐ必須ではないため、Phase 4でdev依存またはNode側実行に寄せるかを決める。
+
+4. 年次/半期のEDINET補完ロジック統合
    同じdoc検索、download、pre_parse、extractを共有し、半期だけ別処理になっている部分を小さくする。
 
-4. 個別分析キャッシュの粒度見直し  
+5. 個別分析キャッシュの粒度見直し
    現在は最終成果物キャッシュ。J-QUANTS raw、EDINET doc map、XBRL parse result、最終metricsを分けると、ロジック更新時の再計算がしやすい。
 
 ### 今は触らないほうがよい
@@ -199,9 +244,9 @@ MCPとCLIは大枠では対応している。
 
 ### Phase 2: 指標の出所整理
 
-- 指標ごとの source/method/docID を統一的に持つ
-- `CalculatedData` の命名・単位表をREADMEまたはdocsに反映
-- `CFC` / `FreeCF` を整理
+- 指標ごとの source/method/docID/unit/label を `MetricSources` に追加済み
+- `CalculatedData` の命名・単位表をdocsに反映済み
+- 半期 `CFC` を追加し、`FreeCF` は互換名として整理済み
 
 ### Phase 3: EDINET境界の再設計
 
@@ -212,6 +257,7 @@ MCPとCLIは大枠では対応している。
 ### Phase 4: 型とテストの強化
 
 - XBRL抽出器戻り値のTypedDict化
+- Pyrightを正式な型チェック手段にするか判断する。現状は設定ファイルのみで、実行環境には未導入
 - 実企業サンプルを使った回帰テストを増やす
 - 会計基準別のゴールデンケースを整理する
 

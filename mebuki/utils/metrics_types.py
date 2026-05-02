@@ -14,6 +14,14 @@ class IBDComponent(TypedDict, total=False):
     prior: float | None
 
 
+class MetricSource(TypedDict, total=False):
+    source: str
+    method: str
+    docID: str | None
+    unit: str
+    label: str
+
+
 class RawData(TypedDict, total=False):
     CurPerType: str
     CurFYSt: str
@@ -36,6 +44,8 @@ class RawData(TypedDict, total=False):
 
 
 class CalculatedData(TypedDict, total=False):
+    # ── source metadata ──
+    MetricSources: dict[str, MetricSource]
     # ── calculator.py: _calculate_base_values ──
     Sales: float | None
     OP: float | None

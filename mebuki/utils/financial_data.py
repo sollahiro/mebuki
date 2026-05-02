@@ -185,7 +185,8 @@ def build_half_year_periods(
                     "NP": float | None,
                     "CFO": float | None,
                     "CFI": float | None,
-                    "FreeCF": float | None,
+                    "CFC": float | None,
+                    "FreeCF": float | None,          # 互換名
                 }
             }
     """
@@ -247,7 +248,8 @@ def build_half_year_periods(
         np_: float | None,
         cfo: float | None,
         cfi: float | None,
-    ) -> dict[str, float | None]:
+    ) -> dict[str, Any]:
+        cfc = (cfo + cfi) if cfo is not None and cfi is not None else None
         return {
             "Sales": sales,
             "OP": op,
@@ -255,7 +257,18 @@ def build_half_year_periods(
             "NP": np_,
             "CFO": cfo,
             "CFI": cfi,
-            "FreeCF": (cfo + cfi) if cfo is not None and cfi is not None else None,
+            "CFC": cfc,
+            "FreeCF": cfc,
+            "MetricSources": {
+                "Sales": {"source": "jquants", "unit": "million_yen"},
+                "OP": {"source": "jquants", "unit": "million_yen"},
+                "OperatingMargin": {"source": "derived", "method": "OP / Sales", "unit": "percent"},
+                "NP": {"source": "jquants", "unit": "million_yen"},
+                "CFO": {"source": "jquants", "unit": "million_yen"},
+                "CFI": {"source": "jquants", "unit": "million_yen"},
+                "CFC": {"source": "derived", "method": "CFO + CFI", "unit": "million_yen"},
+                "FreeCF": {"source": "derived", "method": "alias of CFC", "unit": "million_yen"},
+            },
         }
 
     def _label_year(fy_end: str) -> str:

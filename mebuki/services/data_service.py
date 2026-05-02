@@ -15,7 +15,7 @@ from mebuki.infrastructure.settings import settings_store
 from mebuki.utils.cache import CacheManager
 from mebuki.utils.master_types import StockSearchResult
 
-_CACHE_VERSION = ".".join(__version__.split(".")[:2])
+_CACHE_VERSION = f"{'.'.join(__version__.split('.')[:2])}:metrics-v2"
 
 from .analyzer import IndividualAnalyzer
 from .company_info_service import CompanyInfoService

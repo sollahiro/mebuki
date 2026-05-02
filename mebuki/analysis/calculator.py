@@ -148,7 +148,7 @@ def _calculate_base_values(raw_values: RawData) -> CalculatedData:
     payout_ratio_ann = raw_values.get('PayoutRatioAnn')
     cfo_m = to_millions(cfo)
     cfi_m = to_millions(cfi)
-    return {
+    values: CalculatedData = {
         'Sales': to_millions(raw_values.get('Sales')),
         'OP': to_millions(raw_values.get('OP')),
         'NP': to_millions(raw_values.get('NP')),
@@ -159,6 +159,18 @@ def _calculate_base_values(raw_values: RawData) -> CalculatedData:
         'PayoutRatio': payout_ratio_ann * PERCENT if payout_ratio_ann is not None else None,
         'CFC': (cfo_m + cfi_m) if (cfo_m is not None and cfi_m is not None) else None
     }
+    values["MetricSources"] = {
+        "Sales": {"source": "jquants", "unit": "million_yen"},
+        "OP": {"source": "jquants", "unit": "million_yen"},
+        "NP": {"source": "jquants", "unit": "million_yen"},
+        "Eq": {"source": "jquants", "unit": "million_yen"},
+        "CFO": {"source": "jquants", "unit": "million_yen"},
+        "CFI": {"source": "jquants", "unit": "million_yen"},
+        "CashEq": {"source": "jquants", "unit": "million_yen"},
+        "PayoutRatio": {"source": "jquants", "unit": "percent"},
+        "CFC": {"source": "derived", "method": "CFO + CFI", "unit": "million_yen"},
+    }
+    return values
 
 
 def _format_financial_period(fy_end: str | None, per_type: str) -> str:
@@ -195,6 +207,10 @@ def _build_year_entry(
         'ROE': profit_metrics['roe'],
         'CFCVR': profit_metrics['cf_conversion_rate']
     })
+    calc_values["MetricSources"].update({
+        "ROE": {"source": "derived", "method": "NP / Eq", "unit": "percent"},
+        "CFCVR": {"source": "derived", "method": "CFO / NP", "unit": "percent"},
+    })
 
     # 株式分割調整
     ratio = calculate_adjustment_ratio(raw_values.get('AvgSh'), latest_avg_sh)
@@ -202,6 +218,11 @@ def _build_year_entry(
         'AdjustmentRatio': ratio,
         'AdjustedEPS': apply_adjustment(raw_values.get('EPS'), ratio),
         'AdjustedBPS': apply_adjustment(raw_values.get('BPS'), ratio)
+    })
+    calc_values["MetricSources"].update({
+        "AdjustmentRatio": {"source": "derived", "unit": "ratio"},
+        "AdjustedEPS": {"source": "derived", "method": "EPS / adjustment_ratio", "unit": "yen"},
+        "AdjustedBPS": {"source": "derived", "method": "BPS / adjustment_ratio", "unit": "yen"},
     })
 
     # 2Qは6ヶ月分のEPS/BPSのため、比率系指標は無効
