@@ -1,7 +1,8 @@
 import asyncio
 import json
 import logging
-from typing import Any
+from contextlib import AbstractAsyncContextManager
+from typing import Any, cast
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -14,6 +15,11 @@ from mebuki.services.portfolio_service import portfolio_service
 
 logger = logging.getLogger("mebuki-mcp")
 app = Server("mebuki-mcp-server")
+
+
+def _stdio_server_context() -> AbstractAsyncContextManager[tuple[Any, Any]]:
+    """mcp の stdio_server は実行時 context manager だが型推論が generator になる環境がある。"""
+    return cast(AbstractAsyncContextManager[tuple[Any, Any]], stdio_server())
 
 
 @app.list_tools()
@@ -342,7 +348,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
 async def serve():
     """STDIO経由でサーバーを実行します。"""
-    async with stdio_server() as (read_stream, write_stream):
+    async with _stdio_server_context() as (read_stream, write_stream):
         await app.run(
             read_stream,
             write_stream,

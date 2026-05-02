@@ -3,6 +3,7 @@
 """
 import logging
 from datetime import datetime
+from typing import TypedDict
 
 from mebuki.infrastructure.helpers import validate_stock_code
 from mebuki.infrastructure.portfolio_store import portfolio_store
@@ -20,6 +21,13 @@ from mebuki.utils.portfolio_types import (
 logger = logging.getLogger(__name__)
 
 VALID_ACCOUNT_TYPES = ["特定", "一般", "NISA"]
+
+
+class _SectorAccumulator(TypedDict):
+    sector_name: str
+    ticker_count: int
+    tickers: list[str]
+    total_cost: float
 
 
 def _validate_account_type(account_type: str) -> str:
@@ -232,7 +240,7 @@ class PortfolioService:
         if not consolidated:
             return []
 
-        sectors: dict[str, SectorAllocation] = {}
+        sectors: dict[str, _SectorAccumulator] = {}
         total_cost = 0.0
 
         for item in consolidated:
