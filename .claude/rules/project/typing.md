@@ -259,6 +259,89 @@ if found is None:
 label, method = found  # ここでは str
 ```
 
+戻り値は実際の構造に合わせる。`list[StockSearchResult]` のような TypedDict リストを返す関数は、
+`list[dict[str, Any]]` に広げず、その TypedDict を戻り値型にする。
+
+```python
+# ❌ list は invariant なので list[StockSearchResult] を返せない
+def search_companies(query: str) -> list[dict[str, Any]]: ...
+
+# ✅
+def search_companies(query: str) -> list[StockSearchResult]: ...
+```
+
+## コールバックは宣言どおりの型を返す
+
+`Callable[[dict], bool]` と宣言したコールバックは必ず `bool` を返す。
+`dict.get()` の戻り値は `Any | None` になりやすいので、`bool(...)` で明示する。
+
+```python
+# ❌ Unknown | None
+ExtractorSpec("nr", "NR", extract_net_revenue, result_check=lambda r: r.get("found"))
+
+# ✅ bool
+ExtractorSpec("nr", "NR", extract_net_revenue, result_check=lambda r: bool(r.get("found")))
+```
+
+## `asyncio.gather(return_exceptions=True)` は `BaseException` を扱う
+
+`return_exceptions=True` の結果には `BaseException` が混ざる。
+`Exception` ではなく `BaseException` で絞り、成功側の型だけを後続処理へ渡す。
+
+```python
+results = await asyncio.gather(*tasks, return_exceptions=True)
+for result in results:
+    if isinstance(result, BaseException):
+        continue
+    # ここでは成功結果
+```
+
+最後に保持した例外を `raise` する場合は、`None` ガードを必ず入れる。
+
+```python
+last_exception: BaseException | None = None
+...
+if last_exception is not None:
+    raise last_exception
+raise aiohttp.ClientError("retry limit exceeded")
+```
+
+## Optional な共有クライアントはローカル変数へ束縛する
+
+`self.edinet_client` のような `T | None` の属性は、ネスト関数や await をまたぐと型が絞られない。
+ガード後にローカル変数へ束縛して使う。
+
+```python
+if not self.edinet_client or not self.edinet_client.api_key:
+    return {}
+client = self.edinet_client
+
+async def worker(doc: dict[str, Any]) -> None:
+    await client.download_document(doc["docID"], 1)
+```
+
+APIキー更新メソッドは設定値由来の `None` を受けるため、引数を `str | None` にする。
+
+```python
+def update_api_key(self, api_key: str | None) -> None:
+    self.api_key = api_key.strip() if api_key else ""
+```
+
+## TypedDict に未定義キーを足さない
+
+`GrossProfitResult` などの厳密な TypedDict に `docID` のような未定義キーを直接追加しない。
+追加フィールドを返したい場合は通常の `dict` にコピーしてから追加するか、TypedDict 定義にキーを追加する。
+
+```python
+# ❌ GrossProfitResult に docID はない
+gp = extract_gross_profit(...)
+gp["docID"] = doc_id
+
+# ✅ 返却用の通常 dict にする
+gp_result = dict(extract_gross_profit(...))
+gp_result["docID"] = doc_id
+```
+
 ## 外部ライブラリの属性値は型を絞ってから変換する
 
 BeautifulSoup の `Tag.get()` は型定義上 `str` 以外（list / None など）も返し得る。
