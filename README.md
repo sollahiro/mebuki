@@ -1,4 +1,4 @@
-<div align="center">![mebuki](/assets/mebuki_ascii.png)</div>
+![mebuki](/assets/mebuki_ascii.png)
 
 mebukiは、J-QUANTS API、EDINET APIを最大限に活用した、**MCP (Model Context Protocol) 対応** の財務分析 Python CLI ツールです。
 
