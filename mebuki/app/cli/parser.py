@@ -47,6 +47,26 @@ def build_parser() -> argparse.ArgumentParser:
     config_sub.add_parser("init", help="対話形式で初期設定")
     config_sub.add_parser("check", help="API設定の確認")
 
+    # cache
+    cache_parser = subparsers.add_parser("cache", help="キャッシュ管理")
+    cache_sub = cache_parser.add_subparsers(dest="cache_subcommand", help="キャッシュサブコマンド")
+    prune_parser = cache_sub.add_parser("prune", help="不要なキャッシュを削除")
+    prune_parser.add_argument("--execute", action="store_true", help="実際に削除する（未指定時は dry-run）")
+    prune_parser.add_argument("--keep-boj", action="store_true", help="廃止済みBOJキャッシュを削除対象から外す")
+    prune_parser.add_argument(
+        "--edinet-search-days",
+        type=int,
+        default=None,
+        help="指定日数以上古い EDINET 検索キャッシュを削除",
+    )
+    prune_parser.add_argument(
+        "--edinet-xbrl-days",
+        type=int,
+        default=None,
+        help="指定日数以上古い EDINET XBRL 展開ディレクトリを削除",
+    )
+    prune_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+
     # mcp
     mcp_parser = subparsers.add_parser("mcp", help="MCP連携管理")
     mcp_sub = mcp_parser.add_subparsers(dest="mcp_subcommand")

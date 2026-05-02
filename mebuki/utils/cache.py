@@ -9,6 +9,7 @@ import logging
 from datetime import datetime, date
 from typing import Any
 from pathlib import Path
+import shutil
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +145,17 @@ class CacheManager:
         metadata = self._load_metadata()
         metadata[key] = datetime.now().isoformat()
         self._save_metadata(metadata)
+
+    def keys(self) -> list[str]:
+        """保存済みキャッシュキーの一覧を返す。"""
+        return sorted(self._load_metadata().keys())
+
+    def clear_prefix(self, prefix: str) -> int:
+        """指定 prefix で始まるキャッシュを削除し、削除件数を返す。"""
+        keys = [key for key in self.keys() if key.startswith(prefix)]
+        for key in keys:
+            self.clear(key)
+        return len(keys)
     
     def clear(self, key: str | None = None) -> None:
         """
@@ -167,13 +179,15 @@ class CacheManager:
             for cache_file in self.cache_dir.glob("*.json"):
                 if cache_file.name != "metadata.json":
                     cache_file.unlink()
+            for cache_dir in self.cache_dir.glob("*"):
+                if cache_dir.is_dir():
+                    shutil.rmtree(cache_dir)
 
             # メタデータもクリア
             metadata_path = self._get_metadata_file_path()
             if metadata_path.exists():
                 metadata_path.unlink()
             self._metadata_cache = None
-
 
 
 

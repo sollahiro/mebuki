@@ -3,6 +3,7 @@ import logging
 from .ui import print_banner
 from .analyze import cmd_search, cmd_analyze, cmd_filings, cmd_filing
 from .config import cmd_config
+from .cache import cmd_cache
 from .mcp import cmd_mcp
 from .portfolio import cmd_watch, cmd_portfolio
 from .sector import cmd_sector
@@ -12,15 +13,17 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    print_banner()
     parser = build_parser()
 
     if len(sys.argv) == 1:
+        print_banner()
         parser.print_help()
         return
 
 
     args = parser.parse_args()
+    if getattr(args, "format", "table") != "json":
+        print_banner()
 
     if args.command == "search":
         cmd_search(args)
@@ -29,6 +32,8 @@ def main():
         asyncio.run(cmd_analyze(args))
     elif args.command == "config":
         cmd_config(args, parser)
+    elif args.command == "cache":
+        cmd_cache(args, parser)
     elif args.command == "mcp":
         cmd_mcp(args, parser)
     elif args.command == "filings":
