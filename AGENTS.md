@@ -1,4 +1,4 @@
-# Mebuki — Codex ガイド
+# mebuki — Agent ガイド
 
 日本株の財務データCLIツール（Python / Poetry）。
 
@@ -9,13 +9,17 @@
 
 テストで自動検証: `tests/test_dependency_rules.py`
 
-@.Codex/rules/generic/commit-conventions.md
-@.Codex/rules/project/date-conversion.md
-@.Codex/rules/project/versioning.md
-@.Codex/rules/project/mcp-cli-parity.md
-@.Codex/rules/project/error-handling.md
-@.Codex/rules/project/xbrl-analysis.md
-@.Codex/rules/project/dependencies.md
-@.Codex/rules/project/caching.md
-@.Codex/rules/project/constants.md
-@.Codex/rules/project/typing.md
+## ルールファイル
+
+以下のファイルをすべて読み、内容を遵守すること。
+
+- `.agents/rules/generic/commit-conventions.md`
+- `.agents/rules/project/date-conversion.md`
+- `.agents/rules/project/versioning.md`
+- `.agents/rules/project/mcp-cli-parity.md`
+- `.agents/rules/project/error-handling.md`
+- `.agents/rules/project/xbrl-analysis.md`
+- `.agents/rules/project/dependencies.md`
+- `.agents/rules/project/caching.md`
+- `.agents/rules/project/constants.md`
+- `.agents/rules/project/typing.md`

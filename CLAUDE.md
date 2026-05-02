@@ -9,13 +9,13 @@
 
 テストで自動検証: `tests/test_dependency_rules.py`
 
-@.claude/rules/generic/commit-conventions.md
-@.claude/rules/project/date-conversion.md
-@.claude/rules/project/versioning.md
-@.claude/rules/project/mcp-cli-parity.md
-@.claude/rules/project/error-handling.md
-@.claude/rules/project/xbrl-analysis.md
-@.claude/rules/project/dependencies.md
-@.claude/rules/project/caching.md
-@.claude/rules/project/constants.md
-@.claude/rules/project/typing.md
+@.agents/rules/generic/commit-conventions.md
+@.agents/rules/project/date-conversion.md
+@.agents/rules/project/versioning.md
+@.agents/rules/project/mcp-cli-parity.md
+@.agents/rules/project/error-handling.md
+@.agents/rules/project/xbrl-analysis.md
+@.agents/rules/project/dependencies.md
+@.agents/rules/project/caching.md
+@.agents/rules/project/constants.md
+@.agents/rules/project/typing.md
