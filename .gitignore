@@ -42,7 +42,6 @@ ENV/
 .env.*.local
 
 # Testing
-tests/
 .pytest_cache/
 .coverage
 .hypothesis/
