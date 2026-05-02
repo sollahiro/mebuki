@@ -8,8 +8,11 @@ import json
 import logging
 import shutil
 import zipfile
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from mebuki.constants.api import EDINET_SEARCH_EMPTY_TTL_DAYS, EDINET_SEARCH_HIT_TTL_DAYS
 
 logger = logging.getLogger(__name__)
 
@@ -17,9 +20,17 @@ logger = logging.getLogger(__name__)
 class EdinetCacheStore:
     """EDINET の日別検索結果と XBRL 展開ディレクトリを管理する。"""
 
-    def __init__(self, cache_dir: str | Path):
+    def __init__(
+        self,
+        cache_dir: str | Path,
+        *,
+        search_empty_ttl_days: int = EDINET_SEARCH_EMPTY_TTL_DAYS,
+        search_hit_ttl_days: int = EDINET_SEARCH_HIT_TTL_DAYS,
+    ):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.search_empty_ttl_days = search_empty_ttl_days
+        self.search_hit_ttl_days = search_hit_ttl_days
 
     def search_cache_key(self, date_str: str) -> str:
         """日別検索キャッシュのファイル名を返す。"""
@@ -37,6 +48,8 @@ class EdinetCacheStore:
             return None
         if not isinstance(data, list):
             logger.warning(f"Cache load failed: expected list in {cache_path}")
+            return None
+        if self._is_search_cache_expired(cache_path, has_results=bool(data)):
             return None
         return data
 
@@ -96,3 +109,8 @@ class EdinetCacheStore:
                 member_path.relative_to(dest_resolved)
             except ValueError as e:
                 raise ValueError(f"不正なZIPエントリ: {member}") from e
+
+    def _is_search_cache_expired(self, cache_path: Path, *, has_results: bool) -> bool:
+        ttl_days = self.search_hit_ttl_days if has_results else self.search_empty_ttl_days
+        mtime = datetime.fromtimestamp(cache_path.stat().st_mtime)
+        return (datetime.now() - mtime).days >= ttl_days

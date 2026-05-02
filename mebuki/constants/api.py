@@ -1,4 +1,6 @@
 EDINET_API_BASE_URL = "https://api.edinet-fsa.go.jp/api/v2"
+EDINET_SEARCH_EMPTY_TTL_DAYS = 1
+EDINET_SEARCH_HIT_TTL_DAYS = 30
 JQUANTS_API_BASE_URL = "https://api.jquants.com/v2"
 
 # 財務省 JGB 利回り CSV
