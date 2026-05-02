@@ -11,24 +11,15 @@ __pycache__/
 build/
 dist/
 dist_backend/
-develop-eggs/
-downloads/
-eggs/
 .eggs/
 # lib/ (削除: フロントエンドの src/lib を巻き込んでしまうため)
-lib64/
-parts/
-sdist/
-var/
 wheels/
 *.egg-info/
-.installed.cfg
 *.egg
 MANIFEST
 
-# PyInstaller
+# PyInstaller build outputs
 *.manifest
-*.spec
 
 # Virtual environments
 venv/
@@ -44,9 +35,12 @@ ENV/
 # Testing
 .pytest_cache/
 .coverage
+.coverage.*
+coverage.xml
 .hypothesis/
 htmlcov/
 .tox/
+.nox/
 
 # Type checking
 .mypy_cache/
@@ -57,30 +51,6 @@ dmypy.json
 
 # Linting
 .ruff_cache/
-
-# ==========================================
-# Node.js / JavaScript / TypeScript
-# ==========================================
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-lerna-debug.log*
-.pnpm-debug.log*
-.npm
-.yarn-integrity
-
-# Build outputs
-packages/*/dist/
-packages/renderer/dist/
-packages/mcp/dist/
-packages/preload/dist/
-
-# ==========================================
-# Electron
-# ==========================================
-release/
-out/
 
 # ==========================================
 # Application-specific
@@ -95,6 +65,13 @@ analysis_cache/
 reports/
 reports/*_edinet/
 data/
+
+# Local app state (when MEBUKI_USER_DATA_PATH points at the repo)
+/config.json
+/config.json.bak
+/portfolio.json
+/portfolio.json.bak
+/portfolio.json.lock
 
 # Application logs
 *.log
@@ -118,8 +95,7 @@ mebuki_startup.log
 .cursor/
 .gemini/
 .agent/
-*.sublime-project
-*.sublime-workspace
+.claude/settings.local.json
 
 # ==========================================
 # OS
@@ -127,11 +103,6 @@ mebuki_startup.log
 .DS_Store
 .DS_Store?
 ._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-Desktop.ini
 
 # ==========================================
 # Secrets and credentials
