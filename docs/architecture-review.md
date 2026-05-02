@@ -1,8 +1,11 @@
 # アーキテクチャ棚卸しメモ
 
 作成日: 2026-05-02
+最終更新: 2026-05-02
 
 mebuki は J-QUANTS、EDINET、財務省CSV、ローカル銘柄マスタを組み合わせて財務指標を作る。機能追加のたびに取得項目と補完ロジックが積み上がってきたため、ここでは現状の流れ、指標の出所、キャッシュ構造、見直し候補を整理する。
+
+課題ごとの対応状況は `docs/architecture-status.md` を参照。
 
 ## 1. 現状マップ
 
@@ -13,12 +16,14 @@ flowchart TD
     DS --> ED["EdinetAPIClient"]
     DS --> CM["CacheManager"]
     DS --> IA["IndividualAnalyzer"]
+    DS --> SER["output_serializer.py"]
 
     IA --> FF["FinancialFetcher"]
     IA --> EF["EdinetFetcher"]
     FF --> JQ
     FF --> CALC["calculator.py"]
     EF --> ED
+    ED --> ECS["EdinetCacheStore"]
     EF --> XBRL["analysis/* extractors"]
     IA --> WACC["wacc.py / 財務省CSV"]
 
@@ -27,7 +32,8 @@ flowchart TD
     XBRL --> SUPP["EDINET補完値"]
     WACC --> SUPP
     SUPP --> BASE
-    BASE --> OUT["CLI/MCP JSON/Table output"]
+    BASE --> SER
+    SER --> OUT["CLI/MCP JSON/Table output"]
 ```
 
 主要な責務は以下。
@@ -39,8 +45,10 @@ flowchart TD
 | 年次分析 | `services/analyzer.py` | J-QUANTS基礎指標、EDINET補完、WACCの統合 |
 | J-QUANTS | `services/financial_fetcher.py`, `analysis/calculator.py` | 財務サマリー取得、年度抽出、基礎指標計算 |
 | EDINET | `api/edinet_client.py`, `services/edinet_fetcher.py` | 書類検索、XBRL取得、抽出器実行 |
+| EDINETキャッシュ | `api/edinet_cache_store.py` | 日別検索キャッシュ、XBRL zip展開ディレクトリ管理 |
 | XBRL抽出 | `analysis/*.py` | IBD、GP、IE、TAX、EMP、NR、OP、CF等の抽出 |
 | 半期 | `services/half_year_data_service.py` | J-QUANTS H1/H2基礎値 + EDINET 2Q/FY補完 |
+| 出力整形 | `utils/output_serializer.py` | CLI/MCP標準JSONからデバッグフィールドを除外 |
 | 外部金利 | `utils/wacc.py` | 財務省10年国債利回りCSV取得、WACC計算 |
 
 ## 2. 取得元とキャッシュ
@@ -49,14 +57,14 @@ flowchart TD
 |---|---|---|---|
 | 銘柄基本情報 | J-QUANTS equity master / local master | 個別分析結果に含まれる | 実用上OK |
 | 財務サマリー | J-QUANTS financial statements | `individual_analysis_{code}` / `half_year_periods_{code}_{years}` | 指標再計算まで含むキャッシュのため便利だが、補完ロジック更新時は古い結果が残る |
-| EDINET日別検索 | EDINET `/documents.json?date=...` | `analysis_cache/edinet/search_YYYY-MM-DD.json` | TTL/メタデータなし。件数が増えやすい |
-| EDINET XBRL | EDINET `/documents/{docID}?type=1` | `analysis_cache/edinet/{docID}_xbrl/` | 2回目以降は高速。容量が増えやすい |
+| EDINET日別検索 | EDINET `/documents.json?date=...` | `analysis_cache/edinet/search_YYYY-MM-DD.json` | `EdinetCacheStore` に分離済み。TTL/メタデータは未実装 |
+| EDINET XBRL | EDINET `/documents/{docID}?type=1` | `analysis_cache/edinet/{docID}_xbrl/` | `EdinetCacheStore` に分離済み。2回目以降は高速。容量が増えやすい |
 | 財務省金利 | MOF `jgbcm_all.csv`, `jgbcm.csv` | `mof_rf_rates` 1日TTL | 方針は明確。個別分析キャッシュ内WACCは更新されない点に注意 |
 | 決算予定 | J-QUANTS earnings calendar | `earnings_calendar_store`, `earnings_calendar_last_fetched` | 1日更新で整理されている |
 
 ### キャッシュ上の課題
 
-- `CacheManager` 管理下のJSONと、EDINET配下の手動ファイルキャッシュが分かれている。
+- `CacheManager` 管理下のJSONと、EDINET配下のファイルキャッシュはまだ別系統。ただしEDINET側は `EdinetCacheStore` に分離済み。
 - EDINET検索キャッシュとXBRL展開ディレクトリにはバージョン、TTL、容量上限がない。
 - `individual_analysis_*` は最終成果物を丸ごと保持するため、XBRL抽出器やWACCロジックを改善してもキャッシュヒット時は再計算されない。
 - 廃止済み機能のキャッシュはコードから参照されなくなった後も残る。BOJは今回削除済み。
@@ -82,14 +90,27 @@ flowchart TD
 | `CostOfDebt` | EDINET IE/IBD | % | `InterestExpense / InterestBearingDebt` |
 | `WACC` | 上記統合 | % | Eq、IBD、IE、実効税率、Rfから計算 |
 | `DocID` | EDINET | 文字列 | 指標の根拠書類 |
-| `MetricSources` | mebuki内部メタデータ | object | 指標ごとの `source`, `method`, `docID`, `unit`, `label` を保持 |
+| `MetricSources` | mebuki内部メタデータ | object | 指標ごとの `source`, `method`, `docID`, `unit`, `label` を保持。標準JSONでは除外 |
 
 ### 指標上の課題
 
 - `CalculatedData` は段階的に拡張されるため、どの指標がどのステップで入るかを知らないと追いにくい。
 - 単位はおおむね百万円/%だが、XBRL抽出器の戻り値は円、呼び出し側で百万円変換する。境界が暗黙。
 - `FreeCF` は半期データの互換名として残す。新規実装・表示は `CFC` を優先する。
-- 出所/手法は `MetricSources` に集約し、既存の `GrossProfitMethod`, `IBDAccountingStandard`, `SalesLabel`, `OPLabel` は互換キーとして残す。
+- 出所/手法は `MetricSources` に集約する。`SalesLabel` / `OPLabel` は標準JSONにも残す意味情報、`GrossProfitMethod` / `IBDAccountingStandard` はデバッグフィールドとして扱う。
+
+### 公開JSONの出力境界
+
+内部の `CalculatedData` には計算追跡用のフィールドを残す。一方、CLI/MCPの標準JSONでは `utils/output_serializer.py` を通して以下を除外する。
+
+- `MetricSources`
+- `IBDComponents`
+- `GrossProfitMethod`
+- `IBDAccountingStandard`
+
+`mebuki analyze --include-debug-fields` または MCP `include_debug_fields: true` を指定した場合だけ、上記を含む。`SalesLabel` / `OPLabel` は「売上高ではなく純収益」「営業利益ではなく事業利益/経常利益」といった意味情報なので、標準JSONにも残す。
+
+`scope=raw` は J-QUANTS 生データ取得であり、`include_debug_fields` の対象外。
 
 ### `MetricSources` の形
 
@@ -133,7 +154,7 @@ flowchart TD
 
 ## 4. EDINET/XBRLの現状
 
-EDINETは現在、`EdinetFetcher` が「書類検索」「XBRL取得」「各抽出器の実行」「年度別集約」をまとめて担う。`ExtractorSpec` により年次抽出器の追加はしやすくなっている。
+EDINETは現在、`EdinetFetcher` が「対象書類の選定」「各抽出器の実行」「年度別集約」を担う。API通信とファイルキャッシュ境界は `EdinetAPIClient` / `EdinetCacheStore` に分離済み。`ExtractorSpec` により年次抽出器の追加はしやすくなっている。
 
 良い点:
 
@@ -143,7 +164,7 @@ EDINETは現在、`EdinetFetcher` が「書類検索」「XBRL取得」「各抽
 
 課題:
 
-- `EdinetAPIClient` が日別検索キャッシュとXBRLファイルキャッシュを直接扱うため、キャッシュ方針が分散している。
+- `EdinetCacheStore` は導入済みだが、TTL、容量上限、LRU、統一バージョン管理までは未実装。
 - `search_documents()` の `years` 引数は受け取るが内部では使っていない。呼び出し側との契約が曖昧。
 - 年次分析と半期分析でEDINET補完の呼び方が別経路になっており、GP/IBDなどの再利用単位が揃っていない。
 - 抽出器の戻り値スキーマがモジュールごとに緩く、型で保証されていない。
@@ -157,6 +178,7 @@ MCPとCLIは大枠では対応している。
 | 銘柄検索 | `search` | `find_japan_stock_code` | 対応 |
 | 財務分析 | `analyze` | `get_japan_stock_financial_data` | 対応 |
 | 半期 | `analyze --half` | `half: true` | 対応 |
+| デバッグフィールド | `analyze --include-debug-fields` | `include_debug_fields: true` | 対応 |
 | EDINET一覧 | `filings` | `search_japan_stock_filings` | 対応 |
 | EDINET本文 | `filing` | `extract_japan_stock_filing_content` | 対応 |
 | セクター | `sector` | `search_japan_stocks_by_sector` | 対応 |
@@ -168,7 +190,7 @@ MCPとCLIは大枠では対応している。
 
 - `cache prune` はCLIに限定する。MCPでは削除せず、`get_japan_stock_cache_stats` で容量とaudit結果だけ見せる。
 - JSON出力時にバナーが混ざる問題は今回 `main.py` で抑制した。
-- CLIとMCPの出力はどちらも内部dictをほぼそのまま返すため、公開スキーマとしては固定されていない。
+- CLIとMCPの標準分析JSONは serializer 経由でデバッグフィールドを除外するようになった。ただし公開スキーマとして完全固定するには、出力契約テストとドキュメント化がまだ薄い。
 
 ## 6. キャッシュ運用方針
 
@@ -192,14 +214,14 @@ MCPとCLIは大枠では対応している。
 
 ### すぐやる価値が高い
 
-1. `cache stats` を追加する  
-   カテゴリ別件数・容量・最古/最新mtimeを表示する。運用上の判断がしやすくなる。
+1. CLI/MCP標準JSONの契約テストを増やす  
+   `MetricSources` などのデバッグフィールド除外は導入済み。年次・半期・キャッシュヒット・EDINET失敗経路で標準/デバッグ出力を検証する範囲を広げる。
 
 2. EDINET検索キャッシュにTTL方針を入れる  
    空結果は短め、ヒットありは長めなど。現状の `cache prune` は手動整理なので、取得時にも自然に古いものを無視できるとよい。
 
-3. `CalculatedData` の出所メタデータを整える  
-   `MetricSources` として追加済み。既存互換キーは残す。
+3. `CalculatedData` の公開フィールド一覧を固定する  
+   `MetricSources` は内部メタデータとして整理済み。次は標準JSONに残すキーとデバッグ専用キーをドキュメントとテストで固定する。
 
 4. `CFC` / `FreeCF` の命名整理  
    半期にも `CFC` を追加済み。`FreeCF` は互換名として残す。
@@ -212,8 +234,8 @@ MCPとCLIは大枠では対応している。
 2. XBRL抽出器の戻り値TypedDict化  
    `current`, `prior`, `method`, `docID`, `components` などをモジュールごとに型定義する。`dict[str, Any]` を減らす。
 
-3. Pyrightの正式導入判断
-   `pyrightconfig.json` はあるが、現状の `uv run pyright` では実行ファイルが見つからない。今すぐ必須ではないため、Phase 4でdev依存またはNode側実行に寄せるかを決める。
+3. Pyrightの運用範囲を決める
+   dev依存には追加済み。全体を一気にstrict化せず、変更対象モジュール単位で型エラーを残さない運用にする。
 
 4. 年次/半期のEDINET補完ロジック統合
    同じdoc検索、download、pre_parse、extractを共有し、半期だけ別処理になっている部分を小さくする。
@@ -245,19 +267,22 @@ MCPとCLIは大枠では対応している。
 ### Phase 2: 指標の出所整理
 
 - 指標ごとの source/method/docID/unit/label を `MetricSources` に追加済み
+- CLI/MCP標準JSONでは `MetricSources` / `IBDComponents` / `GrossProfitMethod` / `IBDAccountingStandard` を除外済み
+- `--include-debug-fields` / `include_debug_fields` でデバッグフィールドを明示的に出力可能
 - `CalculatedData` の命名・単位表をdocsに反映済み
 - 半期 `CFC` を追加し、`FreeCF` は互換名として整理済み
 
 ### Phase 3: EDINET境界の再設計
 
 - `EdinetCacheStore` を追加し、日別検索キャッシュとXBRL zip展開を `EdinetAPIClient` から分離済み
+- 残: TTL、容量上限、LRU、統一バージョン管理は未対応
 - 次: pre_parsed結果の責務を分ける
 - 次: 年次/半期の補完パイプラインを共通化
 
 ### Phase 4: 型とテストの強化
 
 - XBRL抽出器戻り値のTypedDict化
-- Pyrightを正式な型チェック手段にするか判断する。現状は設定ファイルのみで、実行環境には未導入
+- Pyrightの運用範囲を決める。dev依存には追加済み
 - 実企業サンプルを使った回帰テストを増やす
 - 会計基準別のゴールデンケースを整理する
 

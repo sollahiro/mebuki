@@ -1,5 +1,24 @@
 # 依存関係の管理方針
 
+このファイルでは、外部パッケージ依存とアーキテクチャ上のレイヤー依存を扱う。
+
+## アーキテクチャ依存ルール
+
+依存方向は以下を基本とする。
+
+```text
+mebuki.app -> mebuki.services -> mebuki.analysis | mebuki.api | mebuki.infrastructure | mebuki.utils
+```
+
+禁止ルール:
+
+- `services/` は `mebuki.app` をインポートしてはならない
+- `infrastructure/` は `mebuki.app` および `mebuki.services` をインポートしてはならない
+
+このルールは `tests/test_dependency_rules.py` で自動検証する。
+
+## 外部パッケージ依存
+
 外部パッケージの追加は最小限に抑える。理由は以下の2点：
 
 - **セキュリティ**: 依存パッケージはサプライチェーン攻撃の攻撃面になる。パッケージが増えるほど脆弱性混入リスクが上がる。
