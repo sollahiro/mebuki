@@ -17,6 +17,7 @@ except ImportError:
 from mebuki.analysis.xbrl_utils import parse_html_number
 from mebuki.constants.financial import MILLION_YEN
 from mebuki.constants.xbrl import COMPONENT_DEFINITIONS
+from mebuki.utils.xbrl_result_types import InterestBearingDebtResult, MetricComponent
 
 
 def _safe_sum(vals: list[float | None]) -> float | None:
@@ -132,7 +133,7 @@ def _parse_loan_tables(tables: list) -> dict[str, tuple[float | None, float | No
     }
 
 
-def _extract_usgaap_from_html(htm_file: Path) -> dict | None:
+def _extract_usgaap_from_html(htm_file: Path) -> InterestBearingDebtResult | None:
     """US-GAAP iXBRLファイルから借入金ノートセクションを解析し、有利子負債の構成要素を返す。"""
     if not _BS4_AVAILABLE:
         return None
@@ -184,18 +185,18 @@ def _extract_usgaap_from_html(htm_file: Path) -> dict | None:
 
     # 合計＋差引計が揃っていればUS-GAAP連結注記形式として処理（富士フイルム等）
     if st_total_current is not None and lt_net_current is not None:
-        components = [
+        shortform_comps: list[MetricComponent] = [
             {"label": "社債及び短期借入金（合計）",     "tag": "USGAAP_STTotal",
              "current": _to_yen(st_total_current), "prior": _to_yen(st_total_prior)},
             {"label": "長期の社債及び借入金（差引計）", "tag": "USGAAP_LTNet",
              "current": _to_yen(lt_net_current),   "prior": _to_yen(lt_net_prior)},
         ]
         return {
-            "current": _safe_sum([c["current"] for c in components]),
-            "prior":   _safe_sum([c["prior"]   for c in components]),
+            "current": _safe_sum([c["current"] for c in shortform_comps]),
+            "prior":   _safe_sum([c["prior"]   for c in shortform_comps]),
             "method":  "usgaap_html",
             "accounting_standard": "US-GAAP",
-            "components": components,
+            "components": shortform_comps,
         }
 
     if all(v is None for v in [short_term_current, lt_total_current, bonds_current]):
@@ -207,7 +208,7 @@ def _extract_usgaap_from_html(htm_file: Path) -> dict | None:
     lt_longterm_current = _subtract(lt_total_current, lt_1yr_current)
     lt_longterm_prior   = _subtract(lt_total_prior,   lt_1yr_prior)
 
-    components = [
+    components: list[MetricComponent] = [
         {"label": "短期借入金",               "tag": "USGAAP_ShortTermLoans",        "current": _to_yen(short_term_current),  "prior": _to_yen(short_term_prior)},
         {"label": "コマーシャル・ペーパー",    "tag": None,                            "current": None,                         "prior": None},
         {"label": "1年内償還予定の社債",       "tag": None,                            "current": None,                         "prior": None},

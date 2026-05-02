@@ -31,6 +31,7 @@ from mebuki.analysis.context_helpers import (
 )
 from mebuki.analysis.ibd_usgaap_html import _extract_usgaap_from_html
 from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
+from mebuki.utils.xbrl_result_types import InterestBearingDebtResult, MetricComponent
 from mebuki.constants.xbrl import (
     INTEREST_BEARING_DEBT_TAGS,
     COMPONENT_DEFINITIONS,
@@ -143,7 +144,7 @@ def _is_usgaap_xbrl(tag_elements: dict) -> bool:
     return True
 
 
-def extract_interest_bearing_debt(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> dict:
+def extract_interest_bearing_debt(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> InterestBearingDebtResult:
     """
     XBRLディレクトリから有利子負債を構成要素ごとに抽出する。
 
@@ -186,9 +187,9 @@ def extract_interest_bearing_debt(xbrl_dir: Path, *, pre_parsed: dict | None = N
         for htm_file in htm_files:
             content = htm_file.read_text(encoding="utf-8", errors="ignore")
             if "借入金等明細表" in content and "該当事項はありません" in content:
-                zero_comps = [{"label": d["label"], "tag": None, "current": 0.0, "prior": 0.0}
-                              for d in COMPONENT_DEFINITIONS]
-                return {"current": 0.0, "prior": 0.0, "method": "usgaap_zero", "accounting_standard": "US-GAAP", "components": zero_comps}
+                usgaap_zero_comps: list[MetricComponent] = [{"label": d["label"], "tag": None, "current": 0.0, "prior": 0.0}
+                                                           for d in COMPONENT_DEFINITIONS]
+                return {"current": 0.0, "prior": 0.0, "method": "usgaap_zero", "accounting_standard": "US-GAAP", "components": usgaap_zero_comps}
         return {"current": None, "prior": None, "method": "not_found", "accounting_standard": "US-GAAP", "components": [],
                 "reason": "US-GAAP 連結財務諸表注記 HTML (0105020) で借入金を取得できない"}
 
@@ -288,7 +289,7 @@ def extract_interest_bearing_debt(xbrl_dir: Path, *, pre_parsed: dict | None = N
     if not found:
         xbrl_files = find_xbrl_files(xbrl_dir)
         if any(f.stat().st_size > 100_000 for f in xbrl_files):
-            zero_comps = [{"label": comp["label"], "tag": None, "current": 0.0, "prior": 0.0} for comp in COMPONENT_DEFINITIONS]
+            zero_comps: list[MetricComponent] = [{"label": comp["label"], "tag": None, "current": 0.0, "prior": 0.0} for comp in COMPONENT_DEFINITIONS]
             return {"current": 0.0, "prior": 0.0, "method": "zero_debt", "accounting_standard": accounting_standard, "components": zero_comps}
         return {"current": None, "prior": None, "method": "not_found", "accounting_standard": accounting_standard, "components": components,
                 "reason": "有利子負債タグが見つからない"}

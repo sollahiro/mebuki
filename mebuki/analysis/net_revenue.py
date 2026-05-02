@@ -8,6 +8,7 @@ IFRS適用の金融会社（クレディセゾン等）は J-QUANTS の Sales/OP
 from pathlib import Path
 
 from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
+from mebuki.utils.xbrl_result_types import NetRevenueResult
 
 _NET_REVENUE_TAGS: frozenset[str] = frozenset([
     "NetRevenueIFRS",
@@ -32,7 +33,7 @@ def _is_target_ctx(ctx: str, patterns: list[str]) -> bool:
     )
 
 
-def extract_net_revenue(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> dict:
+def extract_net_revenue(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> NetRevenueResult:
     """
     XBRLディレクトリから IFRS 純収益と事業利益を抽出する。
 

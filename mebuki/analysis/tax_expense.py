@@ -24,6 +24,7 @@ from mebuki.analysis.context_helpers import (
     _is_nonconsolidated_duration,
     _is_nonconsolidated_prior_duration,
 )
+from mebuki.utils.xbrl_result_types import TaxExpenseResult
 from mebuki.analysis.xbrl_utils import (
     collect_numeric_elements,
     find_xbrl_files,
@@ -107,7 +108,7 @@ def _find_nonconsolidated_duration_value(
     )
 
 
-def _extract_usgaap_tax_from_html(xbrl_dir: Path) -> dict | None:
+def _extract_usgaap_tax_from_html(xbrl_dir: Path) -> TaxExpenseResult | None:
     """US-GAAP企業の連結損益計算書(0105010)HTMLから税引前利益・法人税等を抽出する。"""
     if not _BS4_AVAILABLE:
         return None
@@ -263,7 +264,7 @@ def _get_value(tag_elements: dict, tags: list[str]) -> tuple[float | None, float
     return None, None
 
 
-def extract_tax_expense(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> dict:
+def extract_tax_expense(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> TaxExpenseResult:
     """
     XBRLディレクトリから税引前利益・法人税等を抽出し実効税率を計算する。
 

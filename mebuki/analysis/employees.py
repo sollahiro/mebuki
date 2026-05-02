@@ -16,6 +16,7 @@ from mebuki.analysis.context_helpers import (
     _is_nonconsolidated_prior_instant,
 )
 from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
+from mebuki.utils.xbrl_result_types import EmployeesResult
 
 EMPLOYEE_TAGS = [
     "NumberOfEmployees",       # 主要タグ（J-GAAP・IFRS共通）
@@ -39,7 +40,7 @@ def _find_value(
     return current, prior
 
 
-def extract_employees(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> dict:
+def extract_employees(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> EmployeesResult:
     """
     XBRLディレクトリから従業員数を抽出する。
 

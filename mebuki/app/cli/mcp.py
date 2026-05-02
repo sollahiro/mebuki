@@ -43,12 +43,12 @@ def _yaml_parse_block(lines: list, start: int, base_indent: int):
         if indent < base_indent:
             break
         if stripped.startswith('- '):
-            if result is None:
+            if not isinstance(result, list):
                 result = []
             result.append(_yaml_scalar(stripped[2:]))
             i += 1
         elif stripped == '-':
-            if result is None:
+            if not isinstance(result, list):
                 result = []
             i += 1
             while i < len(lines) and (not lines[i].strip() or lines[i].strip().startswith('#')):

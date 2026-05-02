@@ -207,10 +207,12 @@ def _build_year_entry(
         'ROE': profit_metrics['roe'],
         'CFCVR': profit_metrics['cf_conversion_rate']
     })
-    calc_values["MetricSources"].update({
+    metric_sources = calc_values.get("MetricSources") or {}
+    metric_sources.update({
         "ROE": {"source": "derived", "method": "NP / Eq", "unit": "percent"},
         "CFCVR": {"source": "derived", "method": "CFO / NP", "unit": "percent"},
     })
+    calc_values["MetricSources"] = metric_sources
 
     # 株式分割調整
     ratio = calculate_adjustment_ratio(raw_values.get('AvgSh'), latest_avg_sh)
@@ -219,11 +221,13 @@ def _build_year_entry(
         'AdjustedEPS': apply_adjustment(raw_values.get('EPS'), ratio),
         'AdjustedBPS': apply_adjustment(raw_values.get('BPS'), ratio)
     })
-    calc_values["MetricSources"].update({
+    metric_sources = calc_values.get("MetricSources") or {}
+    metric_sources.update({
         "AdjustmentRatio": {"source": "derived", "unit": "ratio"},
         "AdjustedEPS": {"source": "derived", "method": "EPS / adjustment_ratio", "unit": "yen"},
         "AdjustedBPS": {"source": "derived", "method": "BPS / adjustment_ratio", "unit": "yen"},
     })
+    calc_values["MetricSources"] = metric_sources
 
     # 2Qは6ヶ月分のEPS/BPSのため、比率系指標は無効
     if per_type == "2Q":

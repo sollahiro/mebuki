@@ -41,7 +41,8 @@ def cmd_config(args, parser):
             "analysisYears": "analysisYears",
         }
 
-        target_key = key_map.get(args.key, args.key)
+        raw_key: str = args.key or ""
+        target_key: str = key_map.get(raw_key, raw_key)
         target_value = args.value
 
         if target_key == "analysisYears":

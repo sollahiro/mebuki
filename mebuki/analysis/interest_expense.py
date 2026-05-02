@@ -26,6 +26,7 @@ from mebuki.analysis.context_helpers import (
     _is_nonconsolidated_duration,
     _is_nonconsolidated_prior_duration,
 )
+from mebuki.utils.xbrl_result_types import InterestExpenseResult
 from mebuki.analysis.xbrl_utils import (
     collect_numeric_elements,
     find_xbrl_files,
@@ -134,7 +135,7 @@ def _detect_accounting_standard(tag_elements: dict) -> str:
     return "J-GAAP"
 
 
-def _extract_usgaap_ie_from_html(xbrl_dir: Path) -> dict | None:
+def _extract_usgaap_ie_from_html(xbrl_dir: Path) -> InterestExpenseResult | None:
     """US-GAAP企業の連結損益計算書(0105010)HTMLから支払利息を抽出する。"""
     if not _BS4_AVAILABLE:
         return None
@@ -227,7 +228,7 @@ def _extract_usgaap_ie_from_html(xbrl_dir: Path) -> dict | None:
     return None
 
 
-def extract_interest_expense(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> dict:
+def extract_interest_expense(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> InterestExpenseResult:
     """
     XBRLディレクトリから連結損益計算書の支払利息（金融費用）を抽出する。
 

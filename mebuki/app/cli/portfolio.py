@@ -20,8 +20,9 @@ def cmd_watch(args):
             elif result["status"] == "already_exists":
                 print(f"既にウォッチリストに存在します: {args.code}", file=sys.stderr)
             else:
-                item = result["item"]
-                print(f"ウォッチリストに追加しました: {item['ticker_code']} {item['name']}", file=sys.stderr)
+                item = result.get("item")
+                if item is not None:
+                    print(f"ウォッチリストに追加しました: {item['ticker_code']} {item['name']}", file=sys.stderr)
         except ValueError as e:
             print(f"エラー: {e}", file=sys.stderr)
 

@@ -16,6 +16,7 @@ from pathlib import Path
 
 from mebuki.analysis.context_helpers import _is_consolidated_duration, _is_consolidated_prior_duration
 from mebuki.analysis.xbrl_utils import parse_xbrl_value, collect_numeric_elements, find_xbrl_files
+from mebuki.utils.xbrl_result_types import CashFlowResult
 from mebuki.constants.xbrl import CF_INVESTING_TAGS, CF_OPERATING_TAGS
 
 _CF_RELEVANT_TAGS: frozenset = frozenset(
@@ -49,7 +50,7 @@ def _find_duration_value(
     return current, prior
 
 
-def extract_cash_flow(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> dict:
+def extract_cash_flow(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> CashFlowResult:
     """
     XBRLディレクトリから連結CF計算書の営業CF・投資CFを抽出する。
 
