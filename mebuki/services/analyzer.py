@@ -16,7 +16,7 @@ from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.infrastructure.settings import settings_store
 from mebuki.constants.financial import PERCENT, MILLION_YEN
 from mebuki.utils.wacc import load_rf_rates, get_rf_for_date, calculate_wacc
-from mebuki.utils.metrics_types import CalculatedData, YearEntry
+from mebuki.utils.metrics_types import CalculatedData, MetricSource, YearEntry
 
 from .financial_fetcher import FinancialFetcher
 from .edinet_fetcher import EdinetFetcher
@@ -40,7 +40,7 @@ def _set_metric_source(
     label: str | None = None,
 ) -> None:
     sources = cd.setdefault("MetricSources", {})
-    item: dict[str, str | None] = {"source": source, "unit": unit}
+    item: MetricSource = {"source": source, "unit": unit}
     if method is not None:
         item["method"] = method
     if doc_id is not None:
