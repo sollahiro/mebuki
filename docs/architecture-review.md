@@ -250,9 +250,9 @@ MCPとCLIは大枠では対応している。
 
 ### Phase 3: EDINET境界の再設計
 
-- `EdinetCacheStore` のような専用層を作る
-- 日別検索、XBRL zip/展開、pre_parsed結果の責務を分ける
-- 年次/半期の補完パイプラインを共通化
+- `EdinetCacheStore` を追加し、日別検索キャッシュとXBRL zip展開を `EdinetAPIClient` から分離済み
+- 次: pre_parsed結果の責務を分ける
+- 次: 年次/半期の補完パイプラインを共通化
 
 ### Phase 4: 型とテストの強化
 

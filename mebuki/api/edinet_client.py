@@ -1,8 +1,6 @@
 import asyncio
 import logging
-import json
 import ssl
-import zipfile
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Any
@@ -12,21 +10,24 @@ import certifi
 
 from ..constants.api import EDINET_API_BASE_URL
 from ..utils.fiscal_year import normalize_date_format, parse_date_string
+from .edinet_cache_store import EdinetCacheStore
 
 logger = logging.getLogger(__name__)
 
 class EdinetAPIClient:
     """EDINET API v2 クライアント"""
 
-    def __init__(self, api_key: str | None = None, cache_dir: str | None = None):
+    def __init__(
+        self,
+        api_key: str | None = None,
+        cache_dir: str | None = None,
+        cache_store: EdinetCacheStore | None = None,
+    ):
         self.api_key = api_key
         self.base_url = EDINET_API_BASE_URL
-        if cache_dir:
-            self.cache_dir = Path(cache_dir)
-        else:
-            self.cache_dir = Path("tmp_cache") / "edinet"
+        self.cache_store = cache_store or EdinetCacheStore(cache_dir or Path("tmp_cache") / "edinet")
+        self.cache_dir = self.cache_store.cache_dir
 
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
         self._session: aiohttp.ClientSession | None = None
         self._session_loop: asyncio.AbstractEventLoop | None = None
         self._download_locks: dict[str, asyncio.Lock] = {}
@@ -167,27 +168,15 @@ class EdinetAPIClient:
 
     def _get_search_cache_key(self, date_str: str) -> str:
         """検索用キャッシュキー生成（日付ベース）"""
-        return f"search_{date_str}.json"
+        return self.cache_store.search_cache_key(date_str)
 
     def _load_search_cache(self, filename: str) -> list[dict[str, Any]] | None:
         """キャッシュから検索結果をロード"""
-        cache_path = self.cache_dir / filename
-        if cache_path.exists():
-            try:
-                with open(cache_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except Exception as e:
-                logger.warning(f"Cache load failed: {e}")
-        return None
+        return self.cache_store.load_search_cache(filename)
 
     def _save_search_cache(self, filename: str, data: list[dict[str, Any]]) -> None:
         """検索結果をキャッシュに保存"""
-        cache_path = self.cache_dir / filename
-        try:
-            with open(cache_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.warning(f"Cache save failed: {e}")
+        self.cache_store.save_search_cache(filename, data)
 
     async def _search_record(
         self,
@@ -367,12 +356,12 @@ class EdinetAPIClient:
         save_dir = Path(save_dir)
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        dest = save_dir / f"{doc_id}_xbrl"
+        dest = self.cache_store.xbrl_dir(doc_id, save_dir)
 
         if doc_id not in self._download_locks:
             self._download_locks[doc_id] = asyncio.Lock()
         async with self._download_locks[doc_id]:
-            if dest.exists() and dest.is_dir():
+            if self.cache_store.has_xbrl_dir(doc_id, save_dir):
                 return dest
 
             if not self.api_key:
@@ -380,18 +369,7 @@ class EdinetAPIClient:
 
             try:
                 content = await self._request_binary(f"/documents/{doc_id}", {"type": 1})
-                zip_path = save_dir / f"{doc_id}.zip"
-                with open(zip_path, "wb") as f:
-                    f.write(content)
-                dest.mkdir(parents=True, exist_ok=True)
-                with zipfile.ZipFile(zip_path, "r") as z:
-                    for member in z.namelist():
-                        member_path = (dest / member).resolve()
-                        if not str(member_path).startswith(str(dest.resolve())):
-                            raise ValueError(f"不正なZIPエントリ: {member}")
-                    z.extractall(dest)
-                zip_path.unlink()
-                return dest
+                return self.cache_store.store_xbrl_zip(doc_id, content, save_dir)
             except Exception as e:
                 logger.error(f"❌ [EDINET] XBRL Download error {doc_id}: {e}")
                 return None
