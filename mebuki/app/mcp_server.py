@@ -9,6 +9,8 @@ from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
 from mebuki.infrastructure.helpers import validate_stock_code
+from mebuki.infrastructure.settings import settings_store
+from mebuki.services.cache_pruner import CachePruner
 from mebuki.services.data_service import data_service
 from mebuki.services.master_data import master_data_manager
 from mebuki.services.portfolio_service import portfolio_service
@@ -108,6 +110,15 @@ async def list_tools() -> list[Tool]:
                     },
                 },
                 "required": ["code"],
+            },
+        ),
+        Tool(
+            name="get_japan_stock_cache_stats",
+            description="Inspect mebuki cache usage and deprecated-cache audit findings. キャッシュ容量・EDINET件数・廃止済みBOJキャッシュの検出結果を取得します。Read-only.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
             },
         ),
         Tool(
@@ -267,6 +278,16 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             doc_id = arguments.get("doc_id")
             requested_sections = arguments.get("sections", ["all"])
             result = await data_service.extract_filing_content(code, doc_id, requested_sections)
+            return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
+
+        if name == "get_japan_stock_cache_stats":
+            pruner = CachePruner(settings_store.cache_dir)
+            result = {
+                "stats": pruner.stats().to_dict(),
+                "audit_findings": [finding.to_dict() for finding in pruner.audit()],
+                "prune_available_in_mcp": False,
+                "message": "削除系の cache prune は安全のためCLIのみ対応です。",
+            }
             return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
 
         if name == "get_japan_stock_watchlist":

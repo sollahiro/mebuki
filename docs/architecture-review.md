@@ -119,15 +119,34 @@ MCPとCLIは大枠では対応している。
 | EDINET本文 | `filing` | `extract_japan_stock_filing_content` | 対応 |
 | セクター | `sector` | `search_japan_stocks_by_sector` | 対応 |
 | watch/portfolio | `watch`, `portfolio` | 対応ツール | 対応 |
-| キャッシュ管理 | `cache prune` | なし | MCP対応原則上、必要なら追加検討 |
+| キャッシュ可視化 | `cache stats`, `cache audit` | `get_japan_stock_cache_stats` | 読み取りのみ対応 |
+| キャッシュ削除 | `cache prune` | なし | 安全のためCLIのみ |
 
 課題:
 
-- `cache prune` はCLIに追加済みだが、MCPには未追加。ユーザーがMCPから運用するなら対応が必要。
+- `cache prune` はCLIに限定する。MCPでは削除せず、`get_japan_stock_cache_stats` で容量とaudit結果だけ見せる。
 - JSON出力時にバナーが混ざる問題は今回 `main.py` で抑制した。
 - CLIとMCPの出力はどちらも内部dictをほぼそのまま返すため、公開スキーマとしては固定されていない。
 
-## 6. 改善候補
+## 6. キャッシュ運用方針
+
+キャッシュは「取得を速くするもの」と「分析結果を再利用するもの」が混在するため、まず可視化と安全な削除導線を優先する。
+
+| コマンド/ツール | 目的 | 削除有無 |
+|---|---|---|
+| `mebuki cache stats` | 全体容量、ファイル数、EDINET検索/XBRL件数、BOJ痕跡、不明JSON件数を確認 | なし |
+| `mebuki cache audit` | 廃止済みBOJキャッシュ、metadata上のBOJキー、既知命名に合わないroot JSONを検出 | なし |
+| `mebuki cache prune` | BOJ痕跡、指定日数以上古いEDINET検索/XBRL展開を削除 | dry-runがデフォルト。`--execute` 時のみ削除 |
+| MCP `get_japan_stock_cache_stats` | MCP利用中にキャッシュ状態を確認 | なし |
+
+削除方針:
+
+- 廃止済みBOJキャッシュは `cache prune` の通常削除対象に含める。
+- 財務省金利キャッシュ `mof_rf_rates` は現行機能なので削除対象にしない。
+- EDINET検索キャッシュとXBRL展開ディレクトリは、ユーザーが日数を指定したときだけ削除する。
+- MCPからの削除操作は当面提供しない。削除が必要な場合はCLIでdry-runを確認してから `--execute` する。
+
+## 7. 改善候補
 
 ### すぐやる価値が高い
 
@@ -168,14 +187,15 @@ MCPとCLIは大枠では対応している。
 3. `CalculatedData` の公開キー削除  
    MCP/CLI利用者への互換性影響が大きい。renameよりalias期間を置くべき。
 
-## 7. 推奨ロードマップ
+## 8. 推奨ロードマップ
 
 ### Phase 1: 可視化と運用整理
 
-- `cache stats` 追加
-- `cache prune` のMCP対応要否を判断
-- docsにキャッシュ方針を明記
-- 廃止済み機能のキャッシュ/設定を定期検出するチェックを追加
+- `cache stats` 追加済み
+- `cache audit` 追加済み
+- `cache prune` はMCP非対応、読み取りstatsのみMCP対応
+- docsにキャッシュ方針を明記済み
+- 廃止済み機能のキャッシュ/設定検出をテスト追加済み
 
 ### Phase 2: 指標の出所整理
 
@@ -195,7 +215,7 @@ MCPとCLIは大枠では対応している。
 - 実企業サンプルを使った回帰テストを増やす
 - 会計基準別のゴールデンケースを整理する
 
-## 8. 判断メモ
+## 9. 判断メモ
 
 現状は「実用上は動くが、キャッシュと出所情報が追いにくくなり始めている」段階。直ちに全面改修するより、まず可視化とキャッシュ境界の整備を進めるのが安全。
 

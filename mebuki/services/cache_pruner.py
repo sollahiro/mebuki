@@ -25,6 +25,35 @@ class PruneSummary:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class CacheStats:
+    cache_dir: str
+    total_files: int = 0
+    total_dirs: int = 0
+    total_bytes: int = 0
+    metadata_entries: int = 0
+    root_json_files: int = 0
+    edinet_search_files: int = 0
+    edinet_xbrl_dirs: int = 0
+    boj_files: int = 0
+    boj_metadata_entries: int = 0
+    unknown_root_json_files: int = 0
+
+    def to_dict(self) -> dict[str, int | str]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class CacheAuditFinding:
+    kind: str
+    target: str
+    message: str
+    bytes: int = 0
+
+    def to_dict(self) -> dict[str, int | str]:
+        return asdict(self)
+
+
 class CachePruner:
     """キャッシュディレクトリのスリム化を担当する。"""
 
@@ -55,6 +84,91 @@ class CachePruner:
                 self._prune_edinet_xbrl(days=edinet_xbrl_days, dry_run=dry_run),
             )
         return summary
+
+    def stats(self) -> CacheStats:
+        """キャッシュ全体のサイズと主要カテゴリ別件数を返す。"""
+        files = [path for path in self.cache_dir.rglob("*") if path.is_file()]
+        dirs = [path for path in self.cache_dir.rglob("*") if path.is_dir()]
+        metadata_keys = self.cache_manager.keys()
+        root_json_files = [
+            path
+            for path in self.cache_dir.glob("*.json")
+            if path.name != "metadata.json"
+        ]
+        boj_files = sorted(self.cache_dir.glob("boj_*.json"))
+        known_root_prefixes = (
+            "individual_analysis_",
+            "half_year_periods_",
+            "earnings_calendar_",
+            "mof_",
+            "boj_",
+        )
+        unknown_root_json_files = [
+            path
+            for path in root_json_files
+            if not path.stem.startswith(known_root_prefixes)
+        ]
+
+        return CacheStats(
+            cache_dir=str(self.cache_dir),
+            total_files=len(files),
+            total_dirs=len(dirs),
+            total_bytes=sum(path.stat().st_size for path in files),
+            metadata_entries=len(metadata_keys),
+            root_json_files=len(root_json_files),
+            edinet_search_files=len(list(self.edinet_dir.glob("search_*.json"))),
+            edinet_xbrl_dirs=len([path for path in self.edinet_dir.glob("*_xbrl") if path.is_dir()]),
+            boj_files=len(boj_files),
+            boj_metadata_entries=len([key for key in metadata_keys if key.startswith("boj_")]),
+            unknown_root_json_files=len(unknown_root_json_files),
+        )
+
+    def audit(self) -> list[CacheAuditFinding]:
+        """廃止済み・出所不明キャッシュを検出する。削除は行わない。"""
+        findings: list[CacheAuditFinding] = []
+        metadata_keys = self.cache_manager.keys()
+
+        for path in sorted(self.cache_dir.glob("boj_*.json")):
+            findings.append(
+                CacheAuditFinding(
+                    kind="deprecated_boj_file",
+                    target=str(path),
+                    message="BOJ金利キャッシュは廃止済みです。cache prune の削除対象です。",
+                    bytes=path.stat().st_size,
+                )
+            )
+
+        for key in sorted(key for key in metadata_keys if key.startswith("boj_")):
+            findings.append(
+                CacheAuditFinding(
+                    kind="deprecated_boj_metadata",
+                    target=key,
+                    message="metadata.json に廃止済みBOJキャッシュキーが残っています。",
+                )
+            )
+
+        known_root_prefixes = (
+            "individual_analysis_",
+            "half_year_periods_",
+            "earnings_calendar_",
+            "mof_",
+            "boj_",
+        )
+        for path in sorted(self.cache_dir.glob("*.json")):
+            if path.name == "metadata.json":
+                continue
+            if path.stem.startswith(known_root_prefixes):
+                continue
+            findings.append(
+                CacheAuditFinding(
+                    kind="unknown_root_json_cache",
+                    target=str(path),
+                    message="既知のキャッシュ命名に該当しないルートJSONです。用途確認候補です。",
+                    bytes=path.stat().st_size,
+                )
+            )
+
+        return findings
 
     def _prune_boj(self, *, dry_run: bool) -> PruneSummary:
         files = sorted(self.cache_dir.glob("boj_*.json"))
