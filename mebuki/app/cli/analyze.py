@@ -216,7 +216,7 @@ async def cmd_analyze(args):
             ("投下資本 (百万)",         lambda c: (c.get("InterestBearingDebt") + c.get("Eq")) if c.get("InterestBearingDebt") is not None and c.get("Eq") is not None else None),
             # ── 従業員数 ──
             ("従業員数 (人)",           lambda c: c.get("Employees"),   "int"),
-            ("DocID",                  lambda c: c.get("IBDDocID")),
+            ("DocID",                  lambda c: c.get("DocID")),
         ]
 
         for metric_def in metrics_to_show:

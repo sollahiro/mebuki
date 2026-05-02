@@ -38,7 +38,7 @@ def _apply_ibd(
         fy_end_key = _fy_end_key(year)
         doc_id = doc_id_by_year.get(fy_end_key)
         if doc_id:
-            year["CalculatedData"]["IBDDocID"] = doc_id
+            year["CalculatedData"]["DocID"] = doc_id
         ibd = ibd_by_year.get(fy_end_key)
         if not ibd or ibd.get("current") is None:
             continue

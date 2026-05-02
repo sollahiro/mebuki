@@ -58,7 +58,6 @@ class CalculatedData(TypedDict, total=False):
     GrossProfitMargin: float | None
     GrossProfitMethod: str
     # ── analyzer.py: _apply_ibd ──
-    IBDDocID: str | None
     InterestBearingDebt: float | None
     IBDComponents: list[IBDComponent]
     IBDAccountingStandard: str
@@ -75,7 +74,7 @@ class CalculatedData(TypedDict, total=False):
     SalesLabel: str
     # ── analyzer.py: _apply_employees ──
     Employees: int | None
-    # ── data_service.py: build_half_year_periods ──
+    # ── analyzer.py: _apply_ibd / half_year_data_service.py ──
     DocID: str | None
     # ── wacc.py: calculate_wacc ──
     CostOfEquity: float | None
