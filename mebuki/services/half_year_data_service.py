@@ -82,7 +82,11 @@ class HalfYearDataService:
         # EDINET からの補完（GrossProfit + CFO/CFI for H1）
         # 表示中の FY 数だけ 2Q EDINET を取得（26H1 等の extra 分も含む）
         unique_fy_ends = len(set(p["fy_end"] for p in base_periods))
-        edinet_fetcher = EdinetFetcher(self.api_client, self.edinet_client)
+        edinet_fetcher = EdinetFetcher(
+            self.api_client,
+            self.edinet_client,
+            cache_manager=self.cache_manager,
+        )
         try:
             half_edinet, fy_gp, ibd_by_year = await asyncio.gather(
                 edinet_fetcher.extract_half_year_edinet_data(code, financial_data, max_years=unique_fy_ends),

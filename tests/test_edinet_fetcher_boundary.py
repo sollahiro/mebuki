@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from mebuki.services.edinet_fetcher import EdinetFetcher
+from mebuki.utils.cache import CacheManager
 
 
 def _financial_record(
@@ -74,3 +75,132 @@ async def test_fetch_latest_annual_report_selects_latest_120_doc() -> None:
 
     assert doc is not None
     assert doc["docID"] == "NEW"
+
+
+@pytest.mark.asyncio
+async def test_get_half_year_docs_calls_search_documents_once_on_repeated_calls() -> None:
+    edinet_client = Mock()
+    edinet_client.api_key = "dummy"
+    edinet_client.search_documents = AsyncMock(return_value=[{"docID": "S100HALF"}])
+    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    financial_data = [
+        _financial_record("2023-04-01", "2024-03-31", "2023-11-10", period_type="2Q"),
+    ]
+
+    first = await fetcher._get_half_year_docs("72030", financial_data, 1)
+    second = await fetcher._get_half_year_docs("72030", financial_data, 1)
+
+    assert first == [{"docID": "S100HALF"}]
+    assert second == [{"docID": "S100HALF"}]
+    edinet_client.search_documents.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_get_annual_docs_reads_from_persistent_cache(tmp_path) -> None:
+    code = "72030"
+    max_years = 1
+    cache_manager = CacheManager(cache_dir=str(tmp_path))
+    cache_manager.set(
+        f"edinet_docs_{code}_{max_years}",
+        {
+            "_cache_version": "edinet-docs-v1",
+            "docs": [{"docID": "S100CACHED"}],
+        },
+    )
+    edinet_client = Mock()
+    edinet_client.api_key = "dummy"
+    edinet_client.search_documents = AsyncMock(return_value=[{"docID": "UNUSED"}])
+    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client, cache_manager=cache_manager)
+
+    docs = await fetcher._get_annual_docs(
+        code,
+        [_financial_record("2023-04-01", "2024-03-31", "2024-06-01")],
+        max_years,
+    )
+
+    assert docs == [{"docID": "S100CACHED"}]
+    edinet_client.search_documents.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_annual_docs_saves_to_persistent_cache_after_api_call(tmp_path) -> None:
+    code = "72030"
+    cache_manager = CacheManager(cache_dir=str(tmp_path))
+    edinet_client = Mock()
+    edinet_client.api_key = "dummy"
+    edinet_client.search_documents = AsyncMock(return_value=[{"docID": "S100TEST"}])
+    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client, cache_manager=cache_manager)
+
+    docs = await fetcher._get_annual_docs(
+        code,
+        [_financial_record("2023-04-01", "2024-03-31", "2024-06-01")],
+        1,
+    )
+    cached = cache_manager.get("edinet_docs_72030_1")
+
+    assert docs == [{"docID": "S100TEST"}]
+    assert isinstance(cached, dict)
+    assert cached["docs"] == [{"docID": "S100TEST"}]
+
+
+@pytest.mark.asyncio
+async def test_get_half_year_docs_reads_from_persistent_cache(tmp_path) -> None:
+    code = "72030"
+    max_years = 1
+    cache_manager = CacheManager(cache_dir=str(tmp_path))
+    cache_manager.set(
+        f"edinet_docs_{code}_{max_years}_2Q",
+        {
+            "_cache_version": "edinet-docs-v1",
+            "docs": [{"docID": "S100HALFCACHED"}],
+        },
+    )
+    edinet_client = Mock()
+    edinet_client.api_key = "dummy"
+    edinet_client.search_documents = AsyncMock(return_value=[{"docID": "UNUSED"}])
+    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client, cache_manager=cache_manager)
+    financial_data = [
+        _financial_record("2023-04-01", "2024-03-31", "2023-11-10", period_type="2Q"),
+    ]
+
+    docs = await fetcher._get_half_year_docs(code, financial_data, max_years)
+
+    assert docs == [{"docID": "S100HALFCACHED"}]
+    edinet_client.search_documents.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_half_year_docs_returns_empty_when_no_q2_records() -> None:
+    edinet_client = Mock()
+    edinet_client.api_key = "dummy"
+    edinet_client.search_documents = AsyncMock(return_value=[{"docID": "UNUSED"}])
+    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+
+    docs = await fetcher._get_half_year_docs(
+        "72030",
+        [
+            _financial_record("2023-04-01", "2024-03-31", "2024-06-01", period_type="FY"),
+            _financial_record("2022-04-01", "2023-03-31", "2023-06-01", period_type="3Q"),
+        ],
+        2,
+    )
+
+    assert docs == []
+    edinet_client.search_documents.assert_not_awaited()
+
+
+def test_prepare_q2_records_deduplicates_by_fy_end_keeping_latest_disc_date() -> None:
+    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=Mock())
+
+    records = fetcher._prepare_q2_records(
+        [
+            _financial_record("2023-04-01", "2024-03-31", "2023-11-05", period_type="2Q"),
+            _financial_record("2023-04-01", "2024-03-31", "2023-11-10", period_type="2Q"),
+            _financial_record("2022-04-01", "2023-03-31", "2022-11-10", period_type="2Q"),
+        ],
+        3,
+    )
+
+    assert len(records) == 2
+    assert records[0]["CurFYEn"] == "2024-03-31"
+    assert records[0]["DiscDate"] == "2023-11-10"

@@ -21,14 +21,18 @@ from mebuki.analysis.interest_expense import extract_interest_expense
 from mebuki.analysis.net_revenue import extract_net_revenue
 from mebuki.analysis.operating_profit import extract_operating_profit
 from mebuki.analysis.tax_expense import extract_tax_expense
+from mebuki.utils.cache import CacheManager
 from mebuki.utils.jquants_utils import prepare_edinet_search_data
 from mebuki.utils.xbrl_result_types import XbrlTagElements
 
 logger = logging.getLogger(__name__)
 
+_EDINET_DOCS_CACHE_VERSION = "edinet-docs-v1"
+
 _PreParsedMap: TypeAlias = dict[str, tuple[Path, XbrlTagElements]]
 _MetricByYear: TypeAlias = dict[str, dict[str, Any]]
 _AllMetrics: TypeAlias = dict[str, dict[str, Any]]
+_DocCacheKey: TypeAlias = tuple[str, int] | tuple[str, int, str]
 
 
 def _fy_end_key(value: object) -> str:
@@ -63,11 +67,14 @@ class EdinetFetcher:
         self,
         api_client: JQuantsAPIClient,
         edinet_client: EdinetAPIClient | None,
+        *,
+        cache_manager: CacheManager | None = None,
     ):
         self.api_client = api_client
         self.edinet_client = edinet_client
-        self._doc_cache: dict[tuple[str, int], list[dict[str, Any]]] = {}
-        self._doc_locks: dict[tuple[str, int], asyncio.Lock] = {}
+        self.cache_manager = cache_manager
+        self._doc_cache: dict[_DocCacheKey, list[dict[str, Any]]] = {}
+        self._doc_locks: dict[_DocCacheKey, asyncio.Lock] = {}
 
     async def _get_annual_docs(
         self,
@@ -81,17 +88,106 @@ class EdinetFetcher:
         ネットワーク呼び出しを1回に集約する。
         """
         key = (code, max_years)
+        persistent_key = f"edinet_docs_{code}_{max_years}"
         if key not in self._doc_locks:
             self._doc_locks[key] = asyncio.Lock()
         async with self._doc_locks[key]:
             if key not in self._doc_cache:
-                self._doc_cache[key] = await self.search_recent_reports(
+                if self.cache_manager is not None:
+                    cached = self.cache_manager.get(persistent_key)
+                    if (
+                        isinstance(cached, dict)
+                        and cached.get("_cache_version") == _EDINET_DOCS_CACHE_VERSION
+                        and isinstance(cached.get("docs"), list)
+                    ):
+                        self._doc_cache[key] = cached["docs"]
+                        return self._doc_cache[key]
+
+                docs = await self.search_recent_reports(
                     code=code,
                     jquants_data=financial_data,
                     max_years=max_years,
                     doc_types=["120"],
                     max_documents=max_years,
                 )
+                self._doc_cache[key] = docs
+                if self.cache_manager is not None:
+                    self.cache_manager.set(
+                        persistent_key,
+                        {"_cache_version": _EDINET_DOCS_CACHE_VERSION, "docs": docs},
+                    )
+            return self._doc_cache[key]
+
+    def _prepare_q2_records(
+        self,
+        financial_data: list[dict[str, Any]],
+        max_years: int,
+    ) -> list[dict[str, Any]]:
+        """2Qレコードを抽出し、年度末ごとに最新開示日へ集約する。"""
+        from datetime import datetime as _dt
+        from mebuki.utils.fiscal_year import parse_date_string as _parse
+
+        now = _dt.now()
+        q2_records_raw: list[dict[str, Any]] = []
+        for record in financial_data:
+            if record.get("CurPerType") != "2Q":
+                continue
+            disc_date = record.get("DiscDate", "")
+            if disc_date:
+                dt = _parse(disc_date)
+                if dt and dt > now:
+                    continue
+            q2_records_raw.append(record)
+
+        seen_fy_ends: dict[str, dict[str, Any]] = {}
+        for record in q2_records_raw:
+            fy_end = record.get("CurFYEn", "")
+            if fy_end not in seen_fy_ends or record.get("DiscDate", "") > seen_fy_ends[fy_end].get("DiscDate", ""):
+                seen_fy_ends[fy_end] = record
+
+        return sorted(
+            seen_fy_ends.values(),
+            key=lambda item: item.get("CurFYEn", ""),
+            reverse=True,
+        )[:max_years]
+
+    async def _get_half_year_docs(
+        self,
+        code: str,
+        financial_data: list[dict[str, Any]],
+        max_years: int,
+    ) -> list[dict[str, Any]]:
+        key = (code, max_years, "2Q")
+        persistent_key = f"edinet_docs_{code}_{max_years}_2Q"
+        if key not in self._doc_locks:
+            self._doc_locks[key] = asyncio.Lock()
+        async with self._doc_locks[key]:
+            if key not in self._doc_cache:
+                if self.cache_manager is not None:
+                    cached = self.cache_manager.get(persistent_key)
+                    if (
+                        isinstance(cached, dict)
+                        and cached.get("_cache_version") == _EDINET_DOCS_CACHE_VERSION
+                        and isinstance(cached.get("docs"), list)
+                    ):
+                        self._doc_cache[key] = cached["docs"]
+                        return self._doc_cache[key]
+
+                records = self._prepare_q2_records(financial_data, max_years)
+                if not records or not self.edinet_client:
+                    docs: list[dict[str, Any]] = []
+                else:
+                    docs = await self.edinet_client.search_documents(
+                        code=code,
+                        jquants_data=records,
+                        max_documents=max_years,
+                    )
+                self._doc_cache[key] = docs
+                if self.cache_manager is not None:
+                    self.cache_manager.set(
+                        persistent_key,
+                        {"_cache_version": _EDINET_DOCS_CACHE_VERSION, "docs": docs},
+                    )
             return self._doc_cache[key]
 
     async def search_recent_reports(
@@ -466,41 +562,9 @@ class EdinetFetcher:
 
         if not self.edinet_client or not self.edinet_client.api_key:
             return {}
-        client = self.edinet_client
-
-        # 2Qレコードのみ抽出（未来の開示日を除外して最新max_years件）
-        from datetime import datetime as _dt
-        now = _dt.now()
-
-        q2_records_raw = []
-        for r in financial_data:
-            if r.get("CurPerType") != "2Q":
-                continue
-            disc_date = r.get("DiscDate", "")
-            if disc_date:
-                from mebuki.utils.fiscal_year import parse_date_string as _parse
-                dt = _parse(disc_date)
-                if dt and dt > now:
-                    continue
-            q2_records_raw.append(r)
-
-        # CurFYEn ごとに1件に集約（複数ある場合は最も遅い DiscDate を採用）
-        # 重複レコードが max_years の枠を消費しないようにする
-        seen_fy_ends: dict[str, dict[str, Any]] = {}
-        for r in q2_records_raw:
-            fy_en = r.get("CurFYEn", "")
-            if fy_en not in seen_fy_ends or r.get("DiscDate", "") > seen_fy_ends[fy_en].get("DiscDate", ""):
-                seen_fy_ends[fy_en] = r
-
-        q2_records = sorted(seen_fy_ends.values(), key=lambda x: x.get("CurFYEn", ""), reverse=True)[:max_years]
-        if not q2_records:
+        docs = await self._get_half_year_docs(code, financial_data, max_years)
+        if not docs:
             return {}
-
-        docs = await client.search_documents(
-            code=code,
-            jquants_data=q2_records,
-            max_documents=max_years,
-        )
         logger.info(f"[HALF-EDINET] {code}: {len(docs)}件の2Q文書を検索")
 
         pre_parsed_map = await self._download_and_parse_docs(docs, code)

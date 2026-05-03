@@ -15,6 +15,7 @@ from mebuki.api.jquants_client import JQuantsAPIClient
 from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.infrastructure.settings import settings_store
 from mebuki.constants.financial import PERCENT, MILLION_YEN
+from mebuki.utils.cache import CacheManager
 from mebuki.utils.wacc import load_rf_rates, get_rf_for_date, calculate_wacc
 from mebuki.utils.metrics_types import CalculatedData, MetricSource, YearEntry
 
@@ -286,6 +287,7 @@ class IndividualAnalyzer:
         self,
         api_client: JQuantsAPIClient | None = None,
         edinet_client: EdinetAPIClient | None = None,
+        cache_manager: CacheManager | None = None,
     ):
         self.api_client = api_client or JQuantsAPIClient(api_key=settings_store.jquants_api_key)
 
@@ -302,8 +304,19 @@ class IndividualAnalyzer:
                 logger.warning(f"EDINETクライアントの初期化に失敗しました: {e}")
                 self.edinet_client = None
 
+        if cache_manager is None:
+            cache_manager = CacheManager(
+                cache_dir=str(settings_store.cache_dir),
+                enabled=settings_store.cache_enabled,
+            )
+        self._cache_manager = cache_manager
+
         self._financial_fetcher = FinancialFetcher(self.api_client)
-        self._edinet_fetcher = EdinetFetcher(self.api_client, self.edinet_client)
+        self._edinet_fetcher = EdinetFetcher(
+            self.api_client,
+            self.edinet_client,
+            cache_manager=self._cache_manager,
+        )
 
     async def fetch_analysis_data(
         self,

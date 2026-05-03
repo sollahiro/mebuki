@@ -105,6 +105,7 @@ class DataService:
         return IndividualAnalyzer(
             api_client=self.api_client,
             edinet_client=self.edinet_client,
+            cache_manager=self.cache_manager,
         )
 
     async def _fetch_jquants_financial_data(

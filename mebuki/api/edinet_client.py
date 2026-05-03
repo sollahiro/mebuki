@@ -362,6 +362,7 @@ class EdinetAPIClient:
             self._download_locks[doc_id] = asyncio.Lock()
         async with self._download_locks[doc_id]:
             if self.cache_store.has_xbrl_dir(doc_id, save_dir):
+                self.cache_store.touch_xbrl_dir(doc_id, save_dir)
                 return dest
 
             if not self.api_key:

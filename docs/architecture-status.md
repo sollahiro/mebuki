@@ -240,16 +240,18 @@ CI（GitHub Actions等）にpyrightを組み込む判断をする。
 
 - `_download_and_parse_docs(docs, code) -> _PreParsedMap` を共有ヘルパーとして抽出
 - 年次の `predownload_and_parse()` と半期の `extract_half_year_edinet_data()` が同じダウンロード+パース処理を使うように統一
+- `_prepare_q2_records()` で 2Q レコード抽出・重複排除を切り出し
+- `_get_half_year_docs()` を追加。`_doc_cache` / `_doc_locks` で年次と同じキャッシュ機構に乗せた（キー: `(code, max_years, "2Q")`）
+- `extract_half_year_edinet_data()` を `_get_half_year_docs()` 呼び出しに切り替え
 
 **まだやっていないこと**
 
-- 年次/半期で共通のEDINET doc mapを使う
 - GP/IBD/CFなどの補完結果を共通フォーマットにする
 - 半期固有のH2計算の整理
 
 **次にやるなら**
 
-書類検索（`_get_annual_docs` 相当）を半期パスと共有する。
+EDINET doc mapの独立キャッシュ化（#11）。
 
 ### 11. 個別分析キャッシュの粒度見直し
 
@@ -263,15 +265,21 @@ CI（GitHub Actions等）にpyrightを組み込む判断をする。
 - 分析キャッシュ（`individual_analysis_{code}`）バージョンをバンプしても J-QUANTS 再取得が発生しなくなった
 - `IndividualAnalyzer.fetch_analysis_data()` に `prefetched_stock_info` / `prefetched_financial_data` を追加
 
+**対応済み（追加分）**
+
+- `EdinetFetcher` に `cache_manager: CacheManager | None` を追加
+- `_get_annual_docs` / `_get_half_year_docs` で `CacheManager` 経由の永続キャッシュ読み書きを実装（バージョン: `"edinet-docs-v1"`、形状検証付き）
+- キャッシュキー: `edinet_docs_{code}_{max_years}`（年次）/ `edinet_docs_{code}_{max_years}_2Q`（半期）
+- `HalfYearDataService` / `IndividualAnalyzer` / `DataService.get_analyzer()` から `cache_manager` を伝播
+
 **まだやっていないこと**
 
-- EDINET doc mapの独立キャッシュ
 - XBRL parse resultの独立キャッシュ（現状はEDINETファイルキャッシュが実質的に代用）
 - 最終metricsの年度別粒度化
 
 **次にやるなら**
 
-EDINET doc mapをキャッシュに保存し、EDINET API呼び出しを削減する。
+pyrightをCIに組み込む判断（#9）。
 
 ## 未着手
 
@@ -330,7 +338,7 @@ alias期間、移行ガイド、契約テストを用意する。
 
 **次の候補**
 
-1. XBRL展開ディレクトリの容量上限・LRU整理（#8 残り）
-2. 年次/半期でEDINET書類検索共有を完成させる（#10 残り）
-3. EDINET doc mapの独立キャッシュ化（#11 残り）
+1. ~~XBRL展開ディレクトリの容量上限・LRU整理（#8 残り）~~ → 完了（`EDINET_XBRL_MAX_BYTES` 2GB上限・mtime LRU eviction）
+2. ~~年次/半期でEDINET書類検索共有を完成させる（#10 残り）~~ → 完了（`_get_half_year_docs` で共有キャッシュ機構に統合）
+3. ~~EDINET doc mapの独立キャッシュ化（#11 残り）~~ → 完了（`EdinetFetcher` に `CacheManager` 永続キャッシュを追加）
 4. pyrightをCIに組み込む判断（#9 残り）
