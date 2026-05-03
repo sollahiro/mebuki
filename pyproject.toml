@@ -3,7 +3,7 @@ name = "mebuki"
 version = "2.19.5"
 description = "mebuki: 正確な情報収集に特化した投資分析ツール"
 authors = [
-    {name = "shu", email = "shu.sorahiro@gmail.com"}
+    {name = "sollahiro", email = "sollahiro@gmail.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.11"
