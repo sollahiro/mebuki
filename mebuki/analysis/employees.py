@@ -7,6 +7,7 @@ contextRef が Instant 型の連結コンテキストを優先し、
 連結値が取れない場合のみ非連結にフォールバックする。
 """
 
+from collections.abc import Callable
 from pathlib import Path
 
 from mebuki.analysis.context_helpers import (
@@ -16,7 +17,7 @@ from mebuki.analysis.context_helpers import (
     _is_nonconsolidated_prior_instant,
 )
 from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
-from mebuki.utils.xbrl_result_types import EmployeesResult
+from mebuki.utils.xbrl_result_types import EmployeesResult, XbrlTagElements
 
 EMPLOYEE_TAGS = [
     "NumberOfEmployees",       # 主要タグ（J-GAAP・IFRS共通）
@@ -27,9 +28,9 @@ _RELEVANT_TAGS: frozenset[str] = frozenset(EMPLOYEE_TAGS)
 
 
 def _find_value(
-    ctx_map: dict,
-    is_current_fn,
-    is_prior_fn,
+    ctx_map: dict[str, float],
+    is_current_fn: Callable[[str], bool],
+    is_prior_fn: Callable[[str], bool],
 ) -> tuple[float | None, float | None]:
     current = prior = None
     for ctx, val in ctx_map.items():
@@ -40,7 +41,11 @@ def _find_value(
     return current, prior
 
 
-def extract_employees(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> EmployeesResult:
+def extract_employees(
+    xbrl_dir: Path,
+    *,
+    pre_parsed: XbrlTagElements | None = None,
+) -> EmployeesResult:
     """
     XBRLディレクトリから従業員数を抽出する。
 
@@ -53,7 +58,9 @@ def extract_employees(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> Empl
         }
     """
     if pre_parsed is not None:
-        tag_elements: dict = {tag: ctx for tag, ctx in pre_parsed.items() if tag in _RELEVANT_TAGS}
+        tag_elements: XbrlTagElements = {
+            tag: ctx for tag, ctx in pre_parsed.items() if tag in _RELEVANT_TAGS
+        }
     else:
         tag_elements = {}
         for f in find_xbrl_files(xbrl_dir):

@@ -15,11 +15,11 @@ XBRLインスタンス文書から連結キャッシュフロー計算書の
 from pathlib import Path
 
 from mebuki.analysis.context_helpers import _is_consolidated_duration, _is_consolidated_prior_duration
-from mebuki.analysis.xbrl_utils import parse_xbrl_value, collect_numeric_elements, find_xbrl_files
-from mebuki.utils.xbrl_result_types import CashFlowResult
+from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
+from mebuki.utils.xbrl_result_types import CashFlowResult, XbrlTagElements
 from mebuki.constants.xbrl import CF_INVESTING_TAGS, CF_OPERATING_TAGS
 
-_CF_RELEVANT_TAGS: frozenset = frozenset(
+_CF_RELEVANT_TAGS: frozenset[str] = frozenset(
     CF_OPERATING_TAGS
     + CF_INVESTING_TAGS
     + [
@@ -36,7 +36,7 @@ _CF_RELEVANT_TAGS: frozenset = frozenset(
 
 
 def _find_duration_value(
-    tag_elements: dict, tag: str
+    tag_elements: XbrlTagElements, tag: str
 ) -> tuple[float | None, float | None]:
     """指定タグの連結当期・前期（Duration）値を返す。"""
     if tag not in tag_elements:
@@ -50,7 +50,11 @@ def _find_duration_value(
     return current, prior
 
 
-def extract_cash_flow(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> CashFlowResult:
+def extract_cash_flow(
+    xbrl_dir: Path,
+    *,
+    pre_parsed: XbrlTagElements | None = None,
+) -> CashFlowResult:
     """
     XBRLディレクトリから連結CF計算書の営業CF・投資CFを抽出する。
 
@@ -64,7 +68,9 @@ def extract_cash_flow(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> Cash
         }
     """
     if pre_parsed is not None:
-        tag_elements: dict = {tag: ctx for tag, ctx in pre_parsed.items() if tag in _CF_RELEVANT_TAGS}
+        tag_elements: XbrlTagElements = {
+            tag: ctx for tag, ctx in pre_parsed.items() if tag in _CF_RELEVANT_TAGS
+        }
     else:
         tag_elements = {}
         for f in find_xbrl_files(xbrl_dir):

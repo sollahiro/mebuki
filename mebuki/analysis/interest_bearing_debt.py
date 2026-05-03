@@ -31,7 +31,7 @@ from mebuki.analysis.context_helpers import (
 )
 from mebuki.analysis.ibd_usgaap_html import _extract_usgaap_from_html
 from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
-from mebuki.utils.xbrl_result_types import InterestBearingDebtResult, MetricComponent
+from mebuki.utils.xbrl_result_types import InterestBearingDebtResult, MetricComponent, XbrlTagElements
 from mebuki.constants.xbrl import (
     INTEREST_BEARING_DEBT_TAGS,
     COMPONENT_DEFINITIONS,
@@ -64,7 +64,7 @@ def _safe_sum(vals: list[float | None]) -> float | None:
 
 
 
-def _find_consolidated_value(tag_elements: dict, tag: str) -> tuple[float | None, float | None]:
+def _find_consolidated_value(tag_elements: XbrlTagElements, tag: str) -> tuple[float | None, float | None]:
     """指定タグの連結当期・前期値のみを返す（個別へのフォールバックなし）。"""
     if tag not in tag_elements:
         return None, None
@@ -77,7 +77,7 @@ def _find_consolidated_value(tag_elements: dict, tag: str) -> tuple[float | None
     return current, prior
 
 
-def _find_nonconsolidated_value(tag_elements: dict, tag: str) -> tuple[float | None, float | None]:
+def _find_nonconsolidated_value(tag_elements: XbrlTagElements, tag: str) -> tuple[float | None, float | None]:
     """指定タグの個別当期・前期値のみを返す。"""
     if tag not in tag_elements:
         return None, None
@@ -90,7 +90,7 @@ def _find_nonconsolidated_value(tag_elements: dict, tag: str) -> tuple[float | N
     return current, prior
 
 
-def _detect_accounting_standard(tag_elements: dict) -> str:
+def _detect_accounting_standard(tag_elements: XbrlTagElements) -> str:
     """会計基準を判定: 'J-GAAP' | 'IFRS' | 'US-GAAP'"""
     if _is_usgaap_xbrl(tag_elements):
         return "US-GAAP"
@@ -108,7 +108,7 @@ def _detect_accounting_standard(tag_elements: dict) -> str:
     return "J-GAAP"
 
 
-def _is_usgaap_xbrl(tag_elements: dict) -> bool:
+def _is_usgaap_xbrl(tag_elements: XbrlTagElements) -> bool:
     """XBRLインスタンスのタグ群がUS-GAAP企業かどうかを判定。"""
     usgaap_summary_tags = {
         "TotalAssetsUSGAAPSummaryOfBusinessResults",
@@ -144,7 +144,11 @@ def _is_usgaap_xbrl(tag_elements: dict) -> bool:
     return True
 
 
-def extract_interest_bearing_debt(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> InterestBearingDebtResult:
+def extract_interest_bearing_debt(
+    xbrl_dir: Path,
+    *,
+    pre_parsed: XbrlTagElements | None = None,
+) -> InterestBearingDebtResult:
     """
     XBRLディレクトリから有利子負債を構成要素ごとに抽出する。
 
@@ -166,7 +170,7 @@ def extract_interest_bearing_debt(xbrl_dir: Path, *, pre_parsed: dict | None = N
         }
     """
     if pre_parsed is not None:
-        tag_elements = {tag: ctx for tag, ctx in pre_parsed.items() if tag in _IBD_RELEVANT_TAGS}
+        tag_elements: XbrlTagElements = {tag: ctx for tag, ctx in pre_parsed.items() if tag in _IBD_RELEVANT_TAGS}
     else:
         tag_elements = {}
         for f in find_xbrl_files(xbrl_dir):
@@ -210,7 +214,7 @@ def extract_interest_bearing_debt(xbrl_dir: Path, *, pre_parsed: dict | None = N
 
     # 積み上げ法（コンポーネント別）
     # Pass 1: 連結値のみ収集
-    components = []
+    components: list[MetricComponent] = []
     for comp_def in COMPONENT_DEFINITIONS:
         found_tag = None
         current = prior = None
@@ -244,7 +248,7 @@ def extract_interest_bearing_debt(xbrl_dir: Path, *, pre_parsed: dict | None = N
 
     # Pass 2: 連結値が全くない場合のみ単体にフォールバック（単体のみ企業への対応）
     if not has_consolidated:
-        components = []
+        components: list[MetricComponent] = []
         for comp_def in COMPONENT_DEFINITIONS:
             found_tag = None
             current = prior = None

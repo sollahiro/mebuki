@@ -47,7 +47,7 @@ from mebuki.constants.xbrl import (
     GROSS_PROFIT_COMPONENT_DEFINITIONS,
     GROSS_PROFIT_DIRECT_TAGS,
 )
-from mebuki.utils.xbrl_result_types import GrossProfitResult
+from mebuki.utils.xbrl_result_types import GrossProfitResult, MetricComponent, XbrlTagElements
 
 # XBRL解析で収集対象とするローカルタグ名のセット
 _GP_RELEVANT_TAGS: frozenset[str] = frozenset(
@@ -68,7 +68,7 @@ _GP_RELEVANT_TAGS: frozenset[str] = frozenset(
 
 
 def _find_consolidated_duration_value(
-    tag_elements: dict[str, dict[str, float]], tag: str
+    tag_elements: XbrlTagElements, tag: str
 ) -> tuple[float | None, float | None]:
     """指定タグの連結当期・前期（Duration）値を返す。"""
     if tag not in tag_elements:
@@ -83,7 +83,7 @@ def _find_consolidated_duration_value(
 
 
 def _find_nonconsolidated_duration_value(
-    tag_elements: dict[str, dict[str, float]], tag: str
+    tag_elements: XbrlTagElements, tag: str
 ) -> tuple[float | None, float | None]:
     """指定タグの個別当期・前期（Duration）値を返す。"""
     if tag not in tag_elements:
@@ -200,7 +200,7 @@ def _extract_usgaap_gp_from_html(xbrl_dir: Path) -> GrossProfitResult | None:
     return None
 
 
-def _detect_accounting_standard(tag_elements: dict[str, dict[str, float]]) -> str:
+def _detect_accounting_standard(tag_elements: XbrlTagElements) -> str:
     """会計基準を判定: 'J-GAAP' | 'IFRS' | 'US-GAAP'"""
     usgaap_tags = {
         "TotalAssetsUSGAAPSummaryOfBusinessResults",
@@ -224,7 +224,7 @@ def _detect_accounting_standard(tag_elements: dict[str, dict[str, float]]) -> st
 def extract_gross_profit(
     xbrl_dir: Path,
     *,
-    pre_parsed: dict[str, dict[str, float]] | None = None,
+    pre_parsed: XbrlTagElements | None = None,
 ) -> GrossProfitResult:
     """
     XBRLディレクトリから連結損益計算書の売上総利益を抽出する。
@@ -247,7 +247,7 @@ def extract_gross_profit(
         }
     """
     if pre_parsed is not None:
-        tag_elements: dict[str, dict[str, float]] = {
+        tag_elements: XbrlTagElements = {
             tag: ctx for tag, ctx in pre_parsed.items() if tag in _GP_RELEVANT_TAGS
         }
     else:
@@ -288,7 +288,7 @@ def extract_gross_profit(
             }
 
     # 計算法: 売上高タグ・売上原価タグをそれぞれ取得して差し引く
-    comp_results = []
+    comp_results: list[MetricComponent] = []
     for comp_def in GROSS_PROFIT_COMPONENT_DEFINITIONS:
         found_tag = None
         current = prior = None

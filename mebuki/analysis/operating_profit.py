@@ -30,7 +30,7 @@ from mebuki.analysis.xbrl_utils import (
 )
 from mebuki.constants.financial import MILLION_YEN
 from mebuki.constants.xbrl import OPERATING_PROFIT_DIRECT_TAGS, ORDINARY_INCOME_TAGS
-from mebuki.utils.xbrl_result_types import OperatingProfitResult
+from mebuki.utils.xbrl_result_types import OperatingProfitResult, XbrlTagElements
 
 _OP_RELEVANT_TAGS: frozenset[str] = frozenset(
     OPERATING_PROFIT_DIRECT_TAGS
@@ -47,7 +47,7 @@ _OP_RELEVANT_TAGS: frozenset[str] = frozenset(
 
 
 def _find_duration_value(
-    tag_elements: dict[str, dict[str, float]], tag: str, consolidated: bool
+    tag_elements: XbrlTagElements, tag: str, consolidated: bool
 ) -> tuple[float | None, float | None]:
     if tag not in tag_elements:
         return None, None
@@ -63,7 +63,7 @@ def _find_duration_value(
 
 
 def _try_tags(
-    tag_elements: dict[str, dict[str, float]], tags: list[str], consolidated: bool
+    tag_elements: XbrlTagElements, tags: list[str], consolidated: bool
 ) -> tuple[str | None, float | None, float | None]:
     """指定した連結/個別モードでタグリストを試す。"""
     for tag in tags:
@@ -73,7 +73,7 @@ def _try_tags(
     return None, None, None
 
 
-def _detect_accounting_standard(tag_elements: dict[str, dict[str, float]]) -> str:
+def _detect_accounting_standard(tag_elements: XbrlTagElements) -> str:
     usgaap_tags = {
         "TotalAssetsUSGAAPSummaryOfBusinessResults",
         "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
@@ -195,7 +195,7 @@ def _extract_usgaap_op_from_html(xbrl_dir: Path) -> OperatingProfitResult | None
 def extract_operating_profit(
     xbrl_dir: Path,
     *,
-    pre_parsed: dict[str, dict[str, float]] | None = None,
+    pre_parsed: XbrlTagElements | None = None,
 ) -> OperatingProfitResult:
     """
     XBRLディレクトリから連結損益計算書の営業利益（または経常利益）を抽出する。
@@ -213,7 +213,7 @@ def extract_operating_profit(
         }
     """
     if pre_parsed is not None:
-        tag_elements: dict[str, dict[str, float]] = {
+        tag_elements: XbrlTagElements = {
             tag: ctx for tag, ctx in pre_parsed.items() if tag in _OP_RELEVANT_TAGS
         }
     else:

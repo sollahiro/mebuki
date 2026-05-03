@@ -4,6 +4,8 @@ XBRL 抽出結果の TypedDict 定義
 
 from typing import NotRequired, TypedDict
 
+XbrlTagElements = dict[str, dict[str, float]]
+
 
 class MetricComponent(TypedDict):
     label: str

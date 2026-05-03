@@ -26,7 +26,7 @@ from mebuki.analysis.context_helpers import (
     _is_nonconsolidated_duration,
     _is_nonconsolidated_prior_duration,
 )
-from mebuki.utils.xbrl_result_types import InterestExpenseResult
+from mebuki.utils.xbrl_result_types import InterestExpenseResult, XbrlTagElements
 from mebuki.analysis.xbrl_utils import (
     collect_numeric_elements,
     find_xbrl_files,
@@ -62,7 +62,7 @@ def _is_pure_context(ctx: str, patterns: list[str]) -> bool:
 
 
 def _find_consolidated_duration_value(
-    tag_elements: dict, tag: str
+    tag_elements: XbrlTagElements, tag: str
 ) -> tuple[float | None, float | None]:
     """連結当期・前期の値を返す。純コンテキスト（セグメント修飾なし）を優先する。"""
     if tag not in tag_elements:
@@ -87,7 +87,7 @@ def _find_consolidated_duration_value(
 
 
 def _find_nonconsolidated_duration_value(
-    tag_elements: dict, tag: str
+    tag_elements: XbrlTagElements, tag: str
 ) -> tuple[float | None, float | None]:
     """個別当期・前期の値を返す。純コンテキストを優先する。"""
     if tag not in tag_elements:
@@ -111,7 +111,7 @@ def _find_nonconsolidated_duration_value(
     )
 
 
-def _detect_accounting_standard(tag_elements: dict) -> str:
+def _detect_accounting_standard(tag_elements: XbrlTagElements) -> str:
     """会計基準を判定: 'J-GAAP' | 'IFRS' | 'US-GAAP'"""
     usgaap_tags = {
         "TotalAssetsUSGAAPSummaryOfBusinessResults",
@@ -228,7 +228,11 @@ def _extract_usgaap_ie_from_html(xbrl_dir: Path) -> InterestExpenseResult | None
     return None
 
 
-def extract_interest_expense(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> InterestExpenseResult:
+def extract_interest_expense(
+    xbrl_dir: Path,
+    *,
+    pre_parsed: XbrlTagElements | None = None,
+) -> InterestExpenseResult:
     """
     XBRLディレクトリから連結損益計算書の支払利息（金融費用）を抽出する。
 
@@ -242,7 +246,9 @@ def extract_interest_expense(xbrl_dir: Path, *, pre_parsed: dict | None = None) 
         }
     """
     if pre_parsed is not None:
-        tag_elements: dict = {tag: ctx for tag, ctx in pre_parsed.items() if tag in _IE_RELEVANT_TAGS}
+        tag_elements: XbrlTagElements = {
+            tag: ctx for tag, ctx in pre_parsed.items() if tag in _IE_RELEVANT_TAGS
+        }
     else:
         tag_elements = {}
         for f in find_xbrl_files(xbrl_dir):

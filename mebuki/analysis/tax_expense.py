@@ -24,7 +24,7 @@ from mebuki.analysis.context_helpers import (
     _is_nonconsolidated_duration,
     _is_nonconsolidated_prior_duration,
 )
-from mebuki.utils.xbrl_result_types import TaxExpenseResult
+from mebuki.utils.xbrl_result_types import TaxExpenseResult, XbrlTagElements
 from mebuki.analysis.xbrl_utils import (
     collect_numeric_elements,
     find_xbrl_files,
@@ -61,7 +61,7 @@ _TAX_RELEVANT_TAGS: frozenset[str] = frozenset(
 
 
 def _find_consolidated_duration_value(
-    tag_elements: dict, tag: str
+    tag_elements: XbrlTagElements, tag: str
 ) -> tuple[float | None, float | None]:
     if tag not in tag_elements:
         return None, None
@@ -85,7 +85,7 @@ def _find_consolidated_duration_value(
 
 
 def _find_nonconsolidated_duration_value(
-    tag_elements: dict, tag: str
+    tag_elements: XbrlTagElements, tag: str
 ) -> tuple[float | None, float | None]:
     if tag not in tag_elements:
         return None, None
@@ -232,7 +232,7 @@ def _extract_usgaap_tax_from_html(xbrl_dir: Path) -> TaxExpenseResult | None:
     return None
 
 
-def _detect_accounting_standard(tag_elements: dict) -> str:
+def _detect_accounting_standard(tag_elements: XbrlTagElements) -> str:
     usgaap_tags = {
         "TotalAssetsUSGAAPSummaryOfBusinessResults",
         "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
@@ -254,7 +254,7 @@ def _detect_accounting_standard(tag_elements: dict) -> str:
     return "J-GAAP"
 
 
-def _get_value(tag_elements: dict, tags: list[str]) -> tuple[float | None, float | None]:
+def _get_value(tag_elements: XbrlTagElements, tags: list[str]) -> tuple[float | None, float | None]:
     for tag in tags:
         current, prior = _find_consolidated_duration_value(tag_elements, tag)
         if current is None and prior is None:
@@ -264,7 +264,11 @@ def _get_value(tag_elements: dict, tags: list[str]) -> tuple[float | None, float
     return None, None
 
 
-def extract_tax_expense(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> TaxExpenseResult:
+def extract_tax_expense(
+    xbrl_dir: Path,
+    *,
+    pre_parsed: XbrlTagElements | None = None,
+) -> TaxExpenseResult:
     """
     XBRLディレクトリから税引前利益・法人税等を抽出し実効税率を計算する。
 
@@ -281,7 +285,7 @@ def extract_tax_expense(xbrl_dir: Path, *, pre_parsed: dict | None = None) -> Ta
         }
     """
     if pre_parsed is not None:
-        tag_elements: dict = {tag: ctx for tag, ctx in pre_parsed.items() if tag in _TAX_RELEVANT_TAGS}
+        tag_elements: XbrlTagElements = {tag: ctx for tag, ctx in pre_parsed.items() if tag in _TAX_RELEVANT_TAGS}
     else:
         tag_elements = {}
         for f in find_xbrl_files(xbrl_dir):
