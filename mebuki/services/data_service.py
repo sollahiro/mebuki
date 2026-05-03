@@ -12,6 +12,12 @@ from mebuki import __version__
 from mebuki.api.jquants_client import JQuantsAPIClient
 from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.infrastructure.settings import settings_store
+from mebuki.constants.financial import (
+    PERCENT,
+    WACC_DEFAULT_BETA,
+    WACC_MARKET_RISK_PREMIUM,
+    WACC_RF_FALLBACK,
+)
 from mebuki.utils.cache import CacheManager
 from mebuki.utils.master_types import StockSearchResult
 from mebuki.utils.output_serializer import serialize_metrics_result
@@ -32,6 +38,60 @@ def _apply_debug_filter(result: dict[str, Any], include_debug_fields: bool) -> d
     if include_debug_fields or not result.get("metrics"):
         return result
     return {**result, "metrics": serialize_metrics_result(result["metrics"])}
+
+
+def _has_incomplete_edinet_metrics(cached: dict[str, Any]) -> bool:
+    """EDINET 書類が紐づいているのに IBD/ROIC が欠けた古い分析キャッシュを検出する。"""
+    metrics = cached.get("metrics")
+    if not isinstance(metrics, dict):
+        return False
+    years = metrics.get("years")
+    if not isinstance(years, list):
+        return False
+
+    for year in years:
+        if not isinstance(year, dict):
+            continue
+        calculated = year.get("CalculatedData")
+        if not isinstance(calculated, dict):
+            continue
+        if calculated.get("DocID") and (
+            calculated.get("InterestBearingDebt") is None
+            or calculated.get("ROIC") is None
+        ):
+            return True
+    return False
+
+
+def _has_fallback_mof_metrics(cached: dict[str, Any]) -> bool:
+    """MOF 金利取得失敗時のフォールバック Rf で作られた分析キャッシュを検出する。"""
+    metrics = cached.get("metrics")
+    if not isinstance(metrics, dict):
+        return False
+    years = metrics.get("years")
+    if not isinstance(years, list):
+        return False
+
+    fallback_cost_of_equity = (WACC_RF_FALLBACK + WACC_DEFAULT_BETA * WACC_MARKET_RISK_PREMIUM) * PERCENT
+    for year in years:
+        if not isinstance(year, dict):
+            continue
+        calculated = year.get("CalculatedData")
+        if not isinstance(calculated, dict):
+            continue
+        sources = calculated.get("MetricSources")
+        cost_of_equity_source = sources.get("CostOfEquity") if isinstance(sources, dict) else None
+        if not isinstance(cost_of_equity_source, dict) or cost_of_equity_source.get("source") != "mof":
+            continue
+        rf_source = cost_of_equity_source.get("rf_source")
+        if rf_source == "fallback":
+            return True
+        if rf_source is not None:
+            continue
+        cost_of_equity = calculated.get("CostOfEquity")
+        if isinstance(cost_of_equity, float) and cost_of_equity == fallback_cost_of_equity:
+            return True
+    return False
 
 
 class DataService:
@@ -232,7 +292,12 @@ class DataService:
 
         if use_cache:
             cached = self.cache_manager.get(cache_key)
-            if cached and cached.get("_cache_version") == _CACHE_VERSION:
+            if (
+                cached
+                and cached.get("_cache_version") == _CACHE_VERSION
+                and not _has_incomplete_edinet_metrics(cached)
+                and not _has_fallback_mof_metrics(cached)
+            ):
                 result = {k: v for k, v in cached.items() if k != "_cache_version" and k != "llm_financial_analysis"}
                 return _apply_debug_filter(result, include_debug_fields)
 

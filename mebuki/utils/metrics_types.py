@@ -20,6 +20,8 @@ class MetricSource(TypedDict, total=False):
     docID: str | None
     unit: str
     label: str
+    rf: float
+    rf_source: str
 
 
 class RawData(TypedDict, total=False):

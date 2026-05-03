@@ -387,7 +387,18 @@ class TestApplyWacc:
     def test_sets_cost_of_equity(self):
         years = [_make_year("2024-03-31", Eq=800.0)]
         _apply_wacc(years, {})
-        assert years[0]["CalculatedData"]["CostOfEquity"] == pytest.approx(self._RE)
+        cd = years[0]["CalculatedData"]
+        assert cd["CostOfEquity"] == pytest.approx(self._RE)
+        assert cd["MetricSources"]["CostOfEquity"]["rf"] == WACC_RF_FALLBACK
+        assert cd["MetricSources"]["CostOfEquity"]["rf_source"] == "fallback"
+
+    def test_sets_mof_rf_source(self):
+        years = [_make_year("2024-03-31", Eq=800.0)]
+        _apply_wacc(years, {"2024-03-31": 0.01})
+        cd = years[0]["CalculatedData"]
+        assert cd["CostOfEquity"] == pytest.approx(self._RE)
+        assert cd["MetricSources"]["CostOfEquity"]["rf"] == 0.01
+        assert cd["MetricSources"]["CostOfEquity"]["rf_source"] == "mof"
 
     def test_no_ibd_wacc_equals_cost_of_equity(self):
         """無借金: WACC = CostOfEquity"""

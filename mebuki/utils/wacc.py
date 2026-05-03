@@ -99,22 +99,28 @@ def load_rf_rates(cache_dir: str) -> dict[str, float]:
     return rates
 
 
-def get_rf_for_date(rates: dict[str, float], fy_end: str) -> float:
-    """FY終了日（YYYY-MM-DD）に対応するRfを返す。
+def resolve_rf_for_date(rates: dict[str, float], fy_end: str) -> tuple[float, str]:
+    """FY終了日に対応するRfと出所を返す。
     その日が休日等で存在しなければ最大14日遡って直前値を探す。
-    見つからなければ WACC_RF_FALLBACK を返す。
+    見つからなければ WACC_RF_FALLBACK と "fallback" を返す。
     """
     if fy_end in rates:
-        return rates[fy_end]
+        return rates[fy_end], "mof"
     try:
         target = date.fromisoformat(fy_end)
     except ValueError:
-        return WACC_RF_FALLBACK
+        return WACC_RF_FALLBACK, "fallback"
     for days_back in range(1, 15):
         candidate = (target - timedelta(days=days_back)).isoformat()
         if candidate in rates:
-            return rates[candidate]
-    return WACC_RF_FALLBACK
+            return rates[candidate], "mof"
+    return WACC_RF_FALLBACK, "fallback"
+
+
+def get_rf_for_date(rates: dict[str, float], fy_end: str) -> float:
+    """FY終了日（YYYY-MM-DD）に対応するRfを返す。"""
+    rf, _ = resolve_rf_for_date(rates, fy_end)
+    return rf
 
 
 def calculate_wacc(

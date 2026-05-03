@@ -16,7 +16,7 @@ from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.infrastructure.settings import settings_store
 from mebuki.constants.financial import PERCENT, MILLION_YEN
 from mebuki.utils.cache import CacheManager
-from mebuki.utils.wacc import load_rf_rates, get_rf_for_date, calculate_wacc
+from mebuki.utils.wacc import load_rf_rates, resolve_rf_for_date, calculate_wacc
 from mebuki.utils.metrics_types import CalculatedData, MetricSource, YearEntry
 
 from .financial_fetcher import FinancialFetcher
@@ -264,7 +264,7 @@ def _apply_wacc(years: list[YearEntry], rf_rates: dict[str, float]) -> None:
     for year in years:
         cd = year["CalculatedData"]
         fy_end = year.get("fy_end") or ""
-        rf = get_rf_for_date(rf_rates, fy_end)
+        rf, rf_source = resolve_rf_for_date(rf_rates, fy_end)
         wacc = calculate_wacc(
             eq=cd.get("Eq"),
             ibd=cd.get("InterestBearingDebt"),
@@ -281,6 +281,9 @@ def _apply_wacc(years: list[YearEntry], rf_rates: dict[str, float]) -> None:
         cd["WACC"] = wacc_value if isinstance(wacc_value, float) else None
         cd["WACCLabel"] = wacc_label if isinstance(wacc_label, str) else None
         _set_metric_source(cd, "CostOfEquity", source="mof", unit="percent", method="Rf + beta * MRP")
+        sources = cd.setdefault("MetricSources", {})
+        sources["CostOfEquity"]["rf"] = rf
+        sources["CostOfEquity"]["rf_source"] = rf_source
         _set_metric_source(cd, "CostOfDebt", source="derived", unit="percent", method="InterestExpense / InterestBearingDebt")
         _set_metric_source(cd, "WACC", source="derived", unit="percent", method="weighted average cost of capital")
 
