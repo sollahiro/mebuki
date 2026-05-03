@@ -75,7 +75,7 @@ def test_prune_edinet_by_age(tmp_path) -> None:
     assert new_xbrl.exists()
 
 
-def test_stats_and_audit_detect_deprecated_and_unknown_cache(tmp_path) -> None:
+def test_stats_counts_cache_categories(tmp_path) -> None:
     from mebuki.utils.cache import CacheManager
 
     cache = CacheManager(cache_dir=str(tmp_path))
@@ -92,7 +92,6 @@ def test_stats_and_audit_detect_deprecated_and_unknown_cache(tmp_path) -> None:
 
     pruner = CachePruner(tmp_path)
     stats = pruner.stats()
-    findings = pruner.audit()
 
     assert stats.total_files == 6
     assert stats.edinet_search_files == 1
@@ -100,8 +99,3 @@ def test_stats_and_audit_detect_deprecated_and_unknown_cache(tmp_path) -> None:
     assert stats.boj_files == 1
     assert stats.boj_metadata_entries == 1
     assert stats.unknown_root_json_files == 1
-    assert {finding.kind for finding in findings} == {
-        "deprecated_boj_file",
-        "deprecated_boj_metadata",
-        "unknown_root_json_cache",
-    }

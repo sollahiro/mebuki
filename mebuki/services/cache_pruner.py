@@ -43,16 +43,6 @@ class CacheStats:
         return asdict(self)
 
 
-@dataclass(frozen=True)
-class CacheAuditFinding:
-    kind: str
-    target: str
-    message: str
-    bytes: int = 0
-
-    def to_dict(self) -> dict[str, int | str]:
-        return asdict(self)
-
 
 class CachePruner:
     """キャッシュディレクトリのスリム化を担当する。"""
@@ -122,53 +112,6 @@ class CachePruner:
             boj_metadata_entries=len([key for key in metadata_keys if key.startswith("boj_")]),
             unknown_root_json_files=len(unknown_root_json_files),
         )
-
-    def audit(self) -> list[CacheAuditFinding]:
-        """廃止済み・出所不明キャッシュを検出する。削除は行わない。"""
-        findings: list[CacheAuditFinding] = []
-        metadata_keys = self.cache_manager.keys()
-
-        for path in sorted(self.cache_dir.glob("boj_*.json")):
-            findings.append(
-                CacheAuditFinding(
-                    kind="deprecated_boj_file",
-                    target=str(path),
-                    message="BOJ金利キャッシュは廃止済みです。cache prune の削除対象です。",
-                    bytes=path.stat().st_size,
-                )
-            )
-
-        for key in sorted(key for key in metadata_keys if key.startswith("boj_")):
-            findings.append(
-                CacheAuditFinding(
-                    kind="deprecated_boj_metadata",
-                    target=key,
-                    message="metadata.json に廃止済みBOJキャッシュキーが残っています。",
-                )
-            )
-
-        known_root_prefixes = (
-            "individual_analysis_",
-            "half_year_periods_",
-            "earnings_calendar_",
-            "mof_",
-            "boj_",
-        )
-        for path in sorted(self.cache_dir.glob("*.json")):
-            if path.name == "metadata.json":
-                continue
-            if path.stem.startswith(known_root_prefixes):
-                continue
-            findings.append(
-                CacheAuditFinding(
-                    kind="unknown_root_json_cache",
-                    target=str(path),
-                    message="既知のキャッシュ命名に該当しないルートJSONです。用途確認候補です。",
-                    bytes=path.stat().st_size,
-                )
-            )
-
-        return findings
 
     def _prune_boj(self, *, dry_run: bool) -> PruneSummary:
         files = sorted(self.cache_dir.glob("boj_*.json"))

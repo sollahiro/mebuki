@@ -119,7 +119,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="get_japan_stock_cache_stats",
-            description="Inspect mebuki cache usage and deprecated-cache audit findings. キャッシュ容量・EDINET件数・廃止済みBOJキャッシュの検出結果を取得します。Read-only.",
+            description="Inspect mebuki cache usage. キャッシュ容量・EDINET件数を取得します。Read-only.",
             inputSchema={
                 "type": "object",
                 "properties": {},
@@ -290,7 +290,6 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             pruner = CachePruner(settings_store.cache_dir)
             result = {
                 "stats": pruner.stats().to_dict(),
-                "audit_findings": [finding.to_dict() for finding in pruner.audit()],
                 "prune_available_in_mcp": False,
                 "message": "削除系の cache prune は安全のためCLIのみ対応です。",
             }

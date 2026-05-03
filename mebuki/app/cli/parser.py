@@ -56,8 +56,6 @@ def build_parser() -> argparse.ArgumentParser:
     cache_sub = cache_parser.add_subparsers(dest="cache_subcommand", help="キャッシュサブコマンド")
     stats_parser = cache_sub.add_parser("stats", help="キャッシュ使用量を表示")
     stats_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
-    audit_parser = cache_sub.add_parser("audit", help="廃止済み・不明キャッシュを検出")
-    audit_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
     prune_parser = cache_sub.add_parser("prune", help="不要なキャッシュを削除")
     prune_parser.add_argument("--execute", action="store_true", help="実際に削除する（未指定時は dry-run）")
     prune_parser.add_argument("--keep-boj", action="store_true", help="廃止済みBOJキャッシュを削除対象から外す")

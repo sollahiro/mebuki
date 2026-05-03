@@ -181,29 +181,6 @@ def test_main_cache_stats_outputs_json(monkeypatch, capsys) -> None:
     pruner.stats.assert_called_once_with()
 
 
-def test_main_cache_audit_outputs_json(monkeypatch, capsys) -> None:
-    finding = Mock()
-    finding.to_dict.return_value = {
-        "kind": "deprecated_boj_file",
-        "target": "/tmp/mebuki-cache/boj_legacy.json",
-        "message": "deprecated",
-        "bytes": 10,
-    }
-    pruner = Mock()
-    pruner.audit.return_value = [finding]
-
-    with (
-        patch("mebuki.app.cli.cache.settings_store") as settings,
-        patch("mebuki.app.cli.cache.CachePruner", return_value=pruner) as pruner_cls,
-    ):
-        settings.cache_dir = "/tmp/mebuki-cache"
-        _run_cli(monkeypatch, ["cache", "audit", "--format", "json"])
-
-    captured = capsys.readouterr()
-    assert json.loads(captured.out)["findings"][0]["kind"] == "deprecated_boj_file"
-    pruner_cls.assert_called_once_with("/tmp/mebuki-cache")
-    pruner.audit.assert_called_once_with()
-
 
 def test_main_watch_add_outputs_json(monkeypatch, capsys) -> None:
     result = {
