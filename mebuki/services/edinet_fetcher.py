@@ -155,13 +155,22 @@ class EdinetFetcher:
 
         Returns: { "YYYYMMDD": (xbrl_dir_path, pre_parsed_dict) }
         """
-        from mebuki.analysis.xbrl_utils import collect_all_numeric_elements
-
         if not self.edinet_client or not self.edinet_client.api_key:
             return {}
-        client = self.edinet_client
-
         docs = await self._get_annual_docs(code, financial_data, max_years)
+        return await self._download_and_parse_docs(docs, code)
+
+    async def _download_and_parse_docs(
+        self,
+        docs: list[dict[str, Any]],
+        code: str,
+    ) -> _PreParsedMap:
+        """XBRL文書を一括ダウンロード・パースする。"""
+        from mebuki.analysis.xbrl_utils import collect_all_numeric_elements
+
+        if self.edinet_client is None:
+            return {}
+        client = self.edinet_client
 
         async def _dl_parse(doc: dict[str, Any]) -> tuple[str, tuple[Path, XbrlTagElements] | None]:
             fy_end_8 = _fy_end_key(doc.get("jquants_fy_end"))
@@ -453,6 +462,7 @@ class EdinetFetcher:
         """
         from mebuki.analysis.gross_profit import extract_gross_profit
         from mebuki.analysis.cash_flow import extract_cash_flow
+        from mebuki.analysis.interest_bearing_debt import extract_interest_bearing_debt
 
         if not self.edinet_client or not self.edinet_client.api_key:
             return {}
@@ -493,43 +503,27 @@ class EdinetFetcher:
         )
         logger.info(f"[HALF-EDINET] {code}: {len(docs)}件の2Q文書を検索")
 
-        async def _process_doc(doc: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
-            fy_end_8 = _fy_end_key(doc.get("jquants_fy_end"))
-            if not fy_end_8:
-                return "", None
-            try:
-                xbrl_dir = await asyncio.wait_for(
-                    client.download_document(doc["docID"], 1),
-                    timeout=30.0,
-                )
-                if not xbrl_dir:
-                    logger.warning(f"[HALF-EDINET] {code} {fy_end_8}: XBRLダウンロード失敗")
-                    return fy_end_8, None
-                from mebuki.analysis.interest_bearing_debt import extract_interest_bearing_debt
-                from mebuki.analysis.xbrl_utils import collect_all_numeric_elements
-                xbrl_path = Path(xbrl_dir)
-                pre_parsed = collect_all_numeric_elements(xbrl_path)
-                gp = dict(extract_gross_profit(xbrl_path, pre_parsed=pre_parsed))
-                cf = extract_cash_flow(xbrl_path, pre_parsed=pre_parsed)
-                ibd = extract_interest_bearing_debt(xbrl_path, pre_parsed=pre_parsed)
-                gp["docID"] = doc["docID"]
-                logger.info(
-                    f"[HALF-EDINET] {code} {fy_end_8}: "
-                    f"gp={gp.get('current')}, cfo={cf['cfo'].get('current')}, cfi={cf['cfi'].get('current')}, ibd={ibd.get('current')}, docID={doc['docID']}"
-                )
-                return fy_end_8, {"gp": gp, "cf": cf, "ibd": ibd}
-            except asyncio.TimeoutError:
-                logger.warning(f"[HALF-EDINET] {code} {fy_end_8}: XBRLダウンロードタイムアウト(30s)")
-                return fy_end_8, None
-            except Exception as e:
-                logger.warning(f"[HALF-EDINET] {code} {fy_end_8}: 抽出エラー - {e}")
-                return fy_end_8, None
+        pre_parsed_map = await self._download_and_parse_docs(docs, code)
 
-        _t0 = time.perf_counter()
-        results = await asyncio.gather(*[_process_doc(doc) for doc in docs], return_exceptions=True)
-        half_data = self._collect_results(results, code, "HALF-EDINET")
-        logger.info(f"[HALF-EDINET] {code}: 半期EDINETデータ抽出完了 {len(half_data)}件 {time.perf_counter() - _t0:.2f}s")
-        return half_data
+        out: dict[str, Any] = {}
+        for doc in docs:
+            fy_end_8 = _fy_end_key(doc.get("jquants_fy_end"))
+            if not fy_end_8 or fy_end_8 not in pre_parsed_map:
+                continue
+            xbrl_path, pre_parsed = pre_parsed_map[fy_end_8]
+            gp = dict(extract_gross_profit(xbrl_path, pre_parsed=pre_parsed))
+            cf = extract_cash_flow(xbrl_path, pre_parsed=pre_parsed)
+            ibd = extract_interest_bearing_debt(xbrl_path, pre_parsed=pre_parsed)
+            gp["docID"] = doc["docID"]
+            logger.info(
+                f"[HALF-EDINET] {code} {fy_end_8}: "
+                f"gp={gp.get('current')}, cfo={cf['cfo'].get('current')}, "
+                f"cfi={cf['cfi'].get('current')}, ibd={ibd.get('current')}, docID={doc['docID']}"
+            )
+            out[fy_end_8] = {"gp": gp, "cf": cf, "ibd": ibd}
+
+        logger.info(f"[HALF-EDINET] {code}: 半期EDINETデータ抽出完了 {len(out)}件")
+        return out
 
     async def extract_employees_by_year(
         self,
