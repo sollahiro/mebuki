@@ -293,6 +293,78 @@ class TestGetRawAnalysisData:
             result = await svc.get_raw_analysis_data("72030", use_cache=False)
         assert result == {}
 
+    @pytest.mark.asyncio
+    async def test_jquants_cache_hit_skips_api(self, svc):
+        """J-QUANTSキャッシュヒット時はAPI呼び出しが発生しない。"""
+        from mebuki.services.data_service import _JQUANTS_CACHE_VERSION
+
+        svc.cache_manager.set(
+            "jquants_financial_72030",
+            {
+                "_cache_version": _JQUANTS_CACHE_VERSION,
+                "stock_info": {"Code": "72030", "CoName": "トヨタ"},
+                "financial_data": [{"CurPerType": "FY", "CurFYEn": "2024-03-31"}],
+            },
+        )
+        mock_analyzer = AsyncMock()
+        mock_analyzer.fetch_analysis_data.return_value = {
+            "metrics": {"years": []},
+            "edinet_data": {},
+        }
+        with patch.object(svc, "get_analyzer", return_value=mock_analyzer):
+            await svc.get_raw_analysis_data("72030", use_cache=False)
+
+        svc.api_client.get_financial_summary.assert_not_called()
+        svc.api_client.get_equity_master.assert_not_called()
+        _, kwargs = mock_analyzer.fetch_analysis_data.call_args
+        assert kwargs["prefetched_stock_info"] == {"Code": "72030", "CoName": "トヨタ"}
+        assert kwargs["prefetched_financial_data"] == [{"CurPerType": "FY", "CurFYEn": "2024-03-31"}]
+
+    @pytest.mark.asyncio
+    async def test_jquants_cache_miss_fetches_and_stores(self, svc):
+        """J-QUANTSキャッシュミス時はAPIを呼び出してキャッシュに保存する。"""
+        from mebuki.services.data_service import _JQUANTS_CACHE_VERSION
+
+        svc.api_client.get_equity_master.return_value = [{"Code": "72030", "CoName": "トヨタ"}]
+        svc.api_client.get_financial_summary.return_value = [{"CurPerType": "FY", "CurFYEn": "2024-03-31"}]
+
+        mock_analyzer = AsyncMock()
+        mock_analyzer.fetch_analysis_data.return_value = {
+            "metrics": {"years": []},
+            "edinet_data": {},
+        }
+        with patch.object(svc, "get_analyzer", return_value=mock_analyzer):
+            await svc.get_raw_analysis_data("72030", use_cache=False)
+
+        stored = svc.cache_manager.get("jquants_financial_72030")
+        assert stored is not None
+        assert stored["_cache_version"] == _JQUANTS_CACHE_VERSION
+        assert stored["stock_info"] == {"Code": "72030", "CoName": "トヨタ"}
+
+    @pytest.mark.asyncio
+    async def test_jquants_cache_version_mismatch_refetches(self, svc):
+        """J-QUANTSキャッシュのバージョン不一致時は再取得する。"""
+        svc.cache_manager.set(
+            "jquants_financial_72030",
+            {
+                "_cache_version": "old-version",
+                "stock_info": {"Code": "72030"},
+                "financial_data": [],
+            },
+        )
+        svc.api_client.get_equity_master.return_value = [{"Code": "72030", "CoName": "トヨタ最新"}]
+        svc.api_client.get_financial_summary.return_value = [{"CurPerType": "FY", "CurFYEn": "2024-03-31"}]
+
+        mock_analyzer = AsyncMock()
+        mock_analyzer.fetch_analysis_data.return_value = {
+            "metrics": {"years": []},
+            "edinet_data": {},
+        }
+        with patch.object(svc, "get_analyzer", return_value=mock_analyzer):
+            await svc.get_raw_analysis_data("72030", use_cache=False)
+
+        svc.api_client.get_financial_summary.assert_called_once()
+
 
 # ──────────────────────────────────────────────────────────────
 # HalfYearDataService

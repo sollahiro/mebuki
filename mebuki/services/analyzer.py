@@ -311,14 +311,29 @@ class IndividualAnalyzer:
         analysis_years: int | None = None,
         max_documents: int = 10,
         include_2q: bool = False,
+        prefetched_stock_info: dict[str, Any] | None = None,
+        prefetched_financial_data: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """財務指標 + EDINETデータを取得する公開API（use_cache=False）。
 
         data_service などの上位層が private メソッドを直接呼ばずに済むよう提供する。
         """
-        stock_info, financial_data, annual_data = await self._financial_fetcher.fetch_financial_data(code, include_2q)
-        if not stock_info or not annual_data:
-            return {}
+        if prefetched_stock_info is not None and prefetched_financial_data is not None:
+            from mebuki.utils.financial_data import extract_annual_data
+
+            stock_info = prefetched_stock_info
+            financial_data = prefetched_financial_data
+            try:
+                annual_data = extract_annual_data(financial_data, include_2q=include_2q)
+            except Exception as e:
+                logger.error(f"銘柄コード {code}: 年度データ抽出中にエラーが発生しました - {e}", exc_info=True)
+                return {}
+            if not annual_data:
+                return {}
+        else:
+            stock_info, financial_data, annual_data = await self._financial_fetcher.fetch_financial_data(code, include_2q)
+            if not stock_info or not annual_data:
+                return {}
 
         available_years = sum(1 for d in annual_data if d.get("CurPerType") == "FY")
         actual_years = min(available_years, analysis_years) if analysis_years else available_years

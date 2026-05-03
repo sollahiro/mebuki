@@ -17,6 +17,7 @@ from mebuki.utils.master_types import StockSearchResult
 from mebuki.utils.output_serializer import serialize_metrics_result
 
 _CACHE_VERSION = f"{'.'.join(__version__.split('.')[:2])}:metrics-v2"
+_JQUANTS_CACHE_VERSION = "jquants-v1"
 
 from .analyzer import IndividualAnalyzer
 from .company_info_service import CompanyInfoService
@@ -105,6 +106,32 @@ class DataService:
             api_client=self.api_client,
             edinet_client=self.edinet_client,
         )
+
+    async def _fetch_jquants_financial_data(
+        self,
+        code: str,
+    ) -> tuple[dict[str, Any] | None, list[dict[str, Any]] | None]:
+        """J-QUANTS の stock_info と financial_data をキャッシュ経由で返す。"""
+        from mebuki.services.financial_fetcher import FinancialFetcher
+
+        cache_key = f"jquants_financial_{code}"
+        cached = self.cache_manager.get(cache_key)
+        if cached and cached.get("_cache_version") == _JQUANTS_CACHE_VERSION:
+            return cached.get("stock_info"), cached.get("financial_data")
+
+        stock_info, financial_data, _ = await FinancialFetcher(self.api_client).fetch_financial_data(
+            code, include_2q=True
+        )
+        if stock_info and financial_data:
+            self.cache_manager.set(
+                cache_key,
+                {
+                    "_cache_version": _JQUANTS_CACHE_VERSION,
+                    "stock_info": stock_info,
+                    "financial_data": financial_data,
+                },
+            )
+        return stock_info, financial_data
 
     async def search_companies(self, query: str) -> list[StockSearchResult]:
         """銘柄コードまたは名称で企業を検索します。"""
@@ -208,7 +235,18 @@ class DataService:
                 result = {k: v for k, v in cached.items() if k != "_cache_version" and k != "llm_financial_analysis"}
                 return _apply_debug_filter(result, include_debug_fields)
 
-        result = await analyzer.fetch_analysis_data(code, analysis_years, max_documents, include_2q=include_2q)
+        stock_info, financial_data = await self._fetch_jquants_financial_data(code)
+        if not stock_info or not financial_data:
+            return {}
+
+        result = await analyzer.fetch_analysis_data(
+            code,
+            analysis_years,
+            max_documents,
+            include_2q=include_2q,
+            prefetched_stock_info=stock_info,
+            prefetched_financial_data=financial_data,
+        )
         if not result:
             return {}
 
