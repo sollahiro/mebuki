@@ -20,6 +20,8 @@ from mebuki.constants.financial import (
     MILLION_YEN,
     PERCENT,
     WACC_DEFAULT_BETA,
+    WACC_LABEL_MISSING_INPUT,
+    WACC_LABEL_TAX_RATE_OUT_OF_RANGE,
     WACC_MARKET_RISK_PREMIUM,
     WACC_RF_FALLBACK,
 )
@@ -414,7 +416,25 @@ class TestApplyWacc:
         _apply_wacc(years, {})
         cd = years[0]["CalculatedData"]
         assert cd["WACC"] is None
+        assert cd["WACCLabel"] == WACC_LABEL_MISSING_INPUT
         assert cd["CostOfEquity"] == pytest.approx(self._RE)
+
+    def test_cost_of_debt_is_set_when_tax_rate_is_out_of_range(self):
+        """異常税率では WACC は出さないが、負債コストは IE / IBD で出す"""
+        years = [
+            _make_year(
+                "2024-03-31",
+                Eq=800.0,
+                InterestBearingDebt=200.0,
+                InterestExpense=5.0,
+                EffectiveTaxRate=249.0,
+            )
+        ]
+        _apply_wacc(years, {})
+        cd = years[0]["CalculatedData"]
+        assert cd["CostOfDebt"] == pytest.approx(2.5)
+        assert cd["WACC"] is None
+        assert cd["WACCLabel"] == WACC_LABEL_TAX_RATE_OUT_OF_RANGE
 
     def test_applies_to_multiple_years(self):
         years = [_make_year("2024-03-31", Eq=800.0), _make_year("2023-03-31", Eq=700.0)]

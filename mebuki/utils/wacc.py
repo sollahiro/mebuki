@@ -15,6 +15,9 @@ from datetime import date, timedelta
 from mebuki.constants.financial import (
     PERCENT,
     WACC_DEFAULT_BETA,
+    WACC_LABEL_COST_OF_DEBT_OUT_OF_RANGE,
+    WACC_LABEL_MISSING_INPUT,
+    WACC_LABEL_TAX_RATE_OUT_OF_RANGE,
     WACC_MARKET_RISK_PREMIUM,
     WACC_RF_FALLBACK,
 )
@@ -120,7 +123,7 @@ def calculate_wacc(
     ie: float | None,
     tc_pct: float | None,
     rf: float,
-) -> dict[str, float | None]:
+) -> dict[str, float | str | None]:
     """WACC・CostOfEquity・CostOfDebt を計算して dict で返す。
 
     Args:
@@ -131,14 +134,15 @@ def calculate_wacc(
         rf: リスクフリーレート（小数、例: 0.024）
 
     Returns:
-        {"CostOfEquity": float | None, "CostOfDebt": float | None, "WACC": float | None}
+        {"CostOfEquity": float | None, "CostOfDebt": float | None, "WACC": float | None, "WACCLabel": str | None}
         各値は % 単位。
     """
     re_ = rf + WACC_DEFAULT_BETA * WACC_MARKET_RISK_PREMIUM
-    result: dict[str, float | None] = {
+    result: dict[str, float | str | None] = {
         "CostOfEquity": re_ * PERCENT,
         "CostOfDebt": None,
         "WACC": None,
+        "WACCLabel": None,
     }
     if eq is None:
         return result
@@ -148,9 +152,21 @@ def calculate_wacc(
         return result
     if d == 0:
         result["WACC"] = re_ * PERCENT
-    elif ie is not None and tc_pct is not None and 0 <= tc_pct <= 100:
+    elif ie is not None:
         rd = ie / d
-        result["CostOfDebt"] = rd * PERCENT if rd <= 1.0 else None
+        if rd <= 1.0:
+            result["CostOfDebt"] = rd * PERCENT
+        if result["CostOfDebt"] is None:
+            result["WACCLabel"] = WACC_LABEL_COST_OF_DEBT_OUT_OF_RANGE
+            return result
+        if tc_pct is None:
+            result["WACCLabel"] = WACC_LABEL_MISSING_INPUT
+            return result
+        if not (0 <= tc_pct <= 100):
+            result["WACCLabel"] = WACC_LABEL_TAX_RATE_OUT_OF_RANGE
+            return result
         tc = tc_pct / PERCENT
         result["WACC"] = ((eq / v) * re_ + (d / v) * rd * (1 - tc)) * PERCENT
+    else:
+        result["WACCLabel"] = WACC_LABEL_MISSING_INPUT
     return result

@@ -90,6 +90,7 @@ class CalculatedData(TypedDict, total=False):
     CostOfEquity: float | None
     CostOfDebt: float | None
     WACC: float | None
+    WACCLabel: str | None
 
 
 class YearEntry(TypedDict):

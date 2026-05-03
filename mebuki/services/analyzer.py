@@ -272,9 +272,14 @@ def _apply_wacc(years: list[YearEntry], rf_rates: dict[str, float]) -> None:
             tc_pct=cd.get("EffectiveTaxRate"),
             rf=rf,
         )
-        cd["CostOfEquity"] = wacc["CostOfEquity"]
-        cd["CostOfDebt"] = wacc["CostOfDebt"]
-        cd["WACC"] = wacc["WACC"]
+        cost_of_equity = wacc["CostOfEquity"]
+        cost_of_debt = wacc["CostOfDebt"]
+        wacc_value = wacc["WACC"]
+        wacc_label = wacc["WACCLabel"]
+        cd["CostOfEquity"] = cost_of_equity if isinstance(cost_of_equity, float) else None
+        cd["CostOfDebt"] = cost_of_debt if isinstance(cost_of_debt, float) else None
+        cd["WACC"] = wacc_value if isinstance(wacc_value, float) else None
+        cd["WACCLabel"] = wacc_label if isinstance(wacc_label, str) else None
         _set_metric_source(cd, "CostOfEquity", source="mof", unit="percent", method="Rf + beta * MRP")
         _set_metric_source(cd, "CostOfDebt", source="derived", unit="percent", method="InterestExpense / InterestBearingDebt")
         _set_metric_source(cd, "WACC", source="derived", unit="percent", method="weighted average cost of capital")

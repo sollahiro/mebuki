@@ -103,7 +103,7 @@ async def test_get_annual_docs_reads_from_persistent_cache(tmp_path) -> None:
     cache_manager.set(
         f"edinet_docs_{code}_{max_years}",
         {
-            "_cache_version": "edinet-docs-v1",
+            "_cache_version": "edinet-docs-v2",
             "docs": [{"docID": "S100CACHED"}],
         },
     )
@@ -144,6 +144,32 @@ async def test_get_annual_docs_saves_to_persistent_cache_after_api_call(tmp_path
 
 
 @pytest.mark.asyncio
+async def test_get_annual_docs_ignores_q2_records_for_year_selection() -> None:
+    edinet_client = Mock()
+    edinet_client.api_key = "dummy"
+    edinet_client.search_documents = AsyncMock(return_value=[{"docID": "S100ANNUAL"}])
+    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+
+    docs = await fetcher._get_annual_docs(
+        "59320",
+        [
+            _financial_record("2025-06-01", "2026-05-31", "2026-01-08", period_type="2Q"),
+            _financial_record("2024-06-01", "2025-05-31", "2025-07-10"),
+            _financial_record("2023-06-01", "2024-05-31", "2024-07-11"),
+            _financial_record("2022-06-01", "2023-05-31", "2023-07-12"),
+            _financial_record("2021-06-01", "2022-05-31", "2022-07-12"),
+            _financial_record("2020-06-01", "2021-05-31", "2021-07-13"),
+        ],
+        5,
+    )
+
+    assert docs == [{"docID": "S100ANNUAL"}]
+    _, kwargs = edinet_client.search_documents.await_args
+    assert kwargs["years"] == [2024, 2023, 2022, 2021, 2020]
+    assert [record["CurPerType"] for record in kwargs["jquants_data"]] == ["FY"] * 5
+
+
+@pytest.mark.asyncio
 async def test_get_half_year_docs_reads_from_persistent_cache(tmp_path) -> None:
     code = "72030"
     max_years = 1
@@ -151,7 +177,7 @@ async def test_get_half_year_docs_reads_from_persistent_cache(tmp_path) -> None:
     cache_manager.set(
         f"edinet_docs_{code}_{max_years}_2Q",
         {
-            "_cache_version": "edinet-docs-v1",
+            "_cache_version": "edinet-docs-v2",
             "docs": [{"docID": "S100HALFCACHED"}],
         },
     )

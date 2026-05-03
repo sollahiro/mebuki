@@ -27,7 +27,7 @@ from mebuki.utils.xbrl_result_types import XbrlTagElements
 
 logger = logging.getLogger(__name__)
 
-_EDINET_DOCS_CACHE_VERSION = "edinet-docs-v1"
+_EDINET_DOCS_CACHE_VERSION = "edinet-docs-v2"
 
 _PreParsedMap: TypeAlias = dict[str, tuple[Path, XbrlTagElements]]
 _MetricByYear: TypeAlias = dict[str, dict[str, Any]]
@@ -103,9 +103,14 @@ class EdinetFetcher:
                         self._doc_cache[key] = cached["docs"]
                         return self._doc_cache[key]
 
+                annual_financial_data = [
+                    record for record in financial_data
+                    if record.get("CurPerType") == "FY"
+                ]
+
                 docs = await self.search_recent_reports(
                     code=code,
-                    jquants_data=financial_data,
+                    jquants_data=annual_financial_data,
                     max_years=max_years,
                     doc_types=["120"],
                     max_documents=max_years,

@@ -211,7 +211,7 @@ async def cmd_analyze(args):
             # ── WACC（暫定: β=1.0, MRP=5.5%, Rf=10年国債利回り） ──
             ("株主資本コスト (%)",      lambda c: c.get("CostOfEquity")),
             ("負債コスト (%)",          lambda c: c.get("CostOfDebt")),
-            ("WACC (%)",               lambda c: c.get("WACC")),
+            ("WACC (%)",               lambda c: c.get("WACC") if c.get("WACC") is not None else c.get("WACCLabel")),
             # ── 有利子負債・支払利息 ──
             ("有利子負債合計 (百万)",   lambda c: c.get("InterestBearingDebt")),
             ("支払利息 (百万)",         lambda c: c.get("InterestExpense")),
