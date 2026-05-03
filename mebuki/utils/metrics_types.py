@@ -86,6 +86,8 @@ class CalculatedData(TypedDict, total=False):
     SalesLabel: str
     # ── analyzer.py: _apply_employees ──
     Employees: int | None
+    # ── analyzer.py: _apply_depreciation ──
+    DepreciationAmortization: float | None
     # ── analyzer.py: _apply_ibd / half_year_data_service.py ──
     DocID: str | None
     # ── wacc.py: calculate_wacc ──

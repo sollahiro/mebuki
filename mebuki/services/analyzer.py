@@ -249,6 +249,25 @@ def _apply_employees(
             _set_metric_source(cd, "Employees", source="edinet", unit="persons", method=emp.get("method"), doc_id=emp.get("docID"), label=emp.get("scope"))
 
 
+def _apply_depreciation(
+    years: list[YearEntry],
+    da_by_year: dict[str, dict[str, Any]],
+) -> None:
+    for year in years:
+        fy_end_key = _fy_end_key(year)
+        da = da_by_year.get(fy_end_key)
+        if da and da.get("current") is not None:
+            cd = year["CalculatedData"]
+            cd["DepreciationAmortization"] = da["current"] / MILLION_YEN
+            _set_metric_source(
+                cd,
+                "DepreciationAmortization",
+                source="edinet",
+                unit="million_yen",
+                method=da.get("method"),
+            )
+
+
 _METRIC_APPLIERS: list[Callable[[list[YearEntry], dict[str, dict[str, Any]]], None]] = [
     lambda years, m: _apply_ibd(years, m.get("ibd", {}), m.get("doc_ids", {})),
     lambda years, m: _apply_interest_expense(years, m.get("ie", {})),
@@ -257,6 +276,7 @@ _METRIC_APPLIERS: list[Callable[[list[YearEntry], dict[str, dict[str, Any]]], No
     lambda years, m: _apply_operating_profit(years, m.get("op", {})),
     lambda years, m: _apply_net_revenue(years, m.get("nr", {})),
     lambda years, m: _apply_employees(years, m.get("emp", {})),
+    lambda years, m: _apply_depreciation(years, m.get("da", {})),
 ]
 
 

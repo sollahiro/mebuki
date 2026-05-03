@@ -15,6 +15,7 @@ from typing import Any, TypeAlias
 from mebuki import __version__
 from mebuki.api.jquants_client import JQuantsAPIClient
 from mebuki.api.edinet_client import EdinetAPIClient
+from mebuki.analysis.depreciation import extract_depreciation
 from mebuki.analysis.employees import extract_employees
 from mebuki.analysis.gross_profit import extract_gross_profit
 from mebuki.analysis.interest_bearing_debt import extract_interest_bearing_debt
@@ -69,6 +70,7 @@ _EXTRACTOR_SPECS: list[ExtractorSpec] = [
     ExtractorSpec("emp", "EMP", extract_employees),
     ExtractorSpec("nr", "NR", extract_net_revenue, result_check=lambda r: bool(r.get("found"))),
     ExtractorSpec("op", "OP", extract_operating_profit),
+    ExtractorSpec("da", "DA", extract_depreciation),
 ]
 
 _SPEC_BY_KEY: dict[str, ExtractorSpec] = {spec.key: spec for spec in _EXTRACTOR_SPECS}

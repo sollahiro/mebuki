@@ -263,3 +263,14 @@ AGGREGATE_IFRS_DEFINITIONS: list[_AggregateIFRSDef] = [
         "covers": ["社債", "長期借入金"],
     },
 ]
+
+# 減価償却費（DA）タグ定義
+# analysis/depreciation.py で使用
+
+CF_DEPRECIATION_JGAAP_TAGS: list[str] = [
+    "DepreciationAndAmortizationOpeCF",      # J-GAAP CF計算書（間接法）調整項目
+]
+
+CF_DEPRECIATION_IFRS_TAGS: list[str] = [
+    "DepreciationAndAmortizationOpeCFIFRS",  # IFRS CF計算書
+]

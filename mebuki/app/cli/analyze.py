@@ -205,6 +205,7 @@ async def cmd_analyze(args):
             ("営業CF (百万)",          lambda c: c.get("CFO")),
             ("投資CF (百万)",          lambda c: c.get("CFI")),
             ("フリーCF (百万)",        lambda c: c.get("CFC")),
+            ("減価償却費 (百万)",      lambda c: c.get("DepreciationAmortization")),
             ("配当性向 (%)",           lambda c: c.get("PayoutRatio")),
             # ── 税引前利益・実効税率 ──
             ("実効税率 (%)",            lambda c: c.get("EffectiveTaxRate")),

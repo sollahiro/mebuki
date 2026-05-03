@@ -88,6 +88,14 @@ class CashFlowResult(TypedDict):
     accounting_standard: str
 
 
+class DepreciationResult(TypedDict):
+    current: float | None
+    prior: float | None
+    accounting_standard: str
+    method: str
+    reason: NotRequired[str]
+
+
 class HalfYearEdinetEntry(TypedDict):
     gp: GrossProfitResult
     cf: CashFlowResult
