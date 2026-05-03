@@ -14,10 +14,11 @@
 | 指標の出所情報 | 対応済み | `MetricSources` に集約し、内部計算では保持する |
 | CLI/MCPパリティ | 対応済み | `--include-debug-fields` と MCP `include_debug_fields` を揃えた |
 | キャッシュ可視化/削除 | 対応済み | stats/audit/prune を用意し、MCPは読み取りのみ |
-| EDINETキャッシュ境界 | 一部対応 | `EdinetCacheStore` に分離済み。TTL/容量管理は未対応 |
-| EDINET補完パイプライン | 未対応 | 年次と半期で補完経路がまだ分かれている |
-| XBRL抽出結果の型 | 未対応 | 主要metrics型はあるが、抽出器戻り値はまだ緩い |
-| 個別分析キャッシュ粒度 | 未対応 | 最終成果物キャッシュなのでロジック更新時に古い結果が残りうる |
+| 公開JSONスキーマ固定 | 対応済み | ゴールデンテストでpublicキー・debugキーを契約として固定 |
+| XBRL抽出結果の型 | 対応済み | 全抽出器の戻り値を `TypedDict` 化、pyright 0 errors |
+| EDINETキャッシュ境界 | 一部対応 | `EdinetCacheStore` + TTL対応済み。容量上限・LRUは未対応 |
+| EDINET補完パイプライン | 一部対応 | ダウンロード+パースを `_download_and_parse_docs` に共有化済み |
+| 個別分析キャッシュ粒度 | 一部対応 | J-QUANTSキャッシュを分析キャッシュから独立分離済み |
 
 ## 対応済み
 
@@ -49,7 +50,7 @@
 
 **残り**
 
-標準JSONの公開フィールド一覧をドキュメントとテストでさらに固定する。
+なし。ゴールデンテストで公開フィールドが契約として固定済み（`#12` を参照）。
 
 ### 2. 半期データのEDINET失敗経路でデバッグ情報が漏れる
 
@@ -92,7 +93,7 @@ J-QUANTS由来、EDINET由来、内部計算、財務省CSV由来の値が `Calc
 
 **残り**
 
-抽出器ごとの戻り値型がまだ緩いため、`MetricSources` に入る前の段階は型で保証されていない。
+なし。`utils/xbrl_result_types.py` で全抽出器の戻り値 `TypedDict` を定義し、各 `extract_*` 関数の戻り値型として適用済み。
 
 ### 4. EDINETキャッシュ処理がAPIクライアント内に寄りすぎていた
 
@@ -113,7 +114,7 @@ EDINETの日別検索キャッシュとXBRL zip展開処理が `EdinetAPIClient`
 
 **残り**
 
-TTL、容量上限、LRU、キャッシュバージョン管理は未対応。
+TTL対応済み（空結果1日・ヒットあり30日）。容量上限、LRU、CacheManagerとの統一的な統計/削除ポリシーは未対応。
 
 ### 5. キャッシュ状態が見えず、安全に掃除しづらい
 
@@ -136,7 +137,7 @@ TTL、容量上限、LRU、キャッシュバージョン管理は未対応。
 
 **残り**
 
-EDINET検索/XBRLキャッシュの自動TTL運用は未対応。
+EDINET検索キャッシュのTTLは対応済み。XBRLキャッシュの容量上限・自動整理は未対応。
 
 ### 6. XBRL抽出器追加時の変更箇所が多かった
 
@@ -157,7 +158,7 @@ EDINET検索/XBRLキャッシュの自動TTL運用は未対応。
 
 **残り**
 
-半期補完はまだ別経路なので、年次/半期で完全には統一されていない。
+半期補完はまだ別経路。ただしダウンロード+パース処理は `_download_and_parse_docs` に共有化済み（`#10` を参照）。
 
 ### 7. XBRL parse が指標ごとに重複していた
 
@@ -179,7 +180,7 @@ EDINET検索/XBRLキャッシュの自動TTL運用は未対応。
 
 **残り**
 
-`pre_parsed` の責務と型をさらに整理する余地がある。
+`_download_and_parse_docs` の共有化で年次/半期の重複を解消。型は `XbrlTagElements = dict[str, dict[str, float]]` で固定済み。
 
 ## 一部対応
 
@@ -193,18 +194,17 @@ EDINET検索/XBRLキャッシュの自動TTL運用は未対応。
 
 - `EdinetCacheStore` でAPI通信からファイル管理を分離
 - cache stats/audit/prune で容量と古いEDINETキャッシュを見られるようにした
+- 検索キャッシュのTTL: 空結果1日・ヒットあり30日（`EDINET_SEARCH_EMPTY_TTL_DAYS` / `EDINET_SEARCH_HIT_TTL_DAYS`）
 
 **未対応**
 
-- 検索キャッシュのTTL
 - XBRL展開ディレクトリの容量上限
 - LRUまたは日数ベースの自動整理
-- キャッシュ形式のバージョン管理
 - `CacheManager` とEDINETキャッシュの統一的な統計/削除ポリシー
 
 **次にやるなら**
 
-まずTTLだけ入れる。空結果は短め、ヒットありは長めにする。
+XBRL展開ディレクトリの容量上限（古い順に削除）。
 
 ### 9. 型安全性
 
@@ -215,20 +215,20 @@ EDINET検索/XBRLキャッシュの自動TTL運用は未対応。
 **対応済み**
 
 - `utils/metrics_types.py` に主要metrics系 `TypedDict` を追加
-- Pyright は dev依存に追加済み
-- 変更対象モジュール単位で型を見る方針をルール化
+- `utils/xbrl_result_types.py` に全XBRL抽出器の戻り値 `TypedDict` を定義
+- 全 `extract_*` 関数の戻り値型として適用、pyright 0 errors
+- `pre_parsed` の型は `XbrlTagElements = dict[str, dict[str, float]]` で固定
+- Pyright は dev依存に追加済み、変更対象モジュール単位で型を見る方針をルール化
 
 **未対応**
 
-- XBRL抽出器戻り値の `TypedDict` 化
-- `pre_parsed` の型境界整理
 - 全体pyrightをCIで常時必須にするかの判断
 
 **次にやるなら**
 
-抽出器を一気に型付けせず、`interest_bearing_debt` や `gross_profit` など変更頻度の高いものから順に進める。
+CI（GitHub Actions等）にpyrightを組み込む判断をする。
 
-## 未着手
+## 一部対応（続き）
 
 ### 10. 年次/半期のEDINET補完パイプライン統合
 
@@ -236,15 +236,20 @@ EDINET検索/XBRLキャッシュの自動TTL運用は未対応。
 
 年次分析と半期分析で、EDINET書類検索、XBRL取得、GP/IBD/CF補完の呼び方が別経路になっている。似た処理がある一方で、半期固有のFY-H1計算もあり、単純には共通化しづらい。
 
+**対応済み**
+
+- `_download_and_parse_docs(docs, code) -> _PreParsedMap` を共有ヘルパーとして抽出
+- 年次の `predownload_and_parse()` と半期の `extract_half_year_edinet_data()` が同じダウンロード+パース処理を使うように統一
+
 **まだやっていないこと**
 
 - 年次/半期で共通のEDINET doc mapを使う
-- 共通のdownload/parse結果を使う
 - GP/IBD/CFなどの補完結果を共通フォーマットにする
+- 半期固有のH2計算の整理
 
 **次にやるなら**
 
-まず「書類検索とpre_parseの共有」だけを切り出す。半期固有のH2計算は最後まで残してよい。
+書類検索（`_get_annual_docs` 相当）を半期パスと共有する。
 
 ### 11. 個別分析キャッシュの粒度見直し
 
@@ -252,35 +257,36 @@ EDINET検索/XBRLキャッシュの自動TTL運用は未対応。
 
 `individual_analysis_{code}` は最終成果物を丸ごとキャッシュする。便利だが、XBRL抽出ロジック、WACCロジック、公開JSON整形を改善しても、キャッシュヒット時は古い分析結果が残りうる。
 
-**まだやっていないこと**
+**対応済み**
 
-- J-QUANTS raw
-- EDINET doc map
-- XBRL parse result
-- 最終metrics
-
-これらを別々にキャッシュする設計。
-
-**次にやるなら**
-
-先にキャッシュキーとバージョン設計を決める。いきなり分割するとキャッシュ互換性の影響が大きい。
-
-### 12. 公開JSONスキーマの固定
-
-**問題**
-
-serializerで標準JSONは軽くなったが、「標準JSONに必ず出るキー」「欠損しうるキー」「デバッグ専用キー」の一覧はまだ契約として固定しきれていない。
+- `jquants_financial_{code}` キャッシュを新設（バージョン: `"jquants-v1"`、semver非依存）
+- 分析キャッシュ（`individual_analysis_{code}`）バージョンをバンプしても J-QUANTS 再取得が発生しなくなった
+- `IndividualAnalyzer.fetch_analysis_data()` に `prefetched_stock_info` / `prefetched_financial_data` を追加
 
 **まだやっていないこと**
 
-- 年次標準JSONのゴールデンテスト
-- 半期標準JSONのゴールデンテスト
-- `include_debug_fields=True` のゴールデンテスト
-- 公開キー一覧のドキュメント化
+- EDINET doc mapの独立キャッシュ
+- XBRL parse resultの独立キャッシュ（現状はEDINETファイルキャッシュが実質的に代用）
+- 最終metricsの年度別粒度化
 
 **次にやるなら**
 
-実データではなく小さなfixtureで、serializer単体テストを厚くする。
+EDINET doc mapをキャッシュに保存し、EDINET API呼び出しを削減する。
+
+## 未着手
+
+### 12. 公開JSONスキーマの固定（→対応済み）
+
+**対応**
+
+- `tests/test_output_serializer.py` に `PUBLIC_CALCULATED_DATA_KEYS` / `HALF_YEAR_PUBLIC_DATA_KEYS` 定数を定義
+- 年次・半期標準JSON のゴールデンテスト（公開キーの完全一致チェック）を追加
+- `_DEBUG_FIELDS` の集合を `frozenset` で固定するテストを追加
+- 入力dict不変性テスト、外部構造保持テストを追加
+
+**主なファイル**
+
+- `tests/test_output_serializer.py`
 
 ## 当面触らない
 
@@ -316,8 +322,15 @@ alias期間、移行ガイド、契約テストを用意する。
 
 ## 次のおすすめ順
 
-1. serializer単体テストと公開JSON契約テストを追加する
-2. EDINET検索キャッシュにTTLを入れる
-3. XBRL抽出器戻り値を主要モジュールからTypedDict化する
-4. 年次/半期でEDINET書類検索とpre_parse共有を切り出す
-5. 個別分析キャッシュの粒度設計をする
+1. ~~serializer単体テストと公開JSON契約テストを追加する~~ → 完了（#12）
+2. ~~EDINET検索キャッシュにTTLを入れる~~ → 完了（#8）
+3. ~~XBRL抽出器戻り値を主要モジュールからTypedDict化する~~ → 完了（#9）
+4. ~~年次/半期でEDINET書類検索とpre_parse共有を切り出す~~ → 一部完了（#10）
+5. ~~個別分析キャッシュの粒度設計をする~~ → 一部完了（#11）
+
+**次の候補**
+
+1. XBRL展開ディレクトリの容量上限・LRU整理（#8 残り）
+2. 年次/半期でEDINET書類検索共有を完成させる（#10 残り）
+3. EDINET doc mapの独立キャッシュ化（#11 残り）
+4. pyrightをCIに組み込む判断（#9 残り）
