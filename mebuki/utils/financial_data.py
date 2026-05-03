@@ -99,7 +99,7 @@ def extract_annual_data(
     """
     today = datetime.now()
 
-    def _should_include(record: dict) -> bool:
+    def _should_include(record: dict[str, Any]) -> bool:
         fy_end = record.get("CurFYEn", "")
         disc_date = record.get("DiscDate", "")
 
@@ -235,7 +235,7 @@ def build_half_year_periods(
         v = to_float(value)
         return v / MILLION_YEN if v is not None else None
 
-    def _diff_m(fy_rec: dict, q2_rec: dict, field: str) -> float | None:
+    def _diff_m(fy_rec: dict[str, Any], q2_rec: dict[str, Any], field: str) -> float | None:
         fy_v = to_float(fy_rec.get(field))
         q2_v = to_float(q2_rec.get(field))
         if fy_v is None or q2_v is None:

@@ -22,10 +22,11 @@ from mebuki.analysis.net_revenue import extract_net_revenue
 from mebuki.analysis.operating_profit import extract_operating_profit
 from mebuki.analysis.tax_expense import extract_tax_expense
 from mebuki.utils.jquants_utils import prepare_edinet_search_data
+from mebuki.utils.xbrl_result_types import XbrlTagElements
 
 logger = logging.getLogger(__name__)
 
-_PreParsedMap: TypeAlias = dict[str, tuple[Path, dict[str, dict[str, float]]]]
+_PreParsedMap: TypeAlias = dict[str, tuple[Path, XbrlTagElements]]
 _MetricByYear: TypeAlias = dict[str, dict[str, Any]]
 _AllMetrics: TypeAlias = dict[str, dict[str, Any]]
 
@@ -39,7 +40,7 @@ class ExtractorSpec:
     key: str
     label: str
     extract_fn: Callable
-    result_check: Callable[[dict], bool] | None = None
+    result_check: Callable[[dict[str, Any]], bool] | None = None
 
 
 _EXTRACTOR_SPECS: list[ExtractorSpec] = [
@@ -65,8 +66,8 @@ class EdinetFetcher:
     ):
         self.api_client = api_client
         self.edinet_client = edinet_client
-        self._doc_cache: dict = {}
-        self._doc_locks: dict = {}
+        self._doc_cache: dict[tuple[str, int], list[dict[str, Any]]] = {}
+        self._doc_locks: dict[tuple[str, int], asyncio.Lock] = {}
 
     async def _get_annual_docs(
         self,
@@ -162,7 +163,7 @@ class EdinetFetcher:
 
         docs = await self._get_annual_docs(code, financial_data, max_years)
 
-        async def _dl_parse(doc: dict[str, Any]) -> tuple[str, tuple[Path, dict[str, dict[str, float]]] | None]:
+        async def _dl_parse(doc: dict[str, Any]) -> tuple[str, tuple[Path, XbrlTagElements] | None]:
             fy_end_8 = _fy_end_key(doc.get("jquants_fy_end"))
             if not fy_end_8:
                 return "", None
@@ -202,7 +203,7 @@ class EdinetFetcher:
         prefix: str,
         extract_fn: Callable,
         *,
-        result_check: Callable[[dict], bool] | None = None,
+        result_check: Callable[[dict[str, Any]], bool] | None = None,
         pre_parsed_map: _PreParsedMap | None = None,
     ) -> tuple[str, dict[str, Any] | None]:
         fy_end_8 = _fy_end_key(doc.get("jquants_fy_end"))
@@ -436,7 +437,7 @@ class EdinetFetcher:
         max_years: int,
         *,
         pre_parsed_map: _PreParsedMap | None = None,
-    ) -> dict[str, dict]:
+    ) -> _MetricByYear:
         """年度別に有利子負債を抽出。Returns: { "YYYYMMDD": ibd_result_dict }"""
         return await self._extract_metric_by_year(_SPEC_BY_KEY["ibd"], code, financial_data, max_years, pre_parsed_map=pre_parsed_map)
 
@@ -445,7 +446,7 @@ class EdinetFetcher:
         code: str,
         financial_data: list[dict[str, Any]],
         max_years: int,
-    ) -> dict[str, dict]:
+    ) -> dict[str, Any]:
         """2Q期間のEDINETデータ（GrossProfit + CF + IBD）を年度別に抽出。
 
         Returns: { "YYYYMMDD": {"gp": gp_result_dict, "cf": cf_result_dict, "ibd": ibd_result_dict} }
@@ -475,7 +476,7 @@ class EdinetFetcher:
 
         # CurFYEn ごとに1件に集約（複数ある場合は最も遅い DiscDate を採用）
         # 重複レコードが max_years の枠を消費しないようにする
-        seen_fy_ends: dict = {}
+        seen_fy_ends: dict[str, dict[str, Any]] = {}
         for r in q2_records_raw:
             fy_en = r.get("CurFYEn", "")
             if fy_en not in seen_fy_ends or r.get("DiscDate", "") > seen_fy_ends[fy_en].get("DiscDate", ""):
@@ -492,7 +493,7 @@ class EdinetFetcher:
         )
         logger.info(f"[HALF-EDINET] {code}: {len(docs)}件の2Q文書を検索")
 
-        async def _process_doc(doc: dict) -> tuple[str, dict | None]:
+        async def _process_doc(doc: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
             fy_end_8 = _fy_end_key(doc.get("jquants_fy_end"))
             if not fy_end_8:
                 return "", None
@@ -537,7 +538,7 @@ class EdinetFetcher:
         max_years: int,
         *,
         pre_parsed_map: _PreParsedMap | None = None,
-    ) -> dict[str, dict]:
+    ) -> _MetricByYear:
         """年度別に従業員数を抽出。Returns: { "YYYYMMDD": employees_result_dict }"""
         return await self._extract_metric_by_year(_SPEC_BY_KEY["emp"], code, financial_data, max_years, pre_parsed_map=pre_parsed_map)
 
@@ -548,7 +549,7 @@ class EdinetFetcher:
         max_years: int,
         *,
         pre_parsed_map: _PreParsedMap | None = None,
-    ) -> dict[str, dict]:
+    ) -> _MetricByYear:
         """年度別に IFRS 純収益・事業利益を抽出。Returns: { "YYYYMMDD": nr_result_dict }"""
         return await self._extract_metric_by_year(_SPEC_BY_KEY["nr"], code, financial_data, max_years, pre_parsed_map=pre_parsed_map)
 
@@ -559,7 +560,7 @@ class EdinetFetcher:
         max_years: int,
         *,
         pre_parsed_map: _PreParsedMap | None = None,
-    ) -> dict[str, dict]:
+    ) -> _MetricByYear:
         """年度別に売上総利益を抽出。Returns: { "YYYYMMDD": gp_result_dict }"""
         return await self._extract_metric_by_year(_SPEC_BY_KEY["gp"], code, financial_data, max_years, pre_parsed_map=pre_parsed_map)
 
@@ -570,7 +571,7 @@ class EdinetFetcher:
         max_years: int,
         *,
         pre_parsed_map: _PreParsedMap | None = None,
-    ) -> dict[str, dict]:
+    ) -> _MetricByYear:
         """年度別に税引前利益・法人税等を抽出。Returns: { "YYYYMMDD": tax_result_dict }"""
         return await self._extract_metric_by_year(_SPEC_BY_KEY["tax"], code, financial_data, max_years, pre_parsed_map=pre_parsed_map)
 
@@ -581,7 +582,7 @@ class EdinetFetcher:
         max_years: int,
         *,
         pre_parsed_map: _PreParsedMap | None = None,
-    ) -> dict[str, dict]:
+    ) -> _MetricByYear:
         """年度別に支払利息（金融費用）を抽出。Returns: { "YYYYMMDD": ie_result_dict }"""
         return await self._extract_metric_by_year(_SPEC_BY_KEY["ie"], code, financial_data, max_years, pre_parsed_map=pre_parsed_map)
 
@@ -592,6 +593,6 @@ class EdinetFetcher:
         max_years: int,
         *,
         pre_parsed_map: _PreParsedMap | None = None,
-    ) -> dict[str, dict]:
+    ) -> _MetricByYear:
         """年度別に営業利益（または経常利益）を抽出。Returns: { "YYYYMMDD": op_result_dict }"""
         return await self._extract_metric_by_year(_SPEC_BY_KEY["op"], code, financial_data, max_years, pre_parsed_map=pre_parsed_map)

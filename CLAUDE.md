@@ -9,6 +9,35 @@
 
 テストで自動検証: `tests/test_dependency_rules.py`
 
+## Claude × Codex 開発フロー
+
+実装作業は Claude（計画・レビュー担当）と Codex（実装担当）の役割分担で進める。
+
+```
+Claude: 計画立案・指示
+    ↓
+Codex: 実装
+    ↓
+Claude: レビュー・再指示（問題があれば）
+    ↓
+Codex: 反論または再実装（指示に疑問があれば独自判断で修正してよい）
+    ↓
+Claude: 再レビュー（必要に応じて繰り返す）
+```
+
+### Codex への指示原則
+
+- Codex は Claude の判断を鵜呑みにしない。指示に疑問・矛盾・より良いアプローチがあれば独自判断で修正・改善してよい
+- Claude は Codex の実装結果を必ずファイルを直接読んで検証する（報告だけを信用しない）
+- MCP ツール `mcp__codex__codex`（新規セッション）/ `mcp__codex__codex-reply`（継続）で指示を送る
+
+### レビュー後の報告
+
+Claude はレビュー完了後、必ず以下のいずれかを明示する。
+
+- **追加指示なし**: 問題なし・差し戻し不要と判断した場合
+- **差し戻し**: 問題点と差し戻し理由を添えて Codex に再指示した場合
+
 @.agents/rules/generic/commit-conventions.md
 @.agents/rules/project/date-conversion.md
 @.agents/rules/project/versioning.md

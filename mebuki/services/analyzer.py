@@ -52,7 +52,7 @@ def _set_metric_source(
 
 def _apply_ibd(
     years: list[YearEntry],
-    ibd_by_year: dict[str, dict],
+    ibd_by_year: dict[str, dict[str, Any]],
     doc_id_by_year: dict[str, str],
 ) -> None:
     for year in years:
@@ -94,7 +94,7 @@ def _apply_ibd(
 
 def _apply_interest_expense(
     years: list[YearEntry],
-    ie_by_year: dict[str, dict],
+    ie_by_year: dict[str, dict[str, Any]],
 ) -> None:
     for year in years:
         fy_end_key = _fy_end_key(year)
@@ -114,7 +114,7 @@ def _apply_interest_expense(
 
 def _apply_tax(
     years: list[YearEntry],
-    tax_by_year: dict[str, dict],
+    tax_by_year: dict[str, dict[str, Any]],
 ) -> None:
     for year in years:
         fy_end_key = _fy_end_key(year)
@@ -135,7 +135,7 @@ def _apply_tax(
 
 def _apply_gross_profit(
     years: list[YearEntry],
-    gp_by_year: dict[str, dict],
+    gp_by_year: dict[str, dict[str, Any]],
 ) -> None:
     for year in years:
         fy_end_key = _fy_end_key(year)
@@ -172,7 +172,7 @@ def _apply_gross_profit(
 
 def _apply_operating_profit(
     years: list[YearEntry],
-    op_by_year: dict[str, dict],
+    op_by_year: dict[str, dict[str, Any]],
 ) -> None:
     for year in years:
         fy_end_key = _fy_end_key(year)
@@ -203,7 +203,7 @@ def _apply_operating_profit(
 
 def _apply_net_revenue(
     years: list[YearEntry],
-    nr_by_year: dict[str, dict],
+    nr_by_year: dict[str, dict[str, Any]],
 ) -> None:
     for year in years:
         fy_end_key = _fy_end_key(year)
@@ -237,7 +237,7 @@ def _apply_net_revenue(
 
 def _apply_employees(
     years: list[YearEntry],
-    emp_by_year: dict[str, dict],
+    emp_by_year: dict[str, dict[str, Any]],
 ) -> None:
     for year in years:
         fy_end_key = _fy_end_key(year)
@@ -248,7 +248,7 @@ def _apply_employees(
             _set_metric_source(cd, "Employees", source="edinet", unit="persons", method=emp.get("method"), doc_id=emp.get("docID"), label=emp.get("scope"))
 
 
-_METRIC_APPLIERS: list[Callable[[list[YearEntry], dict], None]] = [
+_METRIC_APPLIERS: list[Callable[[list[YearEntry], dict[str, dict[str, Any]]], None]] = [
     lambda years, m: _apply_ibd(years, m.get("ibd", {}), m.get("doc_ids", {})),
     lambda years, m: _apply_interest_expense(years, m.get("ie", {})),
     lambda years, m: _apply_tax(years, m.get("tax", {})),
@@ -259,7 +259,7 @@ _METRIC_APPLIERS: list[Callable[[list[YearEntry], dict], None]] = [
 ]
 
 
-def _apply_wacc(years: list[YearEntry], rf_rates: dict) -> None:
+def _apply_wacc(years: list[YearEntry], rf_rates: dict[str, float]) -> None:
     for year in years:
         cd = year["CalculatedData"]
         fy_end = year.get("fy_end") or ""
@@ -327,7 +327,7 @@ class IndividualAnalyzer:
         if not metrics:
             return {}
 
-        edinet_data: dict = {}
+        edinet_data: dict[str, Any] = {}
         all_metrics: dict[str, dict[str, Any]] = {}
 
         if financial_data:

@@ -114,7 +114,7 @@ class DataService:
         """銘柄の基本情報を取得"""
         return self.company_info_service.fetch_stock_basic_info(code)
 
-    def _attach_upcoming_earnings(self, result: dict, code: str) -> None:
+    def _attach_upcoming_earnings(self, result: dict[str, Any], code: str) -> None:
         """決算スケジュールを result に付与する（該当なければ何もしない）"""
         self.earnings_calendar_service.attach_upcoming_earnings(result, code)
 
