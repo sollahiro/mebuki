@@ -12,6 +12,7 @@ from mebuki.utils.cache import CacheManager
 from mebuki.utils.converters import to_float
 from mebuki.utils.financial_data import build_half_year_periods
 from mebuki.utils.output_serializer import serialize_half_year_periods
+from mebuki.utils.xbrl_result_types import GrossProfitResult, HalfYearEdinetEntry
 
 from .edinet_fetcher import EdinetFetcher
 
@@ -43,6 +44,159 @@ def _set_metric_source(
     if label is not None:
         item["label"] = label
     sources[metric] = item
+
+
+def _to_gross_profit_result(value: dict[str, Any] | None) -> GrossProfitResult | None:
+    if value is None:
+        return None
+
+    required_keys = ("current", "prior", "method", "accounting_standard", "components")
+    if not all(key in value for key in required_keys):
+        return None
+
+    result: GrossProfitResult = {
+        "current": value.get("current"),
+        "prior": value.get("prior"),
+        "method": str(value["method"]),
+        "accounting_standard": str(value["accounting_standard"]),
+        "components": value["components"] if isinstance(value["components"], list) else [],
+    }
+    if isinstance(value.get("docID"), str):
+        result["docID"] = value["docID"]
+    if isinstance(value.get("reason"), str):
+        result["reason"] = value["reason"]
+    return result
+
+
+def _apply_h1_edinet_data(
+    data: dict[str, Any],
+    edinet_q2: HalfYearEdinetEntry,
+    q2_rec: dict[str, Any],
+) -> tuple[float | None, float | None, float | None]:
+    """H1期間のEDINET補完を適用。(gp_m, cfo_m, cfi_m) を返す（H2キャリーオーバー用）。"""
+    gp_result = edinet_q2["gp"]
+    cf_result = edinet_q2["cf"]
+    ibd_result = edinet_q2["ibd"]
+
+    h1_gp_m = None
+    gp_current = gp_result.get("current")
+    if gp_current is not None:
+        h1_gp_m = gp_current / MILLION_YEN
+        sales = data.get("Sales")
+        data["GrossProfit"] = h1_gp_m
+        data["GrossProfitMargin"] = h1_gp_m / sales * 100 if sales else None
+        data["DocID"] = gp_result.get("docID")
+        _set_metric_source(data, "GrossProfit", source="edinet", unit="million_yen", method=gp_result.get("method"), doc_id=gp_result.get("docID"))
+        _set_metric_source(data, "GrossProfitMargin", source="derived", unit="percent", method="GrossProfit / Sales")
+        _set_metric_source(data, "DocID", source="edinet", unit="id", doc_id=gp_result.get("docID"))
+
+    h1_cfo_m = h1_cfi_m = None
+    cfo_raw = cf_result["cfo"].get("current")
+    cfi_raw = cf_result["cfi"].get("current")
+    if cfo_raw is not None:
+        h1_cfo_m = cfo_raw / MILLION_YEN
+        data["CFO"] = h1_cfo_m
+        _set_metric_source(data, "CFO", source="edinet", unit="million_yen")
+    if cfi_raw is not None:
+        h1_cfi_m = cfi_raw / MILLION_YEN
+        data["CFI"] = h1_cfi_m
+        _set_metric_source(data, "CFI", source="edinet", unit="million_yen")
+    if h1_cfo_m is not None and h1_cfi_m is not None:
+        data["CFC"] = h1_cfo_m + h1_cfi_m
+        data["FreeCF"] = data["CFC"]
+        _set_metric_source(data, "CFC", source="derived", unit="million_yen", method="CFO + CFI")
+        _set_metric_source(data, "FreeCF", source="derived", unit="million_yen", method="alias of CFC")
+
+    ibd_current = ibd_result.get("current")
+    h1_ibd_m = ibd_current / MILLION_YEN if ibd_current is not None else None
+    q2_eq_raw = to_float(q2_rec.get("Eq"))
+    q2_eq_m = q2_eq_raw / MILLION_YEN if q2_eq_raw is not None else None
+    np_h1 = data.get("NP")
+    if np_h1 is not None and q2_eq_m is not None and h1_ibd_m is not None and (q2_eq_m + h1_ibd_m) != 0:
+        data["ROIC"] = np_h1 / (q2_eq_m + h1_ibd_m) * 100
+        _set_metric_source(data, "ROIC", source="derived", unit="percent", method="NP / (Eq + InterestBearingDebt)")
+
+    return h1_gp_m, h1_cfo_m, h1_cfi_m
+
+
+def _apply_h2_edinet_data(
+    data: dict[str, Any],
+    fy_rec: dict[str, Any],
+    h1_carry: tuple[float | None, float | None, float | None],
+    fy_gp_result: GrossProfitResult | None,
+    ibd_by_year: dict[str, Any],
+    fy_end_8: str,
+) -> None:
+    """H2期間の派生計算（FY - H1）と補完を適用。"""
+    h1_gp_m, h1_cfo_m, h1_cfi_m = h1_carry
+
+    fy_cfo = to_float(fy_rec.get("CFO"))
+    fy_cfi = to_float(fy_rec.get("CFI"))
+    fy_cfo_m = fy_cfo / MILLION_YEN if fy_cfo is not None else None
+    fy_cfi_m = fy_cfi / MILLION_YEN if fy_cfi is not None else None
+
+    if fy_cfo_m is not None and h1_cfo_m is not None:
+        data["CFO"] = fy_cfo_m - h1_cfo_m
+        _set_metric_source(data, "CFO", source="derived", unit="million_yen", method="FY J-QUANTS CFO - H1 EDINET CFO")
+    if fy_cfi_m is not None and h1_cfi_m is not None:
+        data["CFI"] = fy_cfi_m - h1_cfi_m
+        _set_metric_source(data, "CFI", source="derived", unit="million_yen", method="FY J-QUANTS CFI - H1 EDINET CFI")
+    cfo = data.get("CFO")
+    cfi = data.get("CFI")
+    if cfo is not None and cfi is not None:
+        data["CFC"] = cfo + cfi
+        data["FreeCF"] = data["CFC"]
+        _set_metric_source(data, "CFC", source="derived", unit="million_yen", method="CFO + CFI")
+        _set_metric_source(data, "FreeCF", source="derived", unit="million_yen", method="alias of CFC")
+
+    fy_gp_current = fy_gp_result.get("current") if fy_gp_result is not None else None
+    if fy_gp_result is not None and fy_gp_current is not None:
+        fy_gp_m = fy_gp_current / MILLION_YEN
+        if h1_gp_m is not None:
+            h2_gp_m = fy_gp_m - h1_gp_m
+            sales = data.get("Sales")
+            data["GrossProfit"] = h2_gp_m
+            data["GrossProfitMargin"] = h2_gp_m / sales * 100 if sales else None
+            data["DocID"] = fy_gp_result.get("docID")
+            _set_metric_source(data, "GrossProfit", source="derived", unit="million_yen", method="FY EDINET GrossProfit - H1 EDINET GrossProfit", doc_id=fy_gp_result.get("docID"))
+            _set_metric_source(data, "GrossProfitMargin", source="derived", unit="percent", method="GrossProfit / Sales")
+            _set_metric_source(data, "DocID", source="edinet", unit="id", doc_id=fy_gp_result.get("docID"))
+
+    h2_ibd = ibd_by_year.get(fy_end_8)
+    h2_ibd_m = h2_ibd["current"] / MILLION_YEN if h2_ibd and h2_ibd.get("current") is not None else None
+    h2_eq_raw = to_float(fy_rec.get("Eq"))
+    h2_eq_m = h2_eq_raw / MILLION_YEN if h2_eq_raw is not None else None
+    np_h2 = data.get("NP")
+    if np_h2 is not None and h2_eq_m is not None and h2_ibd_m is not None and (h2_eq_m + h2_ibd_m) != 0:
+        data["ROIC"] = np_h2 / (h2_eq_m + h2_ibd_m) * 100
+        _set_metric_source(data, "ROIC", source="derived", unit="percent", method="NP / (Eq + InterestBearingDebt)")
+
+
+def _apply_fy_only_edinet_data(
+    data: dict[str, Any],
+    fy_gp_result: GrossProfitResult | None,
+    fy_rec: dict[str, Any],
+    ibd_by_year: dict[str, Any],
+    fy_end_8: str,
+) -> None:
+    """FY-onlyエントリ（2Qデータなし）にFY EDINET GP + ROIC を補完。"""
+    fy_gp_current = fy_gp_result.get("current") if fy_gp_result is not None else None
+    if fy_gp_result is not None and fy_gp_current is not None:
+        gp_m = fy_gp_current / MILLION_YEN
+        sales = data.get("Sales")
+        data["GrossProfit"] = gp_m
+        data["GrossProfitMargin"] = gp_m / sales * 100 if sales else None
+        _set_metric_source(data, "GrossProfit", source="edinet", unit="million_yen", method=fy_gp_result.get("method"), doc_id=fy_gp_result.get("docID"))
+        _set_metric_source(data, "GrossProfitMargin", source="derived", unit="percent", method="GrossProfit / Sales")
+
+    fy_ibd = ibd_by_year.get(fy_end_8)
+    fy_ibd_m = fy_ibd["current"] / MILLION_YEN if fy_ibd and fy_ibd.get("current") is not None else None
+    fy_eq_raw = to_float(fy_rec.get("Eq"))
+    fy_eq_m = fy_eq_raw / MILLION_YEN if fy_eq_raw is not None else None
+    np_fy = data.get("NP")
+    if np_fy is not None and fy_eq_m is not None and fy_ibd_m is not None and (fy_eq_m + fy_ibd_m) != 0:
+        data["ROIC"] = np_fy / (fy_eq_m + fy_ibd_m) * 100
+        _set_metric_source(data, "ROIC", source="derived", unit="percent", method="NP / (Eq + InterestBearingDebt)")
 
 
 class HalfYearDataService:
@@ -97,8 +251,16 @@ class HalfYearDataService:
             logger.warning(f"[HALF] {code}: EDINET補完スキップ - {e}")
             return serialize_half_year_periods(base_periods, include_debug_fields=include_debug_fields)
 
+        fy_gp_by_end: dict[str, GrossProfitResult] = {}
+        for fy_end, result in fy_gp.items():
+            if not isinstance(result, dict):
+                continue
+            gp_result = _to_gross_profit_result(result)
+            if gp_result is not None:
+                fy_gp_by_end[fy_end] = gp_result
+
         # FY J-Quants レコードを fy_end → record で引けるようにしておく
-        fy_by_end: dict[str, dict] = {}
+        fy_by_end: dict[str, dict[str, Any]] = {}
         for r in financial_data:
             if r.get("CurPerType") == "FY":
                 fy_end_8 = _fy_end_key(r.get("CurFYEn"))
@@ -106,7 +268,7 @@ class HalfYearDataService:
                     fy_by_end[fy_end_8] = r
 
         # 2Q J-Quants レコードを fy_end → record で引けるようにしておく
-        q2_by_end: dict[str, dict] = {}
+        q2_by_end: dict[str, dict[str, Any]] = {}
         for r in financial_data:
             if r.get("CurPerType") == "2Q":
                 fy_end_8 = _fy_end_key(r.get("CurFYEn"))
@@ -114,139 +276,28 @@ class HalfYearDataService:
                     q2_by_end[fy_end_8] = r
 
         # H1 期間で確定した EDINET CF 値を H2 計算に引き継ぐ
-        h1_edinet_by_fy: dict[str, dict] = {}
+        h1_edinet_by_fy: dict[str, tuple[float | None, float | None, float | None]] = {}
 
         for period in base_periods:
             fy_end_8 = _fy_end_key(period.get("fy_end"))
             half = period["half"]
             data = period["data"]
+            edinet_q2 = half_edinet.get(fy_end_8)
 
             if half == "H1":
-                edinet_q2 = half_edinet.get(fy_end_8, {})
-                gp_result = edinet_q2.get("gp")
-                cf_result = edinet_q2.get("cf")
-
-                # GrossProfit（H1 = 2Q XBRL の current 値）
-                h1_gp_m = None
-                if gp_result and gp_result.get("current") is not None:
-                    h1_gp_m = gp_result["current"] / MILLION_YEN
-                    sales = data.get("Sales")
-                    data["GrossProfit"] = h1_gp_m
-                    data["GrossProfitMargin"] = h1_gp_m / sales * 100 if sales else None
-                    data["DocID"] = gp_result.get("docID")
-                    _set_metric_source(data, "GrossProfit", source="edinet", unit="million_yen", method=gp_result.get("method"), doc_id=gp_result.get("docID"))
-                    _set_metric_source(data, "GrossProfitMargin", source="derived", unit="percent", method="GrossProfit / Sales")
-                    _set_metric_source(data, "DocID", source="edinet", unit="id", doc_id=gp_result.get("docID"))
-
-                # CFO/CFI（H1 = 2Q XBRL の current 値）
-                h1_cfo_m = h1_cfi_m = None
-                if cf_result:
-                    cfo_raw = cf_result["cfo"].get("current")
-                    cfi_raw = cf_result["cfi"].get("current")
-                    if cfo_raw is not None:
-                        h1_cfo_m = cfo_raw / MILLION_YEN
-                        data["CFO"] = h1_cfo_m
-                        _set_metric_source(data, "CFO", source="edinet", unit="million_yen", method=cf_result["cfo"].get("method"), doc_id=cf_result["cfo"].get("docID"))
-                    if cfi_raw is not None:
-                        h1_cfi_m = cfi_raw / MILLION_YEN
-                        data["CFI"] = h1_cfi_m
-                        _set_metric_source(data, "CFI", source="edinet", unit="million_yen", method=cf_result["cfi"].get("method"), doc_id=cf_result["cfi"].get("docID"))
-                    if h1_cfo_m is not None and h1_cfi_m is not None:
-                        data["CFC"] = h1_cfo_m + h1_cfi_m
-                        data["FreeCF"] = data["CFC"]
-                        _set_metric_source(data, "CFC", source="derived", unit="million_yen", method="CFO + CFI")
-                        _set_metric_source(data, "FreeCF", source="derived", unit="million_yen", method="alias of CFC")
-
-                # ROIC (H1): NP_H1 / (Eq_2Q + IBD_2Q)
-                ibd_result = edinet_q2.get("ibd")
-                h1_ibd_m = ibd_result["current"] / MILLION_YEN if ibd_result and ibd_result.get("current") is not None else None
-                q2_rec = q2_by_end.get(fy_end_8, {})
-                h1_eq_raw = to_float(q2_rec.get("Eq"))
-                h1_eq_m = h1_eq_raw / MILLION_YEN if h1_eq_raw is not None else None
-                np_h1 = data.get("NP")
-                if np_h1 is not None and h1_eq_m is not None and h1_ibd_m is not None and (h1_eq_m + h1_ibd_m) != 0:
-                    data["ROIC"] = np_h1 / (h1_eq_m + h1_ibd_m) * 100
-                    _set_metric_source(data, "ROIC", source="derived", unit="percent", method="NP / (Eq + InterestBearingDebt)")
-
-                h1_edinet_by_fy[fy_end_8] = {
-                    "gp_m": h1_gp_m,
-                    "cfo_m": h1_cfo_m,
-                    "cfi_m": h1_cfi_m,
-                }
-
+                if edinet_q2 is not None:
+                    h1_edinet_by_fy[fy_end_8] = _apply_h1_edinet_data(data, edinet_q2, q2_by_end.get(fy_end_8, {}))
             elif half == "H2":
-                h1 = h1_edinet_by_fy.get(fy_end_8, {})
-                fy_rec = fy_by_end.get(fy_end_8, {})
-
-                # H2 CFO/CFI = FY（J-Quants）- H1（EDINET 2Q）
-                fy_cfo = to_float(fy_rec.get("CFO"))
-                fy_cfi = to_float(fy_rec.get("CFI"))
-                fy_cfo_m = fy_cfo / MILLION_YEN if fy_cfo is not None else None
-                fy_cfi_m = fy_cfi / MILLION_YEN if fy_cfi is not None else None
-
-                h1_cfo_m = h1.get("cfo_m")
-                h1_cfi_m = h1.get("cfi_m")
-
-                if fy_cfo_m is not None and h1_cfo_m is not None:
-                    data["CFO"] = fy_cfo_m - h1_cfo_m
-                    _set_metric_source(data, "CFO", source="derived", unit="million_yen", method="FY J-QUANTS CFO - H1 EDINET CFO")
-                if fy_cfi_m is not None and h1_cfi_m is not None:
-                    data["CFI"] = fy_cfi_m - h1_cfi_m
-                    _set_metric_source(data, "CFI", source="derived", unit="million_yen", method="FY J-QUANTS CFI - H1 EDINET CFI")
-                cfo = data.get("CFO")
-                cfi = data.get("CFI")
-                if cfo is not None and cfi is not None:
-                    data["CFC"] = cfo + cfi
-                    data["FreeCF"] = data["CFC"]
-                    _set_metric_source(data, "CFC", source="derived", unit="million_yen", method="CFO + CFI")
-                    _set_metric_source(data, "FreeCF", source="derived", unit="million_yen", method="alias of CFC")
-
-                # H2 GP = FY EDINET GP - H1 EDINET 2Q GP
-                fy_gp_result = fy_gp.get(fy_end_8)
-                h1_gp_m = h1.get("gp_m")
-                if fy_gp_result and fy_gp_result.get("current") is not None:
-                    fy_gp_m = fy_gp_result["current"] / MILLION_YEN
-                    if h1_gp_m is not None:
-                        h2_gp_m = fy_gp_m - h1_gp_m
-                        sales = data.get("Sales")
-                        data["GrossProfit"] = h2_gp_m
-                        data["GrossProfitMargin"] = h2_gp_m / sales * 100 if sales else None
-                        data["DocID"] = fy_gp_result.get("docID")
-                        _set_metric_source(data, "GrossProfit", source="derived", unit="million_yen", method="FY EDINET GrossProfit - H1 EDINET GrossProfit", doc_id=fy_gp_result.get("docID"))
-                        _set_metric_source(data, "GrossProfitMargin", source="derived", unit="percent", method="GrossProfit / Sales")
-                        _set_metric_source(data, "DocID", source="edinet", unit="id", doc_id=fy_gp_result.get("docID"))
-
-                # ROIC (H2): NP_H2 / (Eq_FY + IBD_FY)
-                h2_ibd = ibd_by_year.get(fy_end_8)
-                h2_ibd_m = h2_ibd["current"] / MILLION_YEN if h2_ibd and h2_ibd.get("current") is not None else None
-                h2_eq_raw = to_float(fy_rec.get("Eq"))
-                h2_eq_m = h2_eq_raw / MILLION_YEN if h2_eq_raw is not None else None
-                np_h2 = data.get("NP")
-                if np_h2 is not None and h2_eq_m is not None and h2_ibd_m is not None and (h2_eq_m + h2_ibd_m) != 0:
-                    data["ROIC"] = np_h2 / (h2_eq_m + h2_ibd_m) * 100
-                    _set_metric_source(data, "ROIC", source="derived", unit="percent", method="NP / (Eq + InterestBearingDebt)")
-
+                _apply_h2_edinet_data(
+                    data,
+                    fy_by_end.get(fy_end_8, {}),
+                    h1_edinet_by_fy.get(fy_end_8, (None, None, None)),
+                    fy_gp_by_end.get(fy_end_8),
+                    ibd_by_year,
+                    fy_end_8,
+                )
             else:
-                # FY のみ（2Q データなし）: EDINET FY GP を付与
-                fy_gp_result = fy_gp.get(fy_end_8)
-                if fy_gp_result and fy_gp_result.get("current") is not None:
-                    gp_m = fy_gp_result["current"] / MILLION_YEN
-                    sales = data.get("Sales")
-                    data["GrossProfit"] = gp_m
-                    data["GrossProfitMargin"] = gp_m / sales * 100 if sales else None
-                    _set_metric_source(data, "GrossProfit", source="edinet", unit="million_yen", method=fy_gp_result.get("method"), doc_id=fy_gp_result.get("docID"))
-                    _set_metric_source(data, "GrossProfitMargin", source="derived", unit="percent", method="GrossProfit / Sales")
-
-                # ROIC (FY): NP_FY / (Eq_FY + IBD_FY)
-                fy_rec_data = fy_by_end.get(fy_end_8, {})
-                fy_ibd = ibd_by_year.get(fy_end_8)
-                fy_ibd_m = fy_ibd["current"] / MILLION_YEN if fy_ibd and fy_ibd.get("current") is not None else None
-                fy_eq_raw = to_float(fy_rec_data.get("Eq"))
-                fy_eq_m = fy_eq_raw / MILLION_YEN if fy_eq_raw is not None else None
-                np_fy = data.get("NP")
-                if np_fy is not None and fy_eq_m is not None and fy_ibd_m is not None and (fy_eq_m + fy_ibd_m) != 0:
-                    data["ROIC"] = np_fy / (fy_eq_m + fy_ibd_m) * 100
-                    _set_metric_source(data, "ROIC", source="derived", unit="percent", method="NP / (Eq + InterestBearingDebt)")
+                _apply_fy_only_edinet_data(data, fy_gp_by_end.get(fy_end_8), fy_by_end.get(fy_end_8, {}), ibd_by_year, fy_end_8)
 
         self.cache_manager.set(cache_key, {
             "_cache_version": _CACHE_VERSION,

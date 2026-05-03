@@ -20,6 +20,7 @@ class GrossProfitResult(TypedDict):
     method: str
     accounting_standard: str
     components: list[MetricComponent]
+    docID: NotRequired[str]
     reason: NotRequired[str]
 
 
@@ -85,3 +86,9 @@ class CashFlowResult(TypedDict):
     cfo: CashFlowPeriod
     cfi: CashFlowPeriod
     accounting_standard: str
+
+
+class HalfYearEdinetEntry(TypedDict):
+    gp: GrossProfitResult
+    cf: CashFlowResult
+    ibd: InterestBearingDebtResult
