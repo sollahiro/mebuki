@@ -1,7 +1,145 @@
+import copy
+
 from mebuki.utils.output_serializer import (
+    _DEBUG_FIELDS,
     serialize_half_year_periods,
     serialize_metrics_result,
 )
+
+
+PUBLIC_CALCULATED_DATA_KEYS = {
+    "Sales",
+    "OP",
+    "NP",
+    "Eq",
+    "CFO",
+    "CFI",
+    "CashEq",
+    "PayoutRatio",
+    "CFC",
+    "ROE",
+    "CFCVR",
+    "AdjustmentRatio",
+    "AdjustedEPS",
+    "AdjustedBPS",
+    "GrossProfit",
+    "GrossProfitMargin",
+    "InterestBearingDebt",
+    "ROIC",
+    "InterestExpense",
+    "PretaxIncome",
+    "IncomeTax",
+    "EffectiveTaxRate",
+    "OperatingMargin",
+    "OPLabel",
+    "SalesLabel",
+    "Employees",
+    "DocID",
+    "CostOfEquity",
+    "CostOfDebt",
+    "WACC",
+}
+
+HALF_YEAR_PUBLIC_DATA_KEYS = {
+    "Sales",
+    "OP",
+    "OperatingMargin",
+    "NP",
+    "CFO",
+    "CFI",
+    "CFC",
+    "FreeCF",
+    "GrossProfit",
+    "GrossProfitMargin",
+    "ROIC",
+}
+
+
+def _complete_calculated_data():
+    return {
+        "Sales": 1.0,
+        "OP": 1.0,
+        "NP": 1.0,
+        "Eq": 1.0,
+        "CFO": 1.0,
+        "CFI": 1.0,
+        "CashEq": 1.0,
+        "PayoutRatio": 1.0,
+        "CFC": 1.0,
+        "ROE": 1.0,
+        "CFCVR": 1.0,
+        "AdjustmentRatio": 1.0,
+        "AdjustedEPS": 1.0,
+        "AdjustedBPS": 1.0,
+        "GrossProfit": 1.0,
+        "GrossProfitMargin": 1.0,
+        "InterestBearingDebt": 1.0,
+        "ROIC": 1.0,
+        "InterestExpense": 1.0,
+        "PretaxIncome": 1.0,
+        "IncomeTax": 1.0,
+        "EffectiveTaxRate": 1.0,
+        "OperatingMargin": 1.0,
+        "OPLabel": "営業利益",
+        "SalesLabel": "売上高",
+        "Employees": 1,
+        "DocID": "S100TEST",
+        "CostOfEquity": 1.0,
+        "CostOfDebt": 1.0,
+        "WACC": 1.0,
+        "MetricSources": {"Sales": {"source": "jquants"}},
+        "IBDComponents": [{"label": "短期借入金", "current": 1.0}],
+        "GrossProfitMethod": "direct",
+        "IBDAccountingStandard": "J-GAAP",
+    }
+
+
+def _complete_metrics_result():
+    return {
+        "code": "7203",
+        "latest_fy_end": "2024-03-31",
+        "analysis_years": 1,
+        "available_years": 1,
+        "latest_fcf": 1.0,
+        "latest_roe": 1.0,
+        "latest_eps": 1.0,
+        "latest_sales": 1.0,
+        "data_availability": "sufficient",
+        "data_availability_message": "ok",
+        "data_valid": True,
+        "validation_message": None,
+        "years": [
+            {
+                "fy_end": "2024-03-31",
+                "FinancialPeriod": "FY",
+                "RawData": {
+                    "CurPerType": "FY",
+                    "Sales": 1.0,
+                },
+                "CalculatedData": _complete_calculated_data(),
+            }
+        ],
+    }
+
+
+def _complete_half_year_data():
+    return {
+        "Sales": 1.0,
+        "OP": 1.0,
+        "OperatingMargin": 1.0,
+        "NP": 1.0,
+        "CFO": 1.0,
+        "CFI": 1.0,
+        "CFC": 1.0,
+        "FreeCF": 1.0,
+        "GrossProfit": 1.0,
+        "GrossProfitMargin": 1.0,
+        "ROIC": 1.0,
+        "MetricSources": {"Sales": {"source": "jquants"}},
+        "IBDComponents": [{"label": "短期借入金", "current": 1.0}],
+        "GrossProfitMethod": "direct",
+        "IBDAccountingStandard": "J-GAAP",
+    }
 
 
 def test_serialize_metrics_result_excludes_debug_fields_by_default():
@@ -156,3 +294,72 @@ def test_serialize_half_year_periods_handles_missing_data():
             "data": {},
         }
     ]
+
+
+def test_serialize_metrics_result_preserves_all_public_calculated_data_keys():
+    metrics = _complete_metrics_result()
+
+    serialized = serialize_metrics_result(metrics)
+    calculated_data = serialized["years"][0]["CalculatedData"]
+
+    assert set(calculated_data) == PUBLIC_CALCULATED_DATA_KEYS
+    for key in PUBLIC_CALCULATED_DATA_KEYS:
+        assert calculated_data[key] == metrics["years"][0]["CalculatedData"][key]
+    assert _DEBUG_FIELDS.isdisjoint(calculated_data)
+
+
+def test_serialize_metrics_result_preserves_outer_structure():
+    metrics = _complete_metrics_result()
+
+    serialized = serialize_metrics_result(metrics)
+
+    for key, value in metrics.items():
+        if key != "years":
+            assert serialized[key] == value
+
+    original_year = metrics["years"][0]
+    serialized_year = serialized["years"][0]
+    assert serialized_year["fy_end"] == original_year["fy_end"]
+    assert serialized_year["FinancialPeriod"] == original_year["FinancialPeriod"]
+    assert serialized_year["RawData"] == original_year["RawData"]
+
+
+def test_serialize_metrics_result_does_not_mutate_input():
+    metrics = _complete_metrics_result()
+    original = copy.deepcopy(metrics)
+
+    serialize_metrics_result(metrics)
+
+    assert metrics == original
+    assert "MetricSources" in metrics["years"][0]["CalculatedData"]
+
+
+def test_serialize_half_year_periods_preserves_all_public_data_keys():
+    periods = [
+        {
+            "label": "24H1",
+            "half": "H1",
+            "fy_end": "2024-03-31",
+            "data": _complete_half_year_data(),
+        }
+    ]
+
+    serialized = serialize_half_year_periods(periods)
+    data = serialized[0]["data"]
+
+    assert serialized[0]["label"] == periods[0]["label"]
+    assert serialized[0]["half"] == periods[0]["half"]
+    assert serialized[0]["fy_end"] == periods[0]["fy_end"]
+    assert set(data) == HALF_YEAR_PUBLIC_DATA_KEYS
+    for key in HALF_YEAR_PUBLIC_DATA_KEYS:
+        assert data[key] == periods[0]["data"][key]
+    assert _DEBUG_FIELDS.isdisjoint(data)
+
+
+def test_debug_fields_set_is_exactly():
+    assert _DEBUG_FIELDS == frozenset({
+        "MetricSources",
+        "IBDComponents",
+        "GrossProfitMethod",
+        "IBDAccountingStandard",
+    })
