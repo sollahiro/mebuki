@@ -196,6 +196,8 @@ async def cmd_analyze(args):
 
         metrics_to_show = [
             (sales_label,             lambda c: c.get("Sales")),
+            ("受注高 (百万)",          lambda c: c.get("OrderIntake")),
+            ("受注残高 (百万)",        lambda c: c.get("OrderBacklog")),
             ("売上総利益 (百万)",      lambda c: c.get("GrossProfit")),
             ("粗利率 (%)",            lambda c: c.get("GrossProfitMargin")),
             (op_label,                lambda c: c.get("OP")),
@@ -225,9 +227,11 @@ async def cmd_analyze(args):
         for metric_def in metrics_to_show:
             label, func = metric_def[0], metric_def[1]
             fmt_hint = metric_def[2] if len(metric_def) > 2 else None
+            values = [func(p.get("CalculatedData", {})) for p in periods]
+            if all(v is None for v in values):
+                continue
             row = [label]
-            for p in periods:
-                val = func(p.get("CalculatedData", {}))
+            for val in values:
                 if val is None:
                     row.append(f"{'-':>10}")
                 elif isinstance(val, str):
