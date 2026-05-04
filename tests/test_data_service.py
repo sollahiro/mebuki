@@ -326,6 +326,11 @@ class TestGetRawAnalysisData:
                         "DocID": "S100TEST",
                         "InterestBearingDebt": 500.0,
                         "ROIC": 10.0,
+                        "CurrentAssets": 1000.0,
+                        "NonCurrentAssets": 2000.0,
+                        "CurrentLiabilities": 700.0,
+                        "NonCurrentLiabilities": 800.0,
+                        "NetAssets": 1500.0,
                     },
                 }
             ]

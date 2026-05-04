@@ -41,7 +41,7 @@ def _apply_debug_filter(result: dict[str, Any], include_debug_fields: bool) -> d
 
 
 def _has_incomplete_edinet_metrics(cached: dict[str, Any]) -> bool:
-    """EDINET 書類が紐づいているのに IBD/ROIC が欠けた古い分析キャッシュを検出する。"""
+    """EDINET 書類が紐づいているのに新しいEDINET指標が欠けた古い分析キャッシュを検出する。"""
     metrics = cached.get("metrics")
     if not isinstance(metrics, dict):
         return False
@@ -58,6 +58,11 @@ def _has_incomplete_edinet_metrics(cached: dict[str, Any]) -> bool:
         if calculated.get("DocID") and (
             calculated.get("InterestBearingDebt") is None
             or calculated.get("ROIC") is None
+            or "CurrentAssets" not in calculated
+            or "NonCurrentAssets" not in calculated
+            or "CurrentLiabilities" not in calculated
+            or "NonCurrentLiabilities" not in calculated
+            or "NetAssets" not in calculated
         ):
             return True
     return False

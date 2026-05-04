@@ -42,6 +42,18 @@ class InterestBearingDebtResult(TypedDict):
     reason: NotRequired[str]
 
 
+class BalanceSheetResult(TypedDict):
+    current_assets: float | None
+    non_current_assets: float | None
+    current_liabilities: float | None
+    non_current_liabilities: float | None
+    net_assets: float | None
+    accounting_standard: str
+    method: str
+    components: list[MetricComponent]
+    reason: NotRequired[str]
+
+
 class InterestExpenseResult(TypedDict):
     current: float | None
     prior: float | None

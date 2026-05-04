@@ -95,6 +95,49 @@ def _apply_ibd(
             _set_metric_source(cd, "ROIC", source="derived", unit="percent", method="NP / (Eq + InterestBearingDebt)")
 
 
+def _apply_balance_sheet(
+    years: list[YearEntry],
+    bs_by_year: dict[str, dict[str, Any]],
+) -> None:
+    field_map = {
+        "current_assets": "CurrentAssets",
+        "non_current_assets": "NonCurrentAssets",
+        "current_liabilities": "CurrentLiabilities",
+        "non_current_liabilities": "NonCurrentLiabilities",
+        "net_assets": "NetAssets",
+    }
+    for year in years:
+        fy_end_key = _fy_end_key(year)
+        bs = bs_by_year.get(fy_end_key)
+        if not bs:
+            continue
+        cd = year["CalculatedData"]
+        for source_key, target_key in field_map.items():
+            value = bs.get(source_key)
+            if source_key in bs:
+                cd[target_key] = None
+            if value is None:
+                continue
+            cd[target_key] = value / MILLION_YEN
+            _set_metric_source(
+                cd,
+                target_key,
+                source="edinet",
+                unit="million_yen",
+                method=bs.get("method"),
+                doc_id=bs.get("docID"),
+            )
+        cd["BalanceSheetComponents"] = [
+            {
+                "label": c["label"],
+                "current": c["current"] / MILLION_YEN if c["current"] is not None else None,
+                "prior": c["prior"] / MILLION_YEN if c["prior"] is not None else None,
+            }
+            for c in bs.get("components", [])
+        ]
+        cd["BalanceSheetAccountingStandard"] = bs.get("accounting_standard", "unknown")
+
+
 def _apply_interest_expense(
     years: list[YearEntry],
     ie_by_year: dict[str, dict[str, Any]],
@@ -306,6 +349,7 @@ def _apply_order_book(
 
 _METRIC_APPLIERS: list[Callable[[list[YearEntry], dict[str, dict[str, Any]]], None]] = [
     lambda years, m: _apply_ibd(years, m.get("ibd", {}), m.get("doc_ids", {})),
+    lambda years, m: _apply_balance_sheet(years, m.get("bs", {})),
     lambda years, m: _apply_interest_expense(years, m.get("ie", {})),
     lambda years, m: _apply_tax(years, m.get("tax", {})),
     lambda years, m: _apply_gross_profit(years, m.get("gp", {})),

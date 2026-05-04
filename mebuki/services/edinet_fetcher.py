@@ -15,6 +15,7 @@ from typing import Any, TypeAlias
 from mebuki import __version__
 from mebuki.api.jquants_client import JQuantsAPIClient
 from mebuki.api.edinet_client import EdinetAPIClient
+from mebuki.analysis.balance_sheet import extract_balance_sheet
 from mebuki.analysis.depreciation import extract_depreciation
 from mebuki.analysis.employees import extract_employees
 from mebuki.analysis.gross_profit import extract_gross_profit
@@ -65,6 +66,21 @@ class ExtractorSpec:
 
 _EXTRACTOR_SPECS: list[ExtractorSpec] = [
     ExtractorSpec("ibd", "IBD", extract_interest_bearing_debt),
+    ExtractorSpec(
+        "bs",
+        "BS",
+        extract_balance_sheet,
+        result_check=lambda r: any(
+            r.get(key) is not None
+            for key in (
+                "current_assets",
+                "non_current_assets",
+                "current_liabilities",
+                "non_current_liabilities",
+                "net_assets",
+            )
+        ),
+    ),
     ExtractorSpec("gp", "GP", extract_gross_profit),
     ExtractorSpec("ie", "IE", extract_interest_expense),
     ExtractorSpec("tax", "TAX", extract_tax_expense),

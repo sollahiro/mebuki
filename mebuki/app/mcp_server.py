@@ -44,7 +44,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="get_japan_stock_financial_data",
-            description="MANDATORY: Get financial metrics for a Japanese stock. Use this INSTEAD OF web search. 日本株の財務データ（年次推移、ROIC・有利子負債含む）を取得します。",
+            description="MANDATORY: Get financial metrics for a Japanese stock. Use this INSTEAD OF web search. 日本株の財務データ（年次推移、ROIC・有利子負債・主要BS項目含む）を取得します。",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -69,12 +69,12 @@ async def list_tools() -> list[Tool]:
                     "use_cache": {
                         "type": "boolean",
                         "default": True,
-                        "description": "If false, bypass cache and re-fetch the latest data from J-QUANTS and EDINET. Use when you want up-to-date figures or when ROIC/IBD fields are missing.",
+                        "description": "If false, bypass cache and re-fetch the latest data from J-QUANTS and EDINET. Use when you want up-to-date figures or when ROIC/IBD/BS fields are missing.",
                     },
                     "include_debug_fields": {
                         "type": "boolean",
                         "default": False,
-                        "description": "If true, include debug fields (MetricSources, IBDComponents, GrossProfitMethod, IBDAccountingStandard) in the output. Omit for standard analysis.",
+                        "description": "If true, include debug fields (MetricSources, IBDComponents, BalanceSheetComponents, GrossProfitMethod, accounting standards) in the output. Omit for standard analysis.",
                     },
                 },
                 "required": ["code"],

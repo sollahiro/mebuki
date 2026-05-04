@@ -17,6 +17,25 @@ class _AggregateIFRSDef(TypedDict):
     label: NotRequired[str]
 
 
+class _BalanceSheetComponentDef(TypedDict):
+    field: str
+    label: str
+    tags: list[str]
+
+
+class _BalanceSheetAggregateDef(TypedDict):
+    field: str
+    label: str
+    tags: list[str]
+
+
+class _BalanceSheetSubtractDef(TypedDict):
+    field: str
+    label: str
+    minuend_tags: list[str]
+    subtrahend_tags: list[str]
+
+
 # Duration（損益計算書・CF）コンテキストパターン
 # 年次: CurrentYearDuration / 新形式半期: InterimDuration / 旧形式半期・四半期: CurrentYTDDuration
 DURATION_CONTEXT_PATTERNS: list[str] = [
@@ -71,6 +90,97 @@ XBRL_SECTIONS: dict[str, _XBRLSection] = {
         'xbrl_elements': ['PlannedAdditionsRetirementsEtcOfFacilitiesTextBlock']
     }
 }
+
+# 貸借対照表（BS）タグ定義
+# analysis/balance_sheet.py で使用
+
+BALANCE_SHEET_COMPONENT_DEFINITIONS: list[_BalanceSheetComponentDef] = [
+    {
+        "field": "CurrentAssets",
+        "label": "流動資産",
+        "tags": [
+            "CurrentAssets",        # J-GAAP
+            "CurrentAssetsIFRS",    # IFRS
+            "CurrentAssetsUSGAAP",  # US-GAAP
+        ],
+    },
+    {
+        "field": "NonCurrentAssets",
+        "label": "固定資産",
+        "tags": [
+            "NoncurrentAssets",        # J-GAAP
+            "NonCurrentAssets",        # 代替表記
+            "NonCurrentAssetsIFRS",    # IFRS
+            "NonCurrentAssetsUSGAAP",  # US-GAAP
+        ],
+    },
+    {
+        "field": "CurrentLiabilities",
+        "label": "流動負債",
+        "tags": [
+            "CurrentLiabilities",        # J-GAAP
+            "TotalCurrentLiabilitiesIFRS", # IFRS
+            "CurrentLiabilitiesIFRS",    # IFRS
+            "CurrentLiabilitiesUSGAAP",  # US-GAAP
+        ],
+    },
+    {
+        "field": "NonCurrentLiabilities",
+        "label": "固定負債",
+        "tags": [
+            "NoncurrentLiabilities",        # J-GAAP
+            "NonCurrentLiabilities",        # 代替表記
+            "NonCurrentLiabilitiesIFRS",    # IFRS
+            "LongTermLiabilitiesUSGAAP",    # US-GAAP
+            "NonCurrentLiabilitiesUSGAAP",  # US-GAAP 代替
+        ],
+    },
+    {
+        "field": "NetAssets",
+        "label": "純資産",
+        "tags": [
+            "NetAssets",                                              # J-GAAP
+            "EquityIFRS",                                             # IFRS
+            "TotalEquityIFRS",                                        # IFRS 代替
+            "EquityAttributableToOwnersOfParentIFRS",                 # IFRS 親会社所有者帰属持分
+            "NetAssetsUSGAAP",                                        # US-GAAP
+            "TotalEquityUSGAAP",                                      # US-GAAP 代替
+            "EquityAttributableToOwnersOfParentUSGAAP",               # US-GAAP 親会社所有者帰属持分
+            "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
+        ],
+    },
+]
+
+BALANCE_SHEET_AGGREGATE_DEFINITIONS: list[_BalanceSheetAggregateDef] = [
+    {
+        "field": "NonCurrentAssets",
+        "label": "投資及び長期債権合計＋有形固定資産合計＋その他の資産合計",
+        "tags": [
+            "InvestmentsAndLongTermReceivablesUSGAAP",
+            "PropertyPlantAndEquipmentNetUSGAAP",
+            "PropertyPlantAndEquipmentUSGAAP",
+            "OtherAssetsUSGAAP",
+        ],
+    },
+]
+
+BALANCE_SHEET_SUBTRACT_DEFINITIONS: list[_BalanceSheetSubtractDef] = [
+    {
+        "field": "NonCurrentLiabilities",
+        "label": "負債合計−流動負債",
+        "minuend_tags": [
+            "LiabilitiesIFRS",
+            "TotalLiabilitiesUSGAAP",
+            "Liabilities",
+        ],
+        "subtrahend_tags": [
+            "TotalCurrentLiabilitiesIFRS",
+            "CurrentLiabilitiesIFRS",
+            "CurrentLiabilitiesUSGAAP",
+            "CurrentLiabilities",
+        ],
+    },
+]
 
 # 有利子負債（IBD）タグ定義
 # analysis/interest_bearing_debt.py で使用

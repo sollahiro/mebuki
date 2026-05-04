@@ -14,6 +14,12 @@ class IBDComponent(TypedDict, total=False):
     prior: float | None
 
 
+class BalanceSheetComponent(TypedDict, total=False):
+    label: str
+    current: float | None
+    prior: float | None
+
+
 class MetricSource(TypedDict, total=False):
     source: str
     method: str
@@ -74,6 +80,14 @@ class CalculatedData(TypedDict, total=False):
     IBDComponents: list[IBDComponent]
     IBDAccountingStandard: str
     ROIC: float | None
+    # ── analyzer.py: _apply_balance_sheet ──
+    CurrentAssets: float | None
+    NonCurrentAssets: float | None
+    CurrentLiabilities: float | None
+    NonCurrentLiabilities: float | None
+    NetAssets: float | None
+    BalanceSheetComponents: list[BalanceSheetComponent]
+    BalanceSheetAccountingStandard: str
     # ── analyzer.py: _apply_interest_expense ──
     InterestExpense: float | None
     # ── analyzer.py: _apply_tax ──
