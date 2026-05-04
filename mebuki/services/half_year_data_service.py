@@ -11,6 +11,7 @@ from mebuki.constants.financial import MILLION_YEN
 from mebuki.utils.cache import CacheManager
 from mebuki.utils.converters import to_float
 from mebuki.utils.financial_data import build_half_year_periods
+from mebuki.utils.operating_profit_change import apply_operating_profit_change_to_periods
 from mebuki.utils.output_serializer import serialize_half_year_periods
 from mebuki.utils.xbrl_result_types import GrossProfitResult, HalfYearEdinetEntry
 
@@ -18,7 +19,7 @@ from .edinet_fetcher import EdinetFetcher
 
 logger = logging.getLogger(__name__)
 
-_CACHE_VERSION = f"{'.'.join(__version__.split('.')[:2])}:metrics-v2"
+_CACHE_VERSION = ".".join(__version__.split(".")[:2])
 
 
 def _fy_end_key(value: object) -> str:
@@ -299,6 +300,7 @@ class HalfYearDataService:
             else:
                 _apply_fy_only_edinet_data(data, fy_gp_by_end.get(fy_end_8), fy_by_end.get(fy_end_8, {}), ibd_by_year, fy_end_8)
 
+        apply_operating_profit_change_to_periods(base_periods)
         self.cache_manager.set(cache_key, {
             "_cache_version": _CACHE_VERSION,
             "periods": base_periods,

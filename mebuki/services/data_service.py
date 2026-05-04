@@ -22,7 +22,7 @@ from mebuki.utils.cache import CacheManager
 from mebuki.utils.master_types import StockSearchResult
 from mebuki.utils.output_serializer import serialize_metrics_result
 
-_CACHE_VERSION = f"{'.'.join(__version__.split('.')[:2])}:metrics-v2"
+_CACHE_VERSION = ".".join(__version__.split(".")[:2])
 _JQUANTS_CACHE_VERSION = "jquants-v1"
 
 from .analyzer import IndividualAnalyzer
