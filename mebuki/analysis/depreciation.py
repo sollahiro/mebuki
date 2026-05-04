@@ -185,11 +185,13 @@ def _extract_usgaap_da_from_html(xbrl_dir: Path) -> DepreciationResult | None:
             if "減価償却費" not in label:
                 continue
 
-            numerics = [
-                (i, parse_html_number(c.get_text(strip=True)))
-                for i, c in enumerate(cells)
-                if i > 0 and parse_html_number(c.get_text(strip=True)) is not None
-            ]
+            numerics: list[tuple[int, float]] = []
+            for i, c in enumerate(cells):
+                if i == 0:
+                    continue
+                v = parse_html_number(c.get_text(strip=True))
+                if v is not None:
+                    numerics.append((i, v))
             if not numerics:
                 continue
 
