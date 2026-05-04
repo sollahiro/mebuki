@@ -9,6 +9,7 @@ import csv
 import io
 import logging
 import re
+import ssl
 import urllib.request
 from datetime import date, timedelta
 
@@ -40,7 +41,11 @@ def _parse_mof_date(date_str: str) -> str | None:
 
 def _fetch_csv_rates(url: str) -> dict[str, float]:
     """MOF CSV URL から {YYYY-MM-DD: 10年利回り(小数)} を返す。"""
-    with urllib.request.urlopen(url, timeout=15) as resp:
+    # OpenSSL 3.6+ が MOF サーバーの証明書チェーン内の自己署名証明書を拒否するため検証をスキップ
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    with urllib.request.urlopen(url, timeout=15, context=ctx) as resp:
         raw = resp.read()
     for enc in ("utf-8-sig", "shift-jis", "cp932"):
         try:
