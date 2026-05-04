@@ -54,6 +54,27 @@ def _write_xbrl(tmp_dir: Path, content: str, filename: str = "test.xbrl") -> Pat
     return tmp_dir
 
 
+def _make_usgaap_cf_html(rows: str) -> str:
+    """US-GAAP 連結CF計算書 HTML の最小構成。"""
+    return f"""<!DOCTYPE html>
+<html>
+<body>
+<table>
+  <tr>
+    <th>科目</th>
+    <th colspan="2">前連結会計年度</th>
+    <th colspan="2">当連結会計年度</th>
+  </tr>
+  <tr>
+    <td>Ⅰ 営業活動によるキャッシュ・フロー</td>
+    <td></td><td></td><td></td><td></td>
+  </tr>
+  {rows}
+</table>
+</body>
+</html>"""
+
+
 class TestExtractDepreciationJGAAP(unittest.TestCase):
     def test_jgaap_consolidated_current(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -121,6 +142,62 @@ class TestExtractDepreciationIFRS(unittest.TestCase):
         self.assertEqual(result["current"], 133784000000.0)
         self.assertEqual(result["accounting_standard"], "IFRS")
         self.assertEqual(result["method"], "direct")
+
+
+class TestExtractDepreciationUSGAAP(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.xbrl_dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _write_usgaap_xbrl(self):
+        (self.xbrl_dir / "instance.xbrl").write_text(
+            _make_xbrl(
+                '<jpcrp_cor:TotalAssetsUSGAAPSummaryOfBusinessResults'
+                ' contextRef="CurrentYearInstant"'
+                ' unitRef="JPY" decimals="-6">5000000000000'
+                '</jpcrp_cor:TotalAssetsUSGAAPSummaryOfBusinessResults>'
+            ),
+            encoding="utf-8",
+        )
+
+    def test_extracts_current_and_prior(self):
+        """US-GAAP HTML: CF計算書から当期・前期の減価償却費を取得する。"""
+        self._write_usgaap_xbrl()
+        html = _make_usgaap_cf_html(
+            "<tr><td>(1) 減価償却費</td><td>150,014</td><td></td><td>163,567</td><td></td></tr>"
+        )
+        (self.xbrl_dir / "0105010_test_ixbrl.htm").write_text(html, encoding="utf-8")
+        result = extract_depreciation(self.xbrl_dir)
+        self.assertEqual(result["method"], "usgaap_html")
+        self.assertEqual(result["accounting_standard"], "US-GAAP")
+        self.assertAlmostEqual(result["current"], 163_567_000_000)
+        self.assertAlmostEqual(result["prior"], 150_014_000_000)
+
+    def test_no_html_file_returns_not_found(self):
+        """US-GAAP で 0105010 HTML が存在しない場合 not_found を返す。"""
+        self._write_usgaap_xbrl()
+        result = extract_depreciation(self.xbrl_dir)
+        self.assertEqual(result["method"], "not_found")
+        self.assertEqual(result["accounting_standard"], "US-GAAP")
+        self.assertIsNone(result["current"])
+
+    def test_fujifilm_real_data(self):
+        """富士フイルム FY2025 実データ: 当期 163,567百万円 / 前期 150,014百万円。"""
+        real_dir = Path(
+            "/Users/shutosorahiro/.config/mebuki/analysis_cache/edinet"
+            "/S100W3XJ_xbrl/XBRL/PublicDoc"
+        )
+        if not real_dir.exists():
+            self.skipTest("富士フイルム実データが存在しない")
+        result = extract_depreciation(real_dir)
+        self.assertEqual(result["method"], "usgaap_html")
+        self.assertEqual(result["accounting_standard"], "US-GAAP")
+        self.assertAlmostEqual(result["current"], 163_567_000_000)
+        self.assertAlmostEqual(result["prior"], 150_014_000_000)
 
 
 if __name__ == "__main__":
