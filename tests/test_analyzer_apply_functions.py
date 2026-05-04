@@ -15,6 +15,7 @@ from mebuki.services.analyzer import (
     _apply_net_revenue,
     _apply_employees,
     _apply_depreciation,
+    _apply_order_book,
     _apply_wacc,
 )
 from mebuki.constants.financial import (
@@ -155,6 +156,39 @@ class TestApplyDepreciation:
         years = [_make_year("2024-03-31")]
         _apply_depreciation(years, {"20240331": {"current": None}})
         assert "DepreciationAmortization" not in years[0]["CalculatedData"]
+
+
+class TestApplyOrderBook:
+    def test_sets_order_book_fields(self):
+        years = [_make_year("2024-03-31")]
+        _apply_order_book(
+            years,
+            {
+                "20240331": {
+                    "order_intake": 151_272_000_000,
+                    "order_backlog": 105_778_000_000,
+                    "method": "mda_textblock_table",
+                    "docID": "S100TEST",
+                }
+            },
+        )
+        cd = years[0]["CalculatedData"]
+        assert cd["OrderIntake"] == pytest.approx(151_272)
+        assert cd["OrderBacklog"] == pytest.approx(105_778)
+        assert cd["MetricSources"]["OrderIntake"]["docID"] == "S100TEST"
+        assert cd["MetricSources"]["OrderBacklog"]["method"] == "mda_textblock_table"
+
+    def test_skips_missing_fields_independently(self):
+        years = [_make_year("2024-03-31")]
+        _apply_order_book(years, {"20240331": {"order_intake": None, "order_backlog": 96_452_000_000}})
+        cd = years[0]["CalculatedData"]
+        assert "OrderIntake" not in cd
+        assert cd["OrderBacklog"] == pytest.approx(96_452)
+
+    def test_skips_when_no_entry(self):
+        years = [_make_year("2024-03-31")]
+        _apply_order_book(years, {})
+        assert "OrderIntake" not in years[0]["CalculatedData"]
 
 
 # ──────────────────────────────────────────────────────────────

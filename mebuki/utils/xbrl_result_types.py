@@ -96,6 +96,16 @@ class DepreciationResult(TypedDict):
     reason: NotRequired[str]
 
 
+class OrderBookResult(TypedDict):
+    order_intake: float | None
+    order_backlog: float | None
+    order_intake_prior: float | None
+    order_backlog_prior: float | None
+    method: str
+    docID: NotRequired[str]
+    reason: NotRequired[str]
+
+
 class HalfYearEdinetEntry(TypedDict):
     gp: GrossProfitResult
     cf: CashFlowResult

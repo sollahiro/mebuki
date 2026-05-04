@@ -268,6 +268,38 @@ def _apply_depreciation(
             )
 
 
+def _apply_order_book(
+    years: list[YearEntry],
+    ob_by_year: dict[str, dict[str, Any]],
+) -> None:
+    for year in years:
+        fy_end_key = _fy_end_key(year)
+        ob = ob_by_year.get(fy_end_key)
+        if not ob:
+            continue
+        cd = year["CalculatedData"]
+        if ob.get("order_intake") is not None:
+            cd["OrderIntake"] = ob["order_intake"] / MILLION_YEN
+            _set_metric_source(
+                cd,
+                "OrderIntake",
+                source="edinet",
+                unit="million_yen",
+                method=ob.get("method"),
+                doc_id=ob.get("docID"),
+            )
+        if ob.get("order_backlog") is not None:
+            cd["OrderBacklog"] = ob["order_backlog"] / MILLION_YEN
+            _set_metric_source(
+                cd,
+                "OrderBacklog",
+                source="edinet",
+                unit="million_yen",
+                method=ob.get("method"),
+                doc_id=ob.get("docID"),
+            )
+
+
 _METRIC_APPLIERS: list[Callable[[list[YearEntry], dict[str, dict[str, Any]]], None]] = [
     lambda years, m: _apply_ibd(years, m.get("ibd", {}), m.get("doc_ids", {})),
     lambda years, m: _apply_interest_expense(years, m.get("ie", {})),
@@ -277,6 +309,7 @@ _METRIC_APPLIERS: list[Callable[[list[YearEntry], dict[str, dict[str, Any]]], No
     lambda years, m: _apply_net_revenue(years, m.get("nr", {})),
     lambda years, m: _apply_employees(years, m.get("emp", {})),
     lambda years, m: _apply_depreciation(years, m.get("da", {})),
+    lambda years, m: _apply_order_book(years, m.get("ob", {})),
 ]
 
 

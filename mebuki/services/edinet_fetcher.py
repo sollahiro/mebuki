@@ -22,6 +22,7 @@ from mebuki.analysis.interest_bearing_debt import extract_interest_bearing_debt
 from mebuki.analysis.interest_expense import extract_interest_expense
 from mebuki.analysis.net_revenue import extract_net_revenue
 from mebuki.analysis.operating_profit import extract_operating_profit
+from mebuki.analysis.order_book import extract_order_book
 from mebuki.analysis.tax_expense import extract_tax_expense
 from mebuki.utils.cache import CacheManager
 from mebuki.utils.jquants_utils import prepare_edinet_search_data
@@ -71,6 +72,12 @@ _EXTRACTOR_SPECS: list[ExtractorSpec] = [
     ExtractorSpec("nr", "NR", extract_net_revenue, result_check=lambda r: bool(r.get("found"))),
     ExtractorSpec("op", "OP", extract_operating_profit),
     ExtractorSpec("da", "DA", extract_depreciation),
+    ExtractorSpec(
+        "ob",
+        "OB",
+        extract_order_book,
+        result_check=lambda r: r.get("order_intake") is not None or r.get("order_backlog") is not None,
+    ),
 ]
 
 _SPEC_BY_KEY: dict[str, ExtractorSpec] = {spec.key: spec for spec in _EXTRACTOR_SPECS}
