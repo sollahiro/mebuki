@@ -118,7 +118,8 @@ def _detect_accounting_standard(tag_elements: XbrlTagElements) -> str:
         "BorrowingsCLIFRS",
         "BondsPayableNCLIFRS",
         "BorrowingsNCLIFRS",
-        "DepreciationAndAmortizationOpeCFIFRS",  # DA タグ自身で IFRS 判定（集約型 IBD タグしか持たない企業に対応）
+        "DepreciationAndAmortizationOpeCFIFRS",                   # DA タグ自身で IFRS 判定（集約型 IBD タグしか持たない企業に対応）
+        "DepreciationAndAmortizationOfIntangibleAssetsOpeCFIFRS",  # 日立等が使用するIFRS変種タグ
     ]
     if any(t in tag_elements for t in usgaap_tags) and not any(
         t in tag_elements for t in ifrs_marker_tags

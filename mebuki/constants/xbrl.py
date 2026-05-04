@@ -272,5 +272,6 @@ CF_DEPRECIATION_JGAAP_TAGS: list[str] = [
 ]
 
 CF_DEPRECIATION_IFRS_TAGS: list[str] = [
-    "DepreciationAndAmortizationOpeCFIFRS",  # IFRS CF計算書
+    "DepreciationAndAmortizationOpeCFIFRS",                   # IFRS CF計算書（一般的）
+    "DepreciationAndAmortizationOfIntangibleAssetsOpeCFIFRS", # IFRS CF計算書（日立等）
 ]
