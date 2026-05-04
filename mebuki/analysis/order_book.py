@@ -1,20 +1,11 @@
-"""
-受注高・受注残高 XBRL 抽出モジュール
-
-有価証券報告書の MD&A TextBlock に含まれる XHTML table から、
-受注高と受注残高を抽出する。
-"""
+"""MD&A TextBlock から受注高・受注残高を抽出する。"""
 
 import html
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-try:
-    from bs4 import BeautifulSoup
-    _BS4_AVAILABLE = True
-except ImportError:
-    _BS4_AVAILABLE = False
+from bs4 import BeautifulSoup
 
 from mebuki.analysis.xbrl_utils import find_xbrl_files, parse_html_int_attribute, parse_html_number
 from mebuki.constants.financial import MILLION_YEN
@@ -50,6 +41,7 @@ _ORDER_BACKLOG_MARKERS = ("受注残高", "受注残", "期末受注残高")
 _TOTAL_ROW_MARKERS = ("合計", "計")
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _INT_RE = re.compile(r"[0-9０-９][0-9０-９,，]*")
+_MAX_NEAREST_COLUMN_DISTANCE = 2
 
 
 def _not_found(reason: str) -> OrderBookResult:
@@ -67,17 +59,16 @@ def _local_tag(tag: str) -> str:
     return tag.split("}", 1)[1] if "}" in tag else tag
 
 
-def _normalized_text(element: ET.Element) -> str:
-    text = "".join(element.itertext())
-    return "".join(text.split()).replace("\xa0", "")
-
-
 def _normalize_plain_text(text: str) -> str:
     return "".join(text.split()).replace("\xa0", "")
 
 
-def _cell_text(element: ET.Element) -> str:
+def _element_text(element: ET.Element) -> str:
     return "".join(element.itertext()).strip()
+
+
+def _compact_element_text(element: ET.Element) -> str:
+    return _normalize_plain_text(_element_text(element))
 
 
 def _has_any(text: str, markers: tuple[str, ...]) -> bool:
@@ -102,7 +93,7 @@ def _expanded_cells(row: ET.Element) -> list[tuple[int, int, str]]:
     for cell in _row_cells(row):
         span = parse_html_int_attribute(cell, "colspan")
         last_col = col_offset + span - 1
-        cells.append((col_offset, last_col, _cell_text(cell)))
+        cells.append((col_offset, last_col, _element_text(cell)))
         col_offset += span
     return cells
 
@@ -140,7 +131,7 @@ def _numeric_cells(row: ET.Element) -> list[tuple[int, float]]:
 
 def _nearest_value(numerics: list[tuple[int, float]], target_col: int) -> float | None:
     best_value = None
-    best_distance = 3
+    best_distance = _MAX_NEAREST_COLUMN_DISTANCE + 1
     for col, value in numerics:
         distance = abs(col - target_col)
         if distance < best_distance:
@@ -182,7 +173,7 @@ def _find_metric_row_values(
     prior_col: int | None,
 ) -> tuple[float | None, float | None]:
     for row in rows:
-        row_text = _normalized_text(row)
+        row_text = _compact_element_text(row)
         if not _has_any(row_text, markers) or _has_any(row_text, excluded_markers):
             continue
         current, prior = _extract_row_values(row, current_col, prior_col)
@@ -194,7 +185,7 @@ def _find_metric_row_values(
 def _find_metric_header_columns(rows: list[ET.Element]) -> tuple[int | None, int | None]:
     intake_col = backlog_col = None
     for row in rows:
-        row_text = _normalized_text(row)
+        row_text = _compact_element_text(row)
         if not (
             _has_any(row_text, _ORDER_INTAKE_MARKERS)
             and _has_any(row_text, _ORDER_BACKLOG_MARKERS)
@@ -221,8 +212,8 @@ def _find_total_row_values_by_metric_columns(
         cells = _expanded_cells(row)
         if not cells:
             continue
-        label = cells[0][2]
-        if not any(marker == "".join(label.split()) for marker in _TOTAL_ROW_MARKERS):
+        label = _normalize_plain_text(cells[0][2])
+        if not _has_any(label, _TOTAL_ROW_MARKERS):
             continue
         numerics = _numeric_cells(row)
         intake = _nearest_value(numerics, intake_col) if intake_col is not None else None
@@ -277,7 +268,7 @@ def _search_in_tables(root: ET.Element) -> OrderBookResult:
     for table in root.iter():
         if _local_tag(table.tag).lower() != "table":
             continue
-        table_text = _normalized_text(table)
+        table_text = _compact_element_text(table)
         if not (
             _has_any(table_text, _ORDER_INTAKE_MARKERS)
             or _has_any(table_text, _ORDER_BACKLOG_MARKERS)
@@ -315,8 +306,6 @@ def _search_in_tables(root: ET.Element) -> OrderBookResult:
 
 
 def _parse_html_tables_with_bs4(fragment: str) -> ET.Element | None:
-    if not _BS4_AVAILABLE:
-        return None
     soup = BeautifulSoup(fragment, "html.parser")
     tables = soup.find_all("table")
     if not tables:

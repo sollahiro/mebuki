@@ -18,6 +18,7 @@ from mebuki.constants.financial import PERCENT, MILLION_YEN
 from mebuki.utils.cache import CacheManager
 from mebuki.utils.wacc import load_rf_rates, resolve_rf_for_date, calculate_wacc
 from mebuki.utils.metrics_types import CalculatedData, MetricSource, YearEntry
+from mebuki.utils.xbrl_result_types import OrderBookResult
 
 from .financial_fetcher import FinancialFetcher
 from .edinet_fetcher import EdinetFetcher
@@ -270,7 +271,7 @@ def _apply_depreciation(
 
 def _apply_order_book(
     years: list[YearEntry],
-    ob_by_year: dict[str, dict[str, Any]],
+    ob_by_year: dict[str, OrderBookResult],
 ) -> None:
     for year in years:
         fy_end_key = _fy_end_key(year)
@@ -278,8 +279,10 @@ def _apply_order_book(
         if not ob:
             continue
         cd = year["CalculatedData"]
-        if ob.get("order_intake") is not None:
-            cd["OrderIntake"] = ob["order_intake"] / MILLION_YEN
+        order_intake = ob.get("order_intake")
+        order_backlog = ob.get("order_backlog")
+        if order_intake is not None:
+            cd["OrderIntake"] = order_intake / MILLION_YEN
             _set_metric_source(
                 cd,
                 "OrderIntake",
@@ -288,8 +291,8 @@ def _apply_order_book(
                 method=ob.get("method"),
                 doc_id=ob.get("docID"),
             )
-        if ob.get("order_backlog") is not None:
-            cd["OrderBacklog"] = ob["order_backlog"] / MILLION_YEN
+        if order_backlog is not None:
+            cd["OrderBacklog"] = order_backlog / MILLION_YEN
             _set_metric_source(
                 cd,
                 "OrderBacklog",
