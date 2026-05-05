@@ -290,6 +290,7 @@ GROSS_PROFIT_COMPONENT_DEFINITIONS: list[_ComponentDef] = [
             "NetSales",         # J-GAAP連結
             "Revenue",          # IFRS代替
             "Revenues",         # US-GAAP
+            "RevenuesUSGAAPSummaryOfBusinessResults",  # US-GAAP 要約情報
         ],
     },
     {
@@ -362,6 +363,11 @@ OPERATING_PROFIT_DIRECT_TAGS: list[str] = [
 ORDINARY_INCOME_TAGS: list[str] = [
     "OrdinaryIncome",            # J-GAAP 金融機関向け経常利益
     "OrdinaryIncomeLoss",        # J-GAAP 経常利益（代替）
+    "OrdinaryIncomeLossSummaryOfBusinessResults",  # J-GAAP 経常利益（要約情報）
+]
+
+ORDINARY_REVENUE_TAGS: list[str] = [
+    "OrdinaryIncomeSummaryOfBusinessResults",  # 銀行等の経常収益（要約情報）
 ]
 
 # 営業利益 計算法: GrossProfit − SGA で算出する

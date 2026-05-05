@@ -36,6 +36,7 @@ from mebuki.constants.xbrl import (
     GROSS_PROFIT_DIRECT_TAGS,
     IFRS_PL_MARKER_TAGS,
     OPERATING_PROFIT_DIRECT_TAGS,
+    ORDINARY_REVENUE_TAGS,
     ORDINARY_INCOME_TAGS,
     PRIOR_DURATION_CONTEXT_PATTERNS,
     SGA_DIRECT_TAGS,
@@ -46,6 +47,7 @@ from mebuki.utils.xbrl_result_types import OperatingProfitResult, XbrlTagElement
 _OP_RELEVANT_TAGS: frozenset[str] = frozenset(
     OPERATING_PROFIT_DIRECT_TAGS
     + ORDINARY_INCOME_TAGS
+    + ORDINARY_REVENUE_TAGS
     + GROSS_PROFIT_DIRECT_TAGS
     + SGA_DIRECT_TAGS
     + USGAAP_MARKER_TAGS
@@ -91,6 +93,16 @@ def _try_tags(
         if c is not None or p is not None:
             return tag, c, p
     return None, None, None
+
+
+def _extract_ordinary_revenue(tag_elements: XbrlTagElements) -> tuple[float | None, float | None]:
+    """金融機関向けに経常収益の当期・前期値を返す。"""
+    for consolidated in (True, False):
+        for tag in ORDINARY_REVENUE_TAGS:
+            current, prior = _find_duration_value(tag_elements, tag, consolidated)
+            if current is not None or prior is not None:
+                return current, prior
+    return None, None
 
 
 def _try_computed_op(
@@ -294,11 +306,16 @@ def extract_operating_profit(
 
         _, current, prior = _try_tags(tag_elements, ORDINARY_INCOME_TAGS, consolidated)
         if current is not None or prior is not None:
-            return {
+            ordinary_result: OperatingProfitResult = {
                 "current": current, "prior": prior,
                 "method": "ordinary_income", "label": "経常利益",
                 "accounting_standard": accounting_standard,
             }
+            sales_c, sales_p = _extract_ordinary_revenue(tag_elements)
+            if sales_c is not None or sales_p is not None:
+                ordinary_result["current_sales"] = sales_c
+                ordinary_result["prior_sales"] = sales_p
+            return ordinary_result
 
     return {
         "current": None, "prior": None,

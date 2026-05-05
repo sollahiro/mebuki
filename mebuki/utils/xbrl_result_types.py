@@ -33,6 +33,8 @@ class OperatingProfitResult(TypedDict):
     label: str
     accounting_standard: str
     reason: NotRequired[str]
+    current_sales: NotRequired[float | None]
+    prior_sales: NotRequired[float | None]
 
 
 class InterestBearingDebtResult(TypedDict):

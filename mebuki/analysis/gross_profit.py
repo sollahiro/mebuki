@@ -300,6 +300,10 @@ def extract_gross_profit(
     if accounting_standard == "US-GAAP":
         usgaap_result = _extract_usgaap_gp_from_html(xbrl_dir)
         if usgaap_result is not None:
+            sales_c, sales_p = _extract_sales_for_yoy(tag_elements)
+            if sales_c is not None or sales_p is not None:
+                usgaap_result["current_sales"] = sales_c
+                usgaap_result["prior_sales"] = sales_p
             return usgaap_result
         return {
             "current": None, "prior": None,

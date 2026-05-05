@@ -295,6 +295,32 @@ class TestGrossProfitNotFound(unittest.TestCase):
         self.assertEqual(result["method"], "not_found")
         self.assertEqual(result["accounting_standard"], "US-GAAP")
 
+    def test_usgaap_html_attaches_summary_revenues_for_yoy(self):
+        """US-GAAP HTML抽出でも要約情報の売上高当期・前期を付与する"""
+        html = """
+        <html><body><table>
+          <tr><th></th><th>前連結会計年度</th><th>当連結会計年度</th></tr>
+          <tr><td>売上総利益</td><td>1,033,224</td><td>1,137,928</td></tr>
+        </table></body></html>
+        """
+        (self.xbrl_dir / "0105010.htm").write_text(html, encoding="utf-8")
+        result = extract_gross_profit(
+            self.xbrl_dir,
+            pre_parsed={
+                "CashAndCashEquivalentsUSGAAPSummaryOfBusinessResults": {
+                    "CurrentYearDuration": 1.0
+                },
+                "RevenuesUSGAAPSummaryOfBusinessResults": {
+                    "CurrentYearDuration": 2_859_041_000_000.0,
+                    "Prior1YearDuration": 2_525_773_000_000.0,
+                },
+            },
+        )
+        self.assertEqual(result["method"], "usgaap_html")
+        self.assertEqual(result["accounting_standard"], "US-GAAP")
+        self.assertAlmostEqual(result.get("current_sales"), 2_859_041_000_000.0)
+        self.assertAlmostEqual(result.get("prior_sales"), 2_525_773_000_000.0)
+
     def test_prior_only(self):
         """前期値のみ存在する場合も正常に返す"""
         xml = _make_xbrl_duration("""

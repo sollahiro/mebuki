@@ -17,6 +17,7 @@ _SALES_IMPACT_KEY = "SalesChangeImpact"
 _GM_IMPACT_KEY = "GrossMarginChangeImpact"
 _SGA_IMPACT_KEY = "SGAChangeImpact"
 _RECONCILIATION_DIFF_KEY = "OperatingProfitChangeReconciliationDiff"
+_FINANCIAL_OP_LABELS = frozenset(("経常利益", "事業利益"))
 
 
 def _gross_margin(gross_profit: float | None, sales: float | None) -> float | None:
@@ -36,28 +37,63 @@ def _set_source(
     sources[metric] = {"source": "derived", "method": method, "unit": unit}
 
 
-def _apply_sga(data: dict[str, Any]) -> None:
+def _profit_base(data: dict[str, Any]) -> tuple[float | None, str | None]:
     gross_profit = data.get("GrossProfit")
+    if gross_profit is not None:
+        return gross_profit, "GrossProfit"
+
+    op_label = data.get("OPLabel")
+    sales = data.get("Sales")
+    if op_label in _FINANCIAL_OP_LABELS and sales is not None:
+        return sales, "Sales"
+
+    return None, None
+
+
+def _profit_base_from_xbrl(
+    gp: dict[str, Any],
+    op: dict[str, Any],
+    *,
+    period: str,
+) -> tuple[float | None, str | None]:
+    gp_raw = gp.get(period)
+    if gp_raw is not None:
+        return gp_raw, "GrossProfit(XBRL)"
+
+    op_label = op.get("label")
+    sales_key = f"{period}_sales"
+    sales_raw = op.get(sales_key)
+    if op_label in _FINANCIAL_OP_LABELS and sales_raw is not None:
+        return sales_raw, "Sales(XBRL)"
+
+    return None, None
+
+
+def _apply_sga(data: dict[str, Any]) -> None:
+    profit_base, base_label = _profit_base(data)
     op = data.get("OP")
-    if gross_profit is None or op is None:
+    if profit_base is None or op is None or base_label is None:
         return
 
-    data[_SGA_KEY] = gross_profit - op
-    _set_source(data, _SGA_KEY, method="GrossProfit - OP")
+    data[_SGA_KEY] = profit_base - op
+    _set_source(data, _SGA_KEY, method=f"{base_label} - OP")
 
 
 def _apply_change(current: dict[str, Any], prior: dict[str, Any]) -> None:
+    if current.get(_OP_CHANGE_KEY) is not None:
+        return
+
     current_sales = current.get("Sales")
-    current_gross_profit = current.get("GrossProfit")
+    current_profit_base, _ = _profit_base(current)
     current_op = current.get("OP")
     current_sga = current.get(_SGA_KEY)
     prior_sales = prior.get("Sales")
-    prior_gross_profit = prior.get("GrossProfit")
+    prior_profit_base, _ = _profit_base(prior)
     prior_op = prior.get("OP")
     prior_sga = prior.get(_SGA_KEY)
 
-    current_margin = _gross_margin(current_gross_profit, current_sales)
-    prior_margin = _gross_margin(prior_gross_profit, prior_sales)
+    current_margin = _gross_margin(current_profit_base, current_sales)
+    prior_margin = _gross_margin(prior_profit_base, prior_sales)
 
     if (
         current_sales is None
@@ -152,47 +188,52 @@ def apply_operating_profit_change_from_xbrl(
         gp = gp_by_year.get(fy_end_key, {})
         op = op_by_year.get(fy_end_key, {})
 
-        current_gp_raw = gp.get("current")
         current_op_raw = op.get("current")
         current_sales_raw = gp.get("current_sales")
+        if current_sales_raw is None:
+            current_sales_raw = op.get("current_sales")
 
-        prior_gp_raw = gp.get("prior")
         prior_op_raw = op.get("prior")
         prior_sales_raw = gp.get("prior_sales")
+        if prior_sales_raw is None:
+            prior_sales_raw = op.get("prior_sales")
+
+        current_base_raw, current_base_label = _profit_base_from_xbrl(gp, op, period="current")
+        prior_base_raw, _ = _profit_base_from_xbrl(gp, op, period="prior")
 
         cd = cast(dict[str, Any], year["CalculatedData"])
 
-        if current_gp_raw is not None and current_op_raw is not None:
-            current_gp_m = current_gp_raw / MILLION_YEN
+        if current_base_raw is not None and current_op_raw is not None and current_base_label is not None:
+            current_base_m = current_base_raw / MILLION_YEN
             current_op_m = current_op_raw / MILLION_YEN
             if cd.get(_SGA_KEY) is None:
-                cd[_SGA_KEY] = current_gp_m - current_op_m
-                _set_source(cd, _SGA_KEY, method="GrossProfit(XBRL) - OP(XBRL)")
+                cd[_SGA_KEY] = current_base_m - current_op_m
+                _set_source(cd, _SGA_KEY, method=f"{current_base_label} - OP(XBRL)")
         else:
-            current_gp_m = current_op_m = None
+            current_base_m = current_op_m = None
 
         if (
-            current_gp_m is None
+            current_base_m is None
             or current_op_m is None
             or current_sales_raw is None
-            or prior_gp_raw is None
+            or prior_base_raw is None
             or prior_op_raw is None
             or prior_sales_raw is None
         ):
             continue
 
         current_sales = current_sales_raw / MILLION_YEN
-        prior_gp = prior_gp_raw / MILLION_YEN
+        prior_base = prior_base_raw / MILLION_YEN
         prior_op = prior_op_raw / MILLION_YEN
         prior_sales = prior_sales_raw / MILLION_YEN
 
         if prior_sales == 0 or current_sales == 0:
             continue
 
-        current_sga = current_gp_m - current_op_m
-        prior_sga = prior_gp - prior_op
-        current_margin = current_gp_m / current_sales
-        prior_margin = prior_gp / prior_sales
+        current_sga = current_base_m - current_op_m
+        prior_sga = prior_base - prior_op
+        current_margin = current_base_m / current_sales
+        prior_margin = prior_base / prior_sales
 
         op_change = current_op_m - prior_op
         sales_impact = (current_sales - prior_sales) * prior_margin

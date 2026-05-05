@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 import pytest
 
 from mebuki.utils.operating_profit_change import (
@@ -5,10 +7,11 @@ from mebuki.utils.operating_profit_change import (
     apply_operating_profit_change_to_periods,
     apply_operating_profit_change_to_years,
 )
+from mebuki.utils.metrics_types import YearEntry
 
 
-def _year(fy_end: str, sales: float, gross_profit: float, op: float) -> dict:
-    return {
+def _year(fy_end: str, sales: float, gross_profit: float | None, op: float) -> YearEntry:
+    return cast(YearEntry, {
         "fy_end": fy_end,
         "FinancialPeriod": fy_end,
         "RawData": {},
@@ -17,7 +20,20 @@ def _year(fy_end: str, sales: float, gross_profit: float, op: float) -> dict:
             "GrossProfit": gross_profit,
             "OP": op,
         },
-    }
+    })
+
+
+def _blank_year(fy_end: str) -> YearEntry:
+    return cast(YearEntry, {
+        "fy_end": fy_end,
+        "FinancialPeriod": fy_end,
+        "RawData": {},
+        "CalculatedData": {},
+    })
+
+
+def _cd(year: YearEntry) -> dict[str, Any]:
+    return cast(dict[str, Any], year["CalculatedData"])
 
 
 def _period(label: str, half: str, fy_end: str, sales: float, gross_profit: float, op: float) -> dict:
@@ -41,7 +57,7 @@ def test_apply_operating_profit_change_to_years_decomposes_op_change() -> None:
 
     apply_operating_profit_change_to_years(years)
 
-    current = years[0]["CalculatedData"]
+    current = _cd(years[0])
     assert current["SellingGeneralAdministrativeExpenses"] == pytest.approx(330.0)
     assert current["OperatingProfitChange"] == pytest.approx(50.0)
     assert current["SalesChangeImpact"] == pytest.approx(70.0)
@@ -51,12 +67,43 @@ def test_apply_operating_profit_change_to_years_decomposes_op_change() -> None:
     assert current["MetricSources"]["SalesChangeImpact"]["source"] == "derived"
 
 
+def test_apply_operating_profit_change_to_years_preserves_xbrl_change() -> None:
+    years = [
+        _year("2024-03-31", 1_200.0, 480.0, 150.0),
+        _year("2023-03-31", 1_000.0, 350.0, 100.0),
+    ]
+    _cd(years[0])["OperatingProfitChange"] = 55.0
+
+    apply_operating_profit_change_to_years(years)
+
+    assert _cd(years[0])["OperatingProfitChange"] == pytest.approx(55.0)
+
+
+def test_apply_operating_profit_change_to_years_uses_financial_revenue_as_profit_base() -> None:
+    years = [
+        _year("2024-03-31", 1_200.0, None, 150.0),
+        _year("2023-03-31", 1_000.0, None, 100.0),
+    ]
+    _cd(years[0])["OPLabel"] = "経常利益"
+    _cd(years[1])["OPLabel"] = "経常利益"
+
+    apply_operating_profit_change_to_years(years)
+
+    current = _cd(years[0])
+    assert current["SellingGeneralAdministrativeExpenses"] == pytest.approx(1_050.0)
+    assert current["OperatingProfitChange"] == pytest.approx(50.0)
+    assert current["SalesChangeImpact"] == pytest.approx(200.0)
+    assert current["GrossMarginChangeImpact"] == pytest.approx(0.0)
+    assert current["SGAChangeImpact"] == pytest.approx(-150.0)
+    assert current["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0)
+
+
 def test_apply_operating_profit_change_to_years_skips_change_without_prior() -> None:
     years = [_year("2024-03-31", 1_200.0, 480.0, 150.0)]
 
     apply_operating_profit_change_to_years(years)
 
-    current = years[0]["CalculatedData"]
+    current = _cd(years[0])
     assert current["SellingGeneralAdministrativeExpenses"] == pytest.approx(330.0)
     assert "OperatingProfitChange" not in current
 
@@ -106,22 +153,26 @@ def _op_entry(current: float, prior: float) -> dict:
     return {"current": current * _M, "prior": prior * _M, "method": "direct", "label": "営業利益", "accounting_standard": "J-GAAP"}
 
 
+def _financial_op_entry(
+    current: float,
+    prior: float,
+    current_sales: float,
+    prior_sales: float,
+) -> dict:
+    return {
+        "current": current * _M,
+        "prior": prior * _M,
+        "method": "ordinary_income",
+        "label": "経常利益",
+        "accounting_standard": "J-GAAP",
+        "current_sales": current_sales * _M,
+        "prior_sales": prior_sales * _M,
+    }
+
+
 def test_apply_operating_profit_change_from_xbrl_uses_filing_prior_values() -> None:
     """有報の前期値（XBRL）から全年度の前年差を計算できる。"""
-    years = [
-        {
-            "fy_end": "2022-03-31",
-            "FinancialPeriod": "2022年03月期",
-            "RawData": {},
-            "CalculatedData": {},
-        },
-        {
-            "fy_end": "2023-03-31",
-            "FinancialPeriod": "2023年03月期",
-            "RawData": {},
-            "CalculatedData": {},
-        },
-    ]
+    years = [_blank_year("2022-03-31"), _blank_year("2023-03-31")]
     # 2022年度の有報に「当期(2022)」と「前期(2021)」の数値が入っている
     gp_by_year = {
         "20220331": _gp_entry(current=480.0, prior=350.0, current_sales=1_200.0, prior_sales=1_000.0),
@@ -134,41 +185,50 @@ def test_apply_operating_profit_change_from_xbrl_uses_filing_prior_values() -> N
 
     apply_operating_profit_change_from_xbrl(years, gp_by_year, op_by_year)
 
-    cd_2022 = years[0]["CalculatedData"]
+    cd_2022 = _cd(years[0])
     assert cd_2022["OperatingProfitChange"] == pytest.approx(50.0)
     assert cd_2022["SalesChangeImpact"] == pytest.approx(70.0)
     assert cd_2022["GrossMarginChangeImpact"] == pytest.approx(60.0)
     assert cd_2022["SGAChangeImpact"] == pytest.approx(-80.0)
     assert cd_2022["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0)
 
-    cd_2023 = years[1]["CalculatedData"]
+    cd_2023 = _cd(years[1])
     assert cd_2023["OperatingProfitChange"] == pytest.approx(50.0)
+
+
+def test_apply_operating_profit_change_from_xbrl_uses_financial_filing_prior_values() -> None:
+    """金融機関は単年有報の経常収益・経常利益の当期/前期値で前年差分解できる。"""
+    years = [_blank_year("2023-03-31")]
+    op_by_year = {
+        "20230331": _financial_op_entry(
+            current=789_606.0,
+            prior=559_847.0,
+            current_sales=5_778_772.0,
+            prior_sales=3_963_091.0,
+        )
+    }
+
+    apply_operating_profit_change_from_xbrl(years, {}, op_by_year)
+
+    cd = _cd(years[0])
+    assert cd["SellingGeneralAdministrativeExpenses"] == pytest.approx(4_989_166.0)
+    assert cd["OperatingProfitChange"] == pytest.approx(229_759.0)
+    assert cd["SalesChangeImpact"] == pytest.approx(1_815_681.0)
+    assert cd["GrossMarginChangeImpact"] == pytest.approx(0.0)
+    assert cd["SGAChangeImpact"] == pytest.approx(-1_585_922.0)
+    assert cd["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0)
 
 
 def test_apply_operating_profit_change_from_xbrl_skips_when_xbrl_missing() -> None:
     """XBRLデータがない年度はスキップされる。"""
-    years = [
-        {
-            "fy_end": "2022-03-31",
-            "FinancialPeriod": "2022年03月期",
-            "RawData": {},
-            "CalculatedData": {},
-        },
-    ]
+    years = [_blank_year("2022-03-31")]
     apply_operating_profit_change_from_xbrl(years, {}, {})
-    assert "OperatingProfitChange" not in years[0]["CalculatedData"]
+    assert "OperatingProfitChange" not in _cd(years[0])
 
 
 def test_apply_operating_profit_change_from_xbrl_sga_without_prior() -> None:
     """当期GP/OPはあるが前期値が欠ける場合、販管費は付与されるが前年差分解は出ない。"""
-    years = [
-        {
-            "fy_end": "2022-03-31",
-            "FinancialPeriod": "2022年03月期",
-            "RawData": {},
-            "CalculatedData": {},
-        },
-    ]
+    years = [_blank_year("2022-03-31")]
     gp_by_year = {
         "20220331": {
             "current": 480.0 * _M,
@@ -186,6 +246,6 @@ def test_apply_operating_profit_change_from_xbrl_sga_without_prior() -> None:
 
     apply_operating_profit_change_from_xbrl(years, gp_by_year, op_by_year)
 
-    cd = years[0]["CalculatedData"]
+    cd = _cd(years[0])
     assert cd["SellingGeneralAdministrativeExpenses"] == pytest.approx(330.0)
     assert "OperatingProfitChange" not in cd

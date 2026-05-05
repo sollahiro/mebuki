@@ -203,6 +203,10 @@ class TestOperatingProfitFallbacks(unittest.TestCase):
     def test_ordinary_income_fallback(self):
         """経常利益フォールバック: 営業利益タグがない金融機関向け"""
         xml = _make_xbrl("""
+            <jppfs_cor:OrdinaryIncomeSummaryOfBusinessResults contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">1200000000000</jppfs_cor:OrdinaryIncomeSummaryOfBusinessResults>
+            <jppfs_cor:OrdinaryIncomeSummaryOfBusinessResults contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">1000000000000</jppfs_cor:OrdinaryIncomeSummaryOfBusinessResults>
             <jppfs_cor:OrdinaryIncome contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">300000000000</jppfs_cor:OrdinaryIncome>
             <jppfs_cor:OrdinaryIncome contextRef="Prior1YearDuration"
@@ -213,6 +217,8 @@ class TestOperatingProfitFallbacks(unittest.TestCase):
         self.assertEqual(result["method"], "ordinary_income")
         self.assertEqual(result["label"], "経常利益")
         self.assertAlmostEqual(result["current"], 300_000_000_000)
+        self.assertAlmostEqual(result.get("current_sales"), 1_200_000_000_000)
+        self.assertAlmostEqual(result.get("prior_sales"), 1_000_000_000_000)
 
     def test_consolidated_preferred_over_nonconsolidated(self):
         """連結タグがある場合は個別タグより優先される"""
