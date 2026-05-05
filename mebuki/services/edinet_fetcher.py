@@ -79,7 +79,6 @@ class ExtractorSpec:
 
 
 _EXTRACTOR_SPECS: list[ExtractorSpec] = [
-    ExtractorSpec("is", "IS", extract_income_statement, result_check=lambda r: r.get("sales") is not None),
     ExtractorSpec("ibd", "IBD", extract_interest_bearing_debt),
     ExtractorSpec(
         "bs",
