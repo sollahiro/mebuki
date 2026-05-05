@@ -480,6 +480,29 @@ AGGREGATE_IFRS_DEFINITIONS: list[_AggregateIFRSDef] = [
     },
 ]
 
+# 損益計算書（IS）タグ定義
+# analysis/income_statement.py で使用
+
+# 売上高（Sales）タグ
+NET_SALES_TAGS: list[str] = [
+    "NetSalesIFRS",                             # IFRS連結
+    "NetSales",                                 # J-GAAP連結
+    "Revenue",                                  # IFRS代替
+    "Revenues",                                 # US-GAAP
+    "RevenuesUSGAAPSummaryOfBusinessResults",   # US-GAAP 要約情報
+    "NetSalesSummaryOfBusinessResults",         # J-GAAP 要約情報（決算短信）
+]
+
+# 当期純利益（Net Profit）タグ（親会社帰属 → PL全体の優先順）
+NET_PROFIT_TAGS: list[str] = [
+    "ProfitLossAttributableToOwnersOfParentIFRS",          # IFRS連結 親会社帰属
+    "ProfitLossAttributableToOwnersOfParent",               # J-GAAP連結 親会社帰属
+    "ProfitLoss",                                           # J-GAAP連結 全体
+    "NetIncomeLossAttributableToOwnersOfParentUSGAAP",      # US-GAAP 親会社帰属
+    "NetIncomeLoss",                                        # US-GAAP 代替
+    "NetIncomeLossSummaryOfBusinessResults",                # J-GAAP 要約情報
+]
+
 # 減価償却費（DA）タグ定義
 # analysis/depreciation.py で使用
 

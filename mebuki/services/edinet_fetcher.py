@@ -16,9 +16,11 @@ from mebuki import __version__
 from mebuki.api.jquants_client import JQuantsAPIClient
 from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.analysis.balance_sheet import extract_balance_sheet
+from mebuki.analysis.cash_flow import extract_cash_flow
 from mebuki.analysis.depreciation import extract_depreciation
 from mebuki.analysis.employees import extract_employees
 from mebuki.analysis.gross_profit import extract_gross_profit
+from mebuki.analysis.income_statement import extract_income_statement
 from mebuki.analysis.interest_bearing_debt import extract_interest_bearing_debt
 from mebuki.analysis.interest_expense import extract_interest_expense
 from mebuki.analysis.net_revenue import extract_net_revenue
@@ -33,6 +35,17 @@ from mebuki.utils.xbrl_result_types import GrossProfitResult, HalfYearEdinetEntr
 logger = logging.getLogger(__name__)
 
 _EDINET_DOCS_CACHE_VERSION = "edinet-docs-v2"
+
+
+def _infer_fy_start(fy_end: str) -> str:
+    """会計期末日から期首日を推測する（前年同日の翌日）。"""
+    from datetime import datetime, timedelta
+    try:
+        end_dt = datetime.strptime(fy_end[:10], "%Y-%m-%d")
+        start_dt = end_dt.replace(year=end_dt.year - 1) + timedelta(days=1)
+        return start_dt.strftime("%Y-%m-%d")
+    except (ValueError, OverflowError):
+        return ""
 _XBRL_PARSE_CACHE_VERSION = ".".join(__version__.split(".")[:2]) + ":xbrl-parse"
 
 _PreParsedMap: TypeAlias = dict[str, tuple[Path, XbrlTagElements]]
@@ -66,6 +79,7 @@ class ExtractorSpec:
 
 
 _EXTRACTOR_SPECS: list[ExtractorSpec] = [
+    ExtractorSpec("is", "IS", extract_income_statement, result_check=lambda r: r.get("sales") is not None),
     ExtractorSpec("ibd", "IBD", extract_interest_bearing_debt),
     ExtractorSpec(
         "bs",
@@ -744,3 +758,77 @@ class EdinetFetcher:
     ) -> _MetricByYear:
         """年度別に営業利益（または経常利益）を抽出。Returns: { "YYYYMMDD": op_result_dict }"""
         return await self._extract_metric_by_year(_SPEC_BY_KEY["op"], code, financial_data, max_years, pre_parsed_map=pre_parsed_map)
+
+    async def build_xbrl_annual_records(
+        self,
+        code: str,
+        max_years: int,
+        docs: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
+        """XBRL から J-Quants 互換の年度財務レコードを構築する。
+
+        J-Quants なし運用時に calculate_metrics_flexible へ渡せる形式の
+        年度レコードリストを返す。各レコードは CurFYEn/CurFYSt/Sales/OP/NP/Eq/CFO/CFI
+        を含む。値はすべて円単位（J-Quants と同じ）。
+
+        Args:
+            code: 銘柄コード
+            max_years: 取得する最大年数
+            docs: 事前に取得した EDINET 書類リスト（省略時は自動発見）
+
+        Returns:
+            J-Quants 形式の年度レコードリスト（新しい年度順）
+        """
+        if not self.edinet_client:
+            return []
+
+        if docs is None:
+            docs = await self._search_without_jquants(code, max_years)
+        if not docs:
+            return []
+
+        pre_parsed_map = await self._download_and_parse_docs(docs, code)
+
+        records: list[dict[str, Any]] = []
+        for doc in docs:
+            fy_end_8 = _fy_end_key(doc.get("jquants_fy_end"))
+            fy_end = doc.get("jquants_fy_end", "")  # YYYY-MM-DD
+            if not fy_end or fy_end_8 not in pre_parsed_map:
+                continue
+
+            xbrl_path, pre_parsed = pre_parsed_map[fy_end_8]
+
+            is_result = extract_income_statement(xbrl_path, pre_parsed=pre_parsed)
+            bs_result = extract_balance_sheet(xbrl_path, pre_parsed=pre_parsed)
+            cf_result = extract_cash_flow(xbrl_path, pre_parsed=pre_parsed)
+
+            fy_st = _infer_fy_start(fy_end)
+            submit_date = (doc.get("submitDateTime") or "")[:10]
+
+            record: dict[str, Any] = {
+                "CurFYEn": fy_end,
+                "CurFYSt": fy_st,
+                "CurPerType": "FY",
+                "DiscDate": submit_date,
+                # IS: 円単位（J-Quants と同単位）
+                "Sales": is_result.get("sales"),
+                "OP": is_result.get("operating_profit"),
+                "NP": is_result.get("net_profit"),
+                # BS: 円単位
+                "Eq": bs_result.get("net_assets"),
+                # CF: 円単位
+                "CFO": cf_result["cfo"].get("current"),
+                "CFI": cf_result["cfi"].get("current"),
+                # メタ情報（calculate_metrics_flexible には影響しない）
+                "_xbrl_source": True,
+                "_accounting_standard": is_result.get("accounting_standard"),
+                "_docID": doc.get("docID"),
+            }
+            records.append(record)
+            logger.info(
+                f"[XBRL-IS] {code} {fy_end}: "
+                f"Sales={record['Sales']}, OP={record['OP']}, NP={record['NP']}, "
+                f"Eq={record['Eq']}, CFO={record['CFO']}, CFI={record['CFI']}"
+            )
+
+        return records

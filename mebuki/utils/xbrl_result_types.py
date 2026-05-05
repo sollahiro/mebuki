@@ -123,6 +123,19 @@ class OrderBookResult(TypedDict):
     reason: NotRequired[str]
 
 
+class IncomeStatementResult(TypedDict):
+    sales: float | None
+    sales_prior: float | None
+    operating_profit: float | None
+    operating_profit_prior: float | None
+    net_profit: float | None
+    net_profit_prior: float | None
+    accounting_standard: str
+    method: str
+    reason: NotRequired[str]
+    docID: NotRequired[str]
+
+
 class HalfYearEdinetEntry(TypedDict):
     gp: GrossProfitResult
     op: OperatingProfitResult
