@@ -16,7 +16,7 @@ from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.infrastructure.settings import settings_store
 from mebuki.constants.financial import PERCENT, MILLION_YEN
 from mebuki.utils.cache import CacheManager
-from mebuki.utils.operating_profit_change import apply_operating_profit_change_to_years
+from mebuki.utils.operating_profit_change import apply_operating_profit_change_from_xbrl
 from mebuki.utils.wacc import load_rf_rates, resolve_rf_for_date, calculate_wacc
 from mebuki.utils.metrics_types import CalculatedData, MetricSource, YearEntry
 from mebuki.utils.xbrl_result_types import OrderBookResult
@@ -481,7 +481,7 @@ class IndividualAnalyzer:
         for apply_fn in _METRIC_APPLIERS:
             apply_fn(years, all_metrics)
 
-        apply_operating_profit_change_to_years(years)
+        apply_operating_profit_change_from_xbrl(years, all_metrics.get("gp", {}), all_metrics.get("op", {}))
         _apply_wacc(years, load_rf_rates(settings_store.cache_dir))
 
         return {

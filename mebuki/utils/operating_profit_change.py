@@ -7,6 +7,7 @@
 
 from typing import Any, cast
 
+from mebuki.constants.financial import MILLION_YEN
 from mebuki.utils.metrics_types import YearEntry
 
 
@@ -131,3 +132,94 @@ def apply_operating_profit_change_to_periods(periods: list[dict[str, Any]]) -> N
         if prior is not None:
             _apply_change(data, prior.get("data") or {})
         latest_by_half[comparison_key] = period
+
+
+def apply_operating_profit_change_from_xbrl(
+    years: list[YearEntry],
+    gp_by_year: dict[str, dict[str, Any]],
+    op_by_year: dict[str, dict[str, Any]],
+) -> None:
+    """有報XBRLの前期比較値を使って営業利益前年差分解を付与する。
+
+    各年度の有報に含まれる前期数値（Prior1YearDuration コンテキスト）を使うため、
+    J-QUANTSデータと前年リストへの依存なしに全年度の前年差を計算できる。
+    gp_by_year / op_by_year は YYYYMMDD キーの XBRL 抽出結果 dict。
+    """
+    for year in years:
+        fy_end = year.get("fy_end") or ""
+        fy_end_key = fy_end.replace("-", "")
+
+        gp = gp_by_year.get(fy_end_key, {})
+        op = op_by_year.get(fy_end_key, {})
+
+        current_gp_raw = gp.get("current")
+        current_op_raw = op.get("current")
+        current_sales_raw = gp.get("current_sales")
+
+        prior_gp_raw = gp.get("prior")
+        prior_op_raw = op.get("prior")
+        prior_sales_raw = gp.get("prior_sales")
+
+        cd = cast(dict[str, Any], year["CalculatedData"])
+
+        if current_gp_raw is not None and current_op_raw is not None:
+            current_gp_m = current_gp_raw / MILLION_YEN
+            current_op_m = current_op_raw / MILLION_YEN
+            if cd.get(_SGA_KEY) is None:
+                cd[_SGA_KEY] = current_gp_m - current_op_m
+                _set_source(cd, _SGA_KEY, method="GrossProfit(XBRL) - OP(XBRL)")
+        else:
+            current_gp_m = current_op_m = None
+
+        if (
+            current_gp_m is None
+            or current_op_m is None
+            or current_sales_raw is None
+            or prior_gp_raw is None
+            or prior_op_raw is None
+            or prior_sales_raw is None
+        ):
+            continue
+
+        current_sales = current_sales_raw / MILLION_YEN
+        prior_gp = prior_gp_raw / MILLION_YEN
+        prior_op = prior_op_raw / MILLION_YEN
+        prior_sales = prior_sales_raw / MILLION_YEN
+
+        if prior_sales == 0 or current_sales == 0:
+            continue
+
+        current_sga = current_gp_m - current_op_m
+        prior_sga = prior_gp - prior_op
+        current_margin = current_gp_m / current_sales
+        prior_margin = prior_gp / prior_sales
+
+        op_change = current_op_m - prior_op
+        sales_impact = (current_sales - prior_sales) * prior_margin
+        gm_impact = current_sales * (current_margin - prior_margin)
+        sga_impact = -(current_sga - prior_sga)
+        total_impact = sales_impact + gm_impact + sga_impact
+
+        cd[_OP_CHANGE_KEY] = op_change
+        cd[_SALES_IMPACT_KEY] = sales_impact
+        cd[_GM_IMPACT_KEY] = gm_impact
+        cd[_SGA_IMPACT_KEY] = sga_impact
+        cd[_RECONCILIATION_DIFF_KEY] = op_change - total_impact
+
+        _set_source(cd, _OP_CHANGE_KEY, method="current OP - prior OP (XBRL)")
+        _set_source(
+            cd,
+            _SALES_IMPACT_KEY,
+            method="(current Sales - prior Sales) * prior GrossProfitMargin (XBRL)",
+        )
+        _set_source(
+            cd,
+            _GM_IMPACT_KEY,
+            method="current Sales * (current GrossProfitMargin - prior GrossProfitMargin) (XBRL)",
+        )
+        _set_source(cd, _SGA_IMPACT_KEY, method="-(current SGA - prior SGA) (XBRL)")
+        _set_source(
+            cd,
+            _RECONCILIATION_DIFF_KEY,
+            method="OperatingProfitChange - (SalesChangeImpact + GrossMarginChangeImpact + SGAChangeImpact) (XBRL)",
+        )

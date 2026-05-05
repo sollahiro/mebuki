@@ -332,6 +332,14 @@ ORDINARY_INCOME_TAGS: list[str] = [
     "OrdinaryIncomeLoss",        # J-GAAP 経常利益（代替）
 ]
 
+# 営業利益 計算法: GrossProfit − SGA で算出する
+# OperatingProfitLossIFRS が存在しない IFRS 企業（日立等）向けフォールバック
+
+SGA_DIRECT_TAGS: list[str] = [
+    "SellingGeneralAndAdministrativeExpensesIFRS",  # IFRS連結
+    "SellingGeneralAndAdministrativeExpenses",       # J-GAAP連結
+]
+
 # 支払利息（IE）タグ定義
 # analysis/interest_expense.py で使用
 

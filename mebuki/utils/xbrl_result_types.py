@@ -22,6 +22,8 @@ class GrossProfitResult(TypedDict):
     components: list[MetricComponent]
     docID: NotRequired[str]
     reason: NotRequired[str]
+    current_sales: NotRequired[float | None]
+    prior_sales: NotRequired[float | None]
 
 
 class OperatingProfitResult(TypedDict):

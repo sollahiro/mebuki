@@ -97,6 +97,33 @@ def _find_nonconsolidated_duration_value(
     return current, prior
 
 
+def _extract_sales_for_yoy(tag_elements: XbrlTagElements) -> tuple[float | None, float | None]:
+    """売上高の当期・前期値を返す（YoY比較用）。連結優先、個別フォールバック。
+
+    当期・前期が両方揃うタグを優先する。両方揃うタグがなければ、
+    最初に見つかった片側候補を返す。
+    """
+    sales_tags = next(
+        (comp["tags"] for comp in GROSS_PROFIT_COMPONENT_DEFINITIONS if comp["label"] == "売上高"),
+        [],
+    )
+    for consolidated in (True, False):
+        partial_c: float | None = None
+        partial_p: float | None = None
+        for tag in sales_tags:
+            if consolidated:
+                c, p = _find_consolidated_duration_value(tag_elements, tag)
+            else:
+                c, p = _find_nonconsolidated_duration_value(tag_elements, tag)
+            if c is not None and p is not None:
+                return c, p
+            if (c is not None or p is not None) and partial_c is None and partial_p is None:
+                partial_c, partial_p = c, p
+        if partial_c is not None or partial_p is not None:
+            return partial_c, partial_p
+    return None, None
+
+
 
 def _extract_usgaap_gp_from_html(xbrl_dir: Path) -> GrossProfitResult | None:
     """US-GAAP企業の連結損益計算書(0105010)HTMLから売上総利益を抽出する。"""
@@ -277,7 +304,8 @@ def extract_gross_profit(
         if current is None and prior is None:
             current, prior = _find_nonconsolidated_duration_value(tag_elements, gp_tag)
         if current is not None or prior is not None:
-            return {
+            sales_c, sales_p = _extract_sales_for_yoy(tag_elements)
+            result: GrossProfitResult = {
                 "current": current,
                 "prior": prior,
                 "method": "direct",
@@ -286,6 +314,10 @@ def extract_gross_profit(
                     {"label": "売上総利益", "tag": gp_tag, "current": current, "prior": prior}
                 ],
             }
+            if sales_c is not None or sales_p is not None:
+                result["current_sales"] = sales_c
+                result["prior_sales"] = sales_p
+            return result
 
     # 計算法: 売上高タグ・売上原価タグをそれぞれ取得して差し引く
     comp_results: list[MetricComponent] = []
@@ -356,6 +388,8 @@ def extract_gross_profit(
             "accounting_standard": accounting_standard,
             "components": comp_results,
             "reason": "売上高タグは存在するが当期・前期ともに値なし",
+            "current_sales": sales["current"],
+            "prior_sales": sales["prior"],
         }
 
     return {
@@ -364,4 +398,6 @@ def extract_gross_profit(
         "method": "computed",
         "accounting_standard": accounting_standard,
         "components": comp_results,
+        "current_sales": sales["current"],
+        "prior_sales": sales["prior"],
     }

@@ -29,12 +29,19 @@ from mebuki.analysis.xbrl_utils import (
     parse_html_number,
 )
 from mebuki.constants.financial import MILLION_YEN
-from mebuki.constants.xbrl import OPERATING_PROFIT_DIRECT_TAGS, ORDINARY_INCOME_TAGS
+from mebuki.constants.xbrl import (
+    GROSS_PROFIT_DIRECT_TAGS,
+    OPERATING_PROFIT_DIRECT_TAGS,
+    ORDINARY_INCOME_TAGS,
+    SGA_DIRECT_TAGS,
+)
 from mebuki.utils.xbrl_result_types import OperatingProfitResult, XbrlTagElements
 
 _OP_RELEVANT_TAGS: frozenset[str] = frozenset(
     OPERATING_PROFIT_DIRECT_TAGS
     + ORDINARY_INCOME_TAGS
+    + GROSS_PROFIT_DIRECT_TAGS
+    + SGA_DIRECT_TAGS
     + [
         "TotalAssetsUSGAAPSummaryOfBusinessResults",
         "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
@@ -71,6 +78,32 @@ def _try_tags(
         if c is not None or p is not None:
             return tag, c, p
     return None, None, None
+
+
+def _try_computed_op(
+    tag_elements: XbrlTagElements, consolidated: bool
+) -> tuple[float | None, float | None]:
+    """GrossProfit - SGA で営業利益の当期・前期を計算する。
+
+    OperatingProfitLossIFRS が存在しない IFRS 企業（日立等）向けフォールバック。
+    """
+    gp_c = gp_p = None
+    for tag in GROSS_PROFIT_DIRECT_TAGS:
+        c, p = _find_duration_value(tag_elements, tag, consolidated)
+        if c is not None or p is not None:
+            gp_c, gp_p = c, p
+            break
+
+    sga_c = sga_p = None
+    for tag in SGA_DIRECT_TAGS:
+        c, p = _find_duration_value(tag_elements, tag, consolidated)
+        if c is not None or p is not None:
+            sga_c, sga_p = c, p
+            break
+
+    current = (gp_c - sga_c) if gp_c is not None and sga_c is not None else None
+    prior = (gp_p - sga_p) if gp_p is not None and sga_p is not None else None
+    return current, prior
 
 
 def _detect_accounting_standard(tag_elements: XbrlTagElements) -> str:
@@ -237,7 +270,8 @@ def extract_operating_profit(
             "reason": "US-GAAP 連結損益計算書 HTML で営業利益・経常利益を取得できない",
         }
 
-    # 連結優先、非連結フォールバック。連結スコープを確定してから個別に落ちる。
+    # 連結優先、非連結フォールバック。
+    # 各スコープで: 直接法 → 計算法(GP-SGA) → 経常利益 の順に試みる。
     for consolidated in (True, False):
         _, current, prior = _try_tags(tag_elements, OPERATING_PROFIT_DIRECT_TAGS, consolidated)
         if current is not None or prior is not None:
@@ -246,6 +280,15 @@ def extract_operating_profit(
                 "method": "direct", "label": "営業利益",
                 "accounting_standard": accounting_standard,
             }
+
+        current, prior = _try_computed_op(tag_elements, consolidated)
+        if current is not None or prior is not None:
+            return {
+                "current": current, "prior": prior,
+                "method": "computed", "label": "営業利益",
+                "accounting_standard": accounting_standard,
+            }
+
         _, current, prior = _try_tags(tag_elements, ORDINARY_INCOME_TAGS, consolidated)
         if current is not None or prior is not None:
             return {

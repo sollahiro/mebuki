@@ -259,5 +259,57 @@ class TestGrossProfitNotFound(unittest.TestCase):
         self.assertAlmostEqual(result["prior"], 100_000_000_000)
 
 
+class TestSalesTagPriorityForYoY(unittest.TestCase):
+    """_extract_sales_for_yoy: 当期・前期が両方揃うタグを片側だけのタグより優先する"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.xbrl_dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_prefers_both_sides_tag_over_current_only_tag(self):
+        """先行タグが当期のみ・後続タグが当期+前期 → 後続タグを採用して prior_sales が取れる"""
+        xml = _make_xbrl_duration("""
+            <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">10000000000</jpifrs_cor:BorrowingsCLIFRS>
+            <jpifrs_cor:GrossProfitIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">500000000000</jpifrs_cor:GrossProfitIFRS>
+            <jpifrs_cor:GrossProfitIFRS contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">450000000000</jpifrs_cor:GrossProfitIFRS>
+            <jpifrs_cor:NetSalesIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">1000000000000</jpifrs_cor:NetSalesIFRS>
+            <jpifrs_cor:Revenue contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">900000000000</jpifrs_cor:Revenue>
+            <jpifrs_cor:Revenue contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">800000000000</jpifrs_cor:Revenue>
+        """)
+        (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
+        result = extract_gross_profit(self.xbrl_dir)
+        self.assertEqual(result["method"], "direct")
+        self.assertIsNotNone(result.get("prior_sales"), "prior_sales が取得できていない（片側タグで止まった可能性）")
+        self.assertAlmostEqual(result.get("prior_sales"), 800_000_000_000)
+        self.assertAlmostEqual(result.get("current_sales"), 900_000_000_000)
+
+    def test_falls_back_to_partial_tag_when_no_both_sides(self):
+        """全タグが当期のみの場合は最初の候補を返す（current_sales のみ）"""
+        xml = _make_xbrl_duration("""
+            <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">10000000000</jpifrs_cor:BorrowingsCLIFRS>
+            <jpifrs_cor:GrossProfitIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">500000000000</jpifrs_cor:GrossProfitIFRS>
+            <jpifrs_cor:GrossProfitIFRS contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">450000000000</jpifrs_cor:GrossProfitIFRS>
+            <jpifrs_cor:NetSalesIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">1000000000000</jpifrs_cor:NetSalesIFRS>
+        """)
+        (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
+        result = extract_gross_profit(self.xbrl_dir)
+        self.assertEqual(result["method"], "direct")
+        self.assertAlmostEqual(result.get("current_sales"), 1_000_000_000_000)
+        self.assertIsNone(result.get("prior_sales"))
+
+
 if __name__ == "__main__":
     unittest.main()
