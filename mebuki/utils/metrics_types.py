@@ -35,6 +35,7 @@ class RawData(TypedDict, total=False):
     CurFYSt: str
     CurFYEn: str | None
     DiscDate: str
+    SalesLabel: str | None
     Sales: float | None
     OP: float | None
     NP: float | None

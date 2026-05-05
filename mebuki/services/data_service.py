@@ -307,8 +307,10 @@ class DataService:
                 return _apply_debug_filter(result, include_debug_fields)
 
         stock_info, financial_data = await self._fetch_jquants_financial_data(code)
-        if not stock_info or not financial_data:
-            return {}
+        if not stock_info:
+            stock_info = {"Code": code}
+        if financial_data is None:
+            financial_data = []
 
         result = await analyzer.fetch_analysis_data(
             code,

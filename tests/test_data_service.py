@@ -493,6 +493,26 @@ class TestGetRawAnalysisData:
         assert result == {}
 
     @pytest.mark.asyncio
+    async def test_jquants_missing_data_still_calls_analyzer_for_edinet_fallback(self, svc):
+        """J-QUANTS財務データが空でもEDINET-onlyフォールバックへ進む。"""
+        mock_analyzer = AsyncMock()
+        mock_analyzer.fetch_analysis_data.return_value = {
+            "metrics": {"years": []},
+            "edinet_data": {},
+        }
+        with (
+            patch.object(svc, "_fetch_jquants_financial_data", AsyncMock(return_value=(None, None))),
+            patch.object(svc, "get_analyzer", return_value=mock_analyzer),
+            patch.object(svc, "fetch_stock_basic_info", return_value={"name": ""}),
+        ):
+            result = await svc.get_raw_analysis_data("72030", use_cache=False)
+
+        assert result["code"] == "72030"
+        _, kwargs = mock_analyzer.fetch_analysis_data.call_args
+        assert kwargs["prefetched_stock_info"] == {"Code": "72030"}
+        assert kwargs["prefetched_financial_data"] == []
+
+    @pytest.mark.asyncio
     async def test_jquants_cache_hit_skips_api(self, svc):
         """J-QUANTSキャッシュヒット時はAPI呼び出しが発生しない。"""
         from mebuki.services.data_service import _JQUANTS_CACHE_VERSION

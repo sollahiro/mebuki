@@ -7,6 +7,29 @@ sys.path.append(str(project_root))
 
 from mebuki.analysis.calculator import calculate_metrics_flexible
 
+
+def test_calculate_metrics_preserves_sales_label_from_xbrl_record():
+    metrics = calculate_metrics_flexible(
+        [
+            {
+                "CurFYEn": "2025-03-31",
+                "CurPerType": "FY",
+                "Sales": 2_922_428_000_000,
+                "SalesLabel": "経常収益",
+                "NP": 257_635_000_000,
+                "Eq": 3_127_317_000_000,
+            }
+        ],
+        analysis_years=1,
+    )
+
+    cd = metrics["years"][0]["CalculatedData"]
+    assert cd["Sales"] == 2_922_428
+    assert cd["SalesLabel"] == "経常収益"
+    assert cd["MetricSources"]["Sales"]["label"] == "経常収益"
+    assert cd["MetricSources"]["Sales"]["source"] == "edinet"
+
+
 def test_annual_financial_period():
     print("Testing annual financial period calculation...")
     annual_data = [

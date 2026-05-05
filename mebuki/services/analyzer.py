@@ -453,19 +453,28 @@ class IndividualAnalyzer:
         if prefetched_stock_info is not None and prefetched_financial_data is not None:
             from mebuki.utils.financial_data import extract_annual_data
 
-            stock_info = prefetched_stock_info
+            stock_info = prefetched_stock_info or {"Code": code}
             financial_data = prefetched_financial_data
             try:
                 annual_data = extract_annual_data(financial_data, include_2q=include_2q)
             except Exception as e:
                 logger.error(f"銘柄コード {code}: 年度データ抽出中にエラーが発生しました - {e}", exc_info=True)
                 return {}
-            if not annual_data:
-                return {}
         else:
             stock_info, financial_data, annual_data = await self._financial_fetcher.fetch_financial_data(code, include_2q)
-            if not stock_info or not annual_data:
+            if not stock_info:
+                stock_info = {"Code": code}
+            if not annual_data:
+                annual_data = []
+            if financial_data is None:
+                financial_data = []
+
+        if not annual_data:
+            fallback_years = analysis_years or max_documents
+            annual_data = await self._edinet_fetcher.build_xbrl_annual_records(code, fallback_years)
+            if not annual_data:
                 return {}
+            financial_data = annual_data
 
         available_years = sum(1 for d in annual_data if d.get("CurPerType") == "FY")
         actual_years = min(available_years, analysis_years) if analysis_years else available_years

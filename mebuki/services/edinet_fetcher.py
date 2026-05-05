@@ -29,7 +29,7 @@ from mebuki.analysis.order_book import extract_order_book
 from mebuki.analysis.tax_expense import extract_tax_expense
 from mebuki.utils.cache import CacheManager
 from mebuki.utils.jquants_utils import prepare_edinet_search_data
-from mebuki.utils.edinet_discovery import scan_for_fiscal_year_end, build_fiscal_year_periods
+from mebuki.utils.edinet_discovery import build_document_index_for_code
 from mebuki.utils.xbrl_result_types import GrossProfitResult, HalfYearEdinetEntry, XbrlTagElements
 
 logger = logging.getLogger(__name__)
@@ -186,21 +186,15 @@ class EdinetFetcher:
     ) -> list[dict[str, Any]]:
         """J-Quants なしで EDINET の有価証券報告書を発見する。
 
-        EDINET をスキャンして会計期末パターンを特定し、過去 max_years 年分の
-        有価証券報告書を検索する。financial_data が空のときのフォールバック。
+        financial_data が空のときのフォールバック。
+        build_document_index_for_code() による3段階フォールバック検索を行う。
         """
         if not self.edinet_client:
             return []
-        fy_pattern = await scan_for_fiscal_year_end(code, self.edinet_client)
-        if not fy_pattern:
-            logger.warning(f"[EdinetFetcher] {code}: 会計期末パターンを発見できませんでした")
-            return []
-        fy_end_month, fy_end_day = fy_pattern
-        periods = build_fiscal_year_periods(fy_end_month, fy_end_day, max_years)
-        return await self.edinet_client.search_documents(
-            code=code,
-            jquants_data=periods,
-            max_documents=max_years,
+        return await build_document_index_for_code(
+            code,
+            self.edinet_client,
+            analysis_years=max_years,
         )
 
     def _prepare_q2_records(
@@ -788,8 +782,14 @@ class EdinetFetcher:
 
         pre_parsed_map = await self._download_and_parse_docs(docs, code)
 
+        # 訂正書類（_is_amendment=True）は pre_parsed_map で元書類の値を上書き済みのため
+        # records 構築はオリジナル書類のみを対象とし、訂正書類の XBRL データは
+        # _download_and_parse_docs の gather 結果（後勝ち）で自動適用される。
         records: list[dict[str, Any]] = []
         for doc in docs:
+            if doc.get("_is_amendment"):
+                continue  # 訂正書類は pre_parsed_map 経由でオリジナルに上書き済み
+
             fy_end_8 = _fy_end_key(doc.get("jquants_fy_end"))
             fy_end = doc.get("jquants_fy_end", "")  # YYYY-MM-DD
             if not fy_end or fy_end_8 not in pre_parsed_map:
@@ -798,6 +798,18 @@ class EdinetFetcher:
             xbrl_path, pre_parsed = pre_parsed_map[fy_end_8]
 
             is_result = extract_income_statement(xbrl_path, pre_parsed=pre_parsed)
+            sales = is_result.get("sales")
+            sales_label = None
+            if sales is None:
+                gp_for_sales = extract_gross_profit(xbrl_path, pre_parsed=pre_parsed)
+                sales = gp_for_sales.get("current_sales")
+                if sales is not None:
+                    sales_label = "経常収益"
+                if sales is None:
+                    op_for_sales = extract_operating_profit(xbrl_path, pre_parsed=pre_parsed)
+                    sales = op_for_sales.get("current_sales")
+                    if sales is not None:
+                        sales_label = "経常収益"
             bs_result = extract_balance_sheet(xbrl_path, pre_parsed=pre_parsed)
             cf_result = extract_cash_flow(xbrl_path, pre_parsed=pre_parsed)
 
@@ -805,12 +817,14 @@ class EdinetFetcher:
             submit_date = (doc.get("submitDateTime") or "")[:10]
 
             record: dict[str, Any] = {
+                "Code": code,
                 "CurFYEn": fy_end,
                 "CurFYSt": fy_st,
                 "CurPerType": "FY",
                 "DiscDate": submit_date,
                 # IS: 円単位（J-Quants と同単位）
-                "Sales": is_result.get("sales"),
+                "Sales": sales,
+                "SalesLabel": sales_label,
                 "OP": is_result.get("operating_profit"),
                 "NP": is_result.get("net_profit"),
                 # BS: 円単位

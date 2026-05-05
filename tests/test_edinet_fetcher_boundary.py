@@ -1,4 +1,5 @@
 from unittest.mock import AsyncMock, Mock
+from pathlib import Path
 
 import pytest
 
@@ -213,6 +214,55 @@ async def test_get_half_year_docs_returns_empty_when_no_q2_records() -> None:
 
     assert docs == []
     edinet_client.search_documents.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_build_xbrl_annual_records_falls_back_to_ordinary_revenue_for_sales(monkeypatch) -> None:
+    edinet_client = Mock()
+    edinet_client.api_key = "dummy"
+    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    fetcher._download_and_parse_docs = AsyncMock(return_value={"20250331": (Path("."), {})})  # type: ignore[method-assign]
+
+    monkeypatch.setattr(
+        "mebuki.services.edinet_fetcher.extract_income_statement",
+        lambda *args, **kwargs: {
+            "sales": None,
+            "operating_profit": 367_694_000_000,
+            "net_profit": 257_635_000_000,
+            "accounting_standard": "J-GAAP",
+        },
+    )
+    monkeypatch.setattr(
+        "mebuki.services.edinet_fetcher.extract_gross_profit",
+        lambda *args, **kwargs: {"current_sales": 2_922_428_000_000},
+    )
+    monkeypatch.setattr(
+        "mebuki.services.edinet_fetcher.extract_balance_sheet",
+        lambda *args, **kwargs: {"net_assets": 3_127_317_000_000},
+    )
+    monkeypatch.setattr(
+        "mebuki.services.edinet_fetcher.extract_cash_flow",
+        lambda *args, **kwargs: {
+            "cfo": {"current": 3_976_669_000_000},
+            "cfi": {"current": -1_763_839_000_000},
+        },
+    )
+
+    records = await fetcher.build_xbrl_annual_records(
+        "83090",
+        1,
+        docs=[
+            {
+                "docID": "S100VXKF",
+                "jquants_fy_end": "2025-03-31",
+                "submitDateTime": "2025-06-25T10:00:00",
+            }
+        ],
+    )
+
+    assert records[0]["Sales"] == 2_922_428_000_000
+    assert records[0]["SalesLabel"] == "経常収益"
+    assert records[0]["OP"] == 367_694_000_000
 
 
 def test_prepare_q2_records_deduplicates_by_fy_end_keeping_latest_disc_date() -> None:

@@ -124,6 +124,7 @@ def _extract_raw_values(year_data: dict[str, Any]) -> RawData:
         'CurFYSt': year_data.get("CurFYSt", ""),
         'CurFYEn': year_data.get("CurFYEn"),
         'DiscDate': year_data.get("DiscDate", ""),
+        'SalesLabel': year_data.get("SalesLabel"),
         'Sales': to_float(year_data.get("Sales")),
         'OP': to_float(year_data.get("OP")),
         'NP': to_float(year_data.get("NP")),
@@ -170,6 +171,11 @@ def _calculate_base_values(raw_values: RawData) -> CalculatedData:
         "PayoutRatio": {"source": "jquants", "unit": "percent"},
         "CFC": {"source": "derived", "method": "CFO + CFI", "unit": "million_yen"},
     }
+    sales_label = raw_values.get("SalesLabel")
+    if isinstance(sales_label, str) and sales_label:
+        values["SalesLabel"] = sales_label
+        values["MetricSources"]["Sales"]["label"] = sales_label
+        values["MetricSources"]["Sales"]["source"] = "edinet"
     return values
 
 
