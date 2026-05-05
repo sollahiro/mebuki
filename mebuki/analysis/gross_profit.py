@@ -34,6 +34,8 @@ from mebuki.analysis.context_helpers import (
     _is_consolidated_prior_duration,
     _is_nonconsolidated_duration,
     _is_nonconsolidated_prior_duration,
+    _is_pure_context,
+    _is_pure_nonconsolidated_context,
 )
 from mebuki.analysis.xbrl_utils import (
     parse_xbrl_value,
@@ -44,8 +46,12 @@ from mebuki.analysis.xbrl_utils import (
 )
 from mebuki.constants.financial import MILLION_YEN
 from mebuki.constants.xbrl import (
+    DURATION_CONTEXT_PATTERNS,
     GROSS_PROFIT_COMPONENT_DEFINITIONS,
     GROSS_PROFIT_DIRECT_TAGS,
+    IFRS_PL_MARKER_TAGS,
+    PRIOR_DURATION_CONTEXT_PATTERNS,
+    USGAAP_MARKER_TAGS,
 )
 from mebuki.utils.xbrl_result_types import GrossProfitResult, MetricComponent, XbrlTagElements
 
@@ -53,15 +59,8 @@ from mebuki.utils.xbrl_result_types import GrossProfitResult, MetricComponent, X
 _GP_RELEVANT_TAGS: frozenset[str] = frozenset(
     GROSS_PROFIT_DIRECT_TAGS
     + [tag for comp in GROSS_PROFIT_COMPONENT_DEFINITIONS for tag in comp["tags"]]
-    + [
-        # 会計基準判定用マーカー（IBDモジュールと同一セット）
-        "TotalAssetsUSGAAPSummaryOfBusinessResults",
-        "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
-        "InterestBearingLiabilitiesCLIFRS",
-        "BorrowingsCLIFRS",
-        "BondsPayableNCLIFRS",
-        "BorrowingsNCLIFRS",
-    ]
+    + USGAAP_MARKER_TAGS
+    + IFRS_PL_MARKER_TAGS
 )
 
 
@@ -74,12 +73,22 @@ def _find_consolidated_duration_value(
     if tag not in tag_elements:
         return None, None
     current = prior = None
+    current_pure = prior_pure = None
     for ctx, val in tag_elements[tag].items():
         if _is_consolidated_duration(ctx):
-            current = val
+            if _is_pure_context(ctx, DURATION_CONTEXT_PATTERNS):
+                current_pure = val
+            else:
+                current = val
         elif _is_consolidated_prior_duration(ctx):
-            prior = val
-    return current, prior
+            if _is_pure_context(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
+                prior_pure = val
+            else:
+                prior = val
+    return (
+        current_pure if current_pure is not None else current,
+        prior_pure if prior_pure is not None else prior,
+    )
 
 
 def _find_nonconsolidated_duration_value(
@@ -89,12 +98,22 @@ def _find_nonconsolidated_duration_value(
     if tag not in tag_elements:
         return None, None
     current = prior = None
+    current_pure = prior_pure = None
     for ctx, val in tag_elements[tag].items():
         if _is_nonconsolidated_duration(ctx):
-            current = val
+            if _is_pure_nonconsolidated_context(ctx, DURATION_CONTEXT_PATTERNS):
+                current_pure = val
+            else:
+                current = val
         elif _is_nonconsolidated_prior_duration(ctx):
-            prior = val
-    return current, prior
+            if _is_pure_nonconsolidated_context(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
+                prior_pure = val
+            else:
+                prior = val
+    return (
+        current_pure if current_pure is not None else current,
+        prior_pure if prior_pure is not None else prior,
+    )
 
 
 def _extract_sales_for_yoy(tag_elements: XbrlTagElements) -> tuple[float | None, float | None]:
@@ -229,21 +248,11 @@ def _extract_usgaap_gp_from_html(xbrl_dir: Path) -> GrossProfitResult | None:
 
 def _detect_accounting_standard(tag_elements: XbrlTagElements) -> str:
     """会計基準を判定: 'J-GAAP' | 'IFRS' | 'US-GAAP'"""
-    usgaap_tags = {
-        "TotalAssetsUSGAAPSummaryOfBusinessResults",
-        "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
-    }
-    ifrs_marker_tags = [
-        "InterestBearingLiabilitiesCLIFRS",
-        "BorrowingsCLIFRS",
-        "BondsPayableNCLIFRS",
-        "BorrowingsNCLIFRS",
-    ]
-    if any(t in tag_elements for t in usgaap_tags) and not any(
-        t in tag_elements for t in ifrs_marker_tags
+    if any(t in tag_elements for t in USGAAP_MARKER_TAGS) and not any(
+        t in tag_elements for t in IFRS_PL_MARKER_TAGS
     ):
         return "US-GAAP"
-    if any(t in tag_elements for t in ifrs_marker_tags):
+    if any(t in tag_elements for t in IFRS_PL_MARKER_TAGS):
         return "IFRS"
     return "J-GAAP"
 
@@ -289,9 +298,9 @@ def extract_gross_profit(
 
     # US-GAAP 企業: 連結損益計算書HTML(0105010)から直接解析
     if accounting_standard == "US-GAAP":
-        result = _extract_usgaap_gp_from_html(xbrl_dir)
-        if result is not None:
-            return result
+        usgaap_result = _extract_usgaap_gp_from_html(xbrl_dir)
+        if usgaap_result is not None:
+            return usgaap_result
         return {
             "current": None, "prior": None,
             "method": "not_found", "accounting_standard": "US-GAAP", "components": [],

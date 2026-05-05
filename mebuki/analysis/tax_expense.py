@@ -23,6 +23,8 @@ from mebuki.analysis.context_helpers import (
     _is_consolidated_prior_duration,
     _is_nonconsolidated_duration,
     _is_nonconsolidated_prior_duration,
+    _is_pure_context,
+    _is_pure_nonconsolidated_context,
 )
 from mebuki.utils.xbrl_result_types import TaxExpenseResult, XbrlTagElements
 from mebuki.analysis.xbrl_utils import (
@@ -36,9 +38,11 @@ from mebuki.constants.xbrl import (
     DURATION_CONTEXT_PATTERNS,
     INCOME_TAX_IFRS_TAGS,
     INCOME_TAX_JGAAP_TAGS,
+    IFRS_TAX_MARKER_TAGS,
     PRETAX_INCOME_IFRS_TAGS,
     PRETAX_INCOME_JGAAP_TAGS,
     PRIOR_DURATION_CONTEXT_PATTERNS,
+    USGAAP_MARKER_TAGS,
 )
 
 _TAX_RELEVANT_TAGS: frozenset[str] = frozenset(
@@ -46,16 +50,8 @@ _TAX_RELEVANT_TAGS: frozenset[str] = frozenset(
     + PRETAX_INCOME_IFRS_TAGS
     + INCOME_TAX_JGAAP_TAGS
     + INCOME_TAX_IFRS_TAGS
-    + [
-        "TotalAssetsUSGAAPSummaryOfBusinessResults",
-        "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
-        "InterestBearingLiabilitiesCLIFRS",
-        "BorrowingsCLIFRS",
-        "BondsPayableNCLIFRS",
-        "BorrowingsNCLIFRS",
-        "ProfitLossBeforeTaxIFRS",
-        "IncomeTaxExpenseIFRS",
-    ]
+    + USGAAP_MARKER_TAGS
+    + IFRS_TAX_MARKER_TAGS
 )
 
 
@@ -69,12 +65,12 @@ def _find_consolidated_duration_value(
     current_pure = prior_pure = None
     for ctx, val in tag_elements[tag].items():
         if _is_consolidated_duration(ctx):
-            if any(ctx == p for p in DURATION_CONTEXT_PATTERNS):
+            if _is_pure_context(ctx, DURATION_CONTEXT_PATTERNS):
                 current_pure = val
             else:
                 current = val
         elif _is_consolidated_prior_duration(ctx):
-            if any(ctx == p for p in PRIOR_DURATION_CONTEXT_PATTERNS):
+            if _is_pure_context(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
                 prior_pure = val
             else:
                 prior = val
@@ -93,12 +89,12 @@ def _find_nonconsolidated_duration_value(
     current_pure = prior_pure = None
     for ctx, val in tag_elements[tag].items():
         if _is_nonconsolidated_duration(ctx):
-            if any(ctx == p for p in DURATION_CONTEXT_PATTERNS):
+            if _is_pure_nonconsolidated_context(ctx, DURATION_CONTEXT_PATTERNS):
                 current_pure = val
             else:
                 current = val
         elif _is_nonconsolidated_prior_duration(ctx):
-            if any(ctx == p for p in PRIOR_DURATION_CONTEXT_PATTERNS):
+            if _is_pure_nonconsolidated_context(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
                 prior_pure = val
             else:
                 prior = val
@@ -233,23 +229,11 @@ def _extract_usgaap_tax_from_html(xbrl_dir: Path) -> TaxExpenseResult | None:
 
 
 def _detect_accounting_standard(tag_elements: XbrlTagElements) -> str:
-    usgaap_tags = {
-        "TotalAssetsUSGAAPSummaryOfBusinessResults",
-        "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
-    }
-    ifrs_marker_tags = [
-        "InterestBearingLiabilitiesCLIFRS",
-        "BorrowingsCLIFRS",
-        "BondsPayableNCLIFRS",
-        "BorrowingsNCLIFRS",
-        "ProfitLossBeforeTaxIFRS",
-        "IncomeTaxExpenseIFRS",
-    ]
-    if any(t in tag_elements for t in usgaap_tags) and not any(
-        t in tag_elements for t in ifrs_marker_tags
+    if any(t in tag_elements for t in USGAAP_MARKER_TAGS) and not any(
+        t in tag_elements for t in IFRS_TAX_MARKER_TAGS
     ):
         return "US-GAAP"
-    if any(t in tag_elements for t in ifrs_marker_tags):
+    if any(t in tag_elements for t in IFRS_TAX_MARKER_TAGS):
         return "IFRS"
     return "J-GAAP"
 

@@ -68,6 +68,32 @@ PRIOR_INSTANT_CONTEXT_PATTERNS: list[str] = [
     "Prior1InterimInstant",
 ]
 
+# 会計基準判定用マーカータグ。
+# pre_parsed 経由でも判定用タグが落ちないよう、各モジュールの relevant tags に含める。
+# モジュール固有の IFRS データタグは、判定マーカーとしても機能するため *_MARKER_TAGS に含める。
+USGAAP_MARKER_TAGS: list[str] = [
+    "TotalAssetsUSGAAPSummaryOfBusinessResults",
+    "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
+    "CashAndCashEquivalentsUSGAAPSummaryOfBusinessResults",
+]
+
+IFRS_BALANCE_SHEET_MARKER_TAGS: list[str] = [
+    "InterestBearingLiabilitiesCLIFRS",
+    "InterestBearingLiabilitiesNCLIFRS",
+    "BorrowingsCLIFRS",
+    "BondsPayableNCLIFRS",
+    "BorrowingsNCLIFRS",
+    "BondsAndBorrowingsCLIFRS",
+    "BondsAndBorrowingsNCLIFRS",
+]
+
+IFRS_PL_MARKER_TAGS: list[str] = [
+    "InterestBearingLiabilitiesCLIFRS",
+    "BorrowingsCLIFRS",
+    "BondsPayableNCLIFRS",
+    "BorrowingsNCLIFRS",
+]
+
 XBRL_SECTIONS: dict[str, _XBRLSection] = {
     'business_risks': {
         'title': '事業等のリスク',
@@ -318,6 +344,12 @@ INCOME_TAX_IFRS_TAGS: list[str] = [
     "IncomeTaxExpenseIFRS",
 ]
 
+IFRS_TAX_MARKER_TAGS: list[str] = (
+    IFRS_PL_MARKER_TAGS
+    + PRETAX_INCOME_IFRS_TAGS
+    + INCOME_TAX_IFRS_TAGS
+)
+
 # 営業利益（OP）タグ定義
 # analysis/operating_profit.py で使用
 
@@ -353,6 +385,11 @@ INTEREST_EXPENSE_IFRS_TAGS: list[str] = [
     "InterestExpensesIFRS",   # 支払利息（推奨）
     "FinanceCostsIFRS",       # 金融費用合計（フォールバック）
 ]
+
+IFRS_INTEREST_EXPENSE_MARKER_TAGS: list[str] = (
+    IFRS_PL_MARKER_TAGS
+    + INTEREST_EXPENSE_IFRS_TAGS
+)
 
 AGGREGATE_IFRS_DEFINITIONS: list[_AggregateIFRSDef] = [
     {
@@ -393,3 +430,8 @@ CF_DEPRECIATION_IFRS_TAGS: list[str] = [
     "DepreciationAndAmortizationOpeCFIFRS",                   # IFRS CF計算書（一般的）
     "DepreciationAndAmortizationOfIntangibleAssetsOpeCFIFRS", # IFRS CF計算書（日立等）
 ]
+
+IFRS_DEPRECIATION_MARKER_TAGS: list[str] = (
+    IFRS_PL_MARKER_TAGS
+    + CF_DEPRECIATION_IFRS_TAGS
+)

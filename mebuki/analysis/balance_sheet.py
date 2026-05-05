@@ -19,8 +19,10 @@ from mebuki.constants.xbrl import (
     BALANCE_SHEET_AGGREGATE_DEFINITIONS,
     BALANCE_SHEET_COMPONENT_DEFINITIONS,
     BALANCE_SHEET_SUBTRACT_DEFINITIONS,
+    IFRS_BALANCE_SHEET_MARKER_TAGS,
     INSTANT_CONTEXT_PATTERNS,
     PRIOR_INSTANT_CONTEXT_PATTERNS,
+    USGAAP_MARKER_TAGS,
 )
 from mebuki.constants.financial import MILLION_YEN
 from mebuki.utils.xbrl_result_types import BalanceSheetResult, MetricComponent, XbrlTagElements
@@ -30,6 +32,8 @@ _BS_RELEVANT_TAGS: frozenset[str] = frozenset(
     + [tag for agg in BALANCE_SHEET_AGGREGATE_DEFINITIONS for tag in agg["tags"]]
     + [tag for sub in BALANCE_SHEET_SUBTRACT_DEFINITIONS for tag in sub["minuend_tags"]]
     + [tag for sub in BALANCE_SHEET_SUBTRACT_DEFINITIONS for tag in sub["subtrahend_tags"]]
+    + IFRS_BALANCE_SHEET_MARKER_TAGS
+    + USGAAP_MARKER_TAGS
 )
 
 _RESULT_FIELD_BY_COMPONENT_FIELD: dict[str, str] = {
@@ -82,9 +86,9 @@ def _safe_sum(values: list[float | None]) -> float | None:
 
 
 def _detect_accounting_standard(tag_elements: XbrlTagElements) -> str:
-    if any(tag.endswith("IFRS") for tag in tag_elements):
+    if any(tag in IFRS_BALANCE_SHEET_MARKER_TAGS or tag.endswith("IFRS") for tag in tag_elements):
         return "IFRS"
-    if any("USGAAP" in tag for tag in tag_elements):
+    if any(tag in USGAAP_MARKER_TAGS or "USGAAP" in tag for tag in tag_elements):
         return "US-GAAP"
     return "J-GAAP"
 

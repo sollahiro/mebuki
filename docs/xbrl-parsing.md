@@ -56,6 +56,8 @@ J-GAAP   ← 上記いずれにも該当しない
 
 ### IFRS判定マーカータグ
 
+BS/IBD 系モジュールは貸借対照表タグを広めに見ます。
+
 ```
 InterestBearingLiabilitiesCLIFRS
 InterestBearingLiabilitiesNCLIFRS
@@ -66,6 +68,20 @@ BondsAndBorrowingsCLIFRS
 BondsAndBorrowingsNCLIFRS
 ```
 
+GP/OP/CF 系モジュールは、既存のPL/CF抽出に必要な最小セットを使います。
+
+```
+InterestBearingLiabilitiesCLIFRS
+BorrowingsCLIFRS
+BondsPayableNCLIFRS
+BorrowingsNCLIFRS
+```
+
+IE/DA/TAX などは、上記に各モジュール自身の IFRS タグ
+（例: `FinanceCostsIFRS`, `DepreciationAndAmortizationOpeCFIFRS`,
+`ProfitLossBeforeTaxIFRS`）を加えて判定します。これにより、貸借対照表側の
+マーカーが収集対象に存在しない `pre_parsed` 入力でも IFRS 判定を維持します。
+
 ### US-GAAP判定マーカータグ
 
 ```
@@ -74,7 +90,7 @@ EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults
 CashAndCashEquivalentsUSGAAPSummaryOfBusinessResults
 ```
 
-> **注意**: IFRSへ移行済みの企業でも、過去比較データとして `*USGAAP*` タグが残存することがあります。IBDモジュールでは「USGAAPタグが存在してもIFRSマーカーがあれば IFRS と判定」という 2 段階チェックを行っています。
+> **注意**: IFRSへ移行済みの企業でも、過去比較データとして `*USGAAP*` タグが残存することがあります。各モジュールでは「USGAAPタグが存在してもIFRSマーカーがあれば IFRS と判定」という 2 段階チェックを行っています。
 
 ---
 

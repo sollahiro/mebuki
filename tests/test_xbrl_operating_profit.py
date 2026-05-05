@@ -227,6 +227,24 @@ class TestOperatingProfitFallbacks(unittest.TestCase):
         self.assertEqual(result["method"], "direct")
         self.assertAlmostEqual(result["current"], 900_000_000_000)
 
+    def test_pure_context_over_segment_context(self):
+        """同一タグにセグメント修飾値があっても純コンテキストを優先する"""
+        xml = _make_xbrl("""
+            <jppfs_cor:OperatingIncomeLoss contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">900000000000</jppfs_cor:OperatingIncomeLoss>
+            <jppfs_cor:OperatingIncomeLoss contextRef="CurrentYearDuration_SomeSegmentMember"
+                unitRef="JPY" decimals="-6">100000000000</jppfs_cor:OperatingIncomeLoss>
+            <jppfs_cor:OperatingIncomeLoss contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">850000000000</jppfs_cor:OperatingIncomeLoss>
+            <jppfs_cor:OperatingIncomeLoss contextRef="Prior1YearDuration_SomeSegmentMember"
+                unitRef="JPY" decimals="-6">90000000000</jppfs_cor:OperatingIncomeLoss>
+        """)
+        (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
+        result = extract_operating_profit(self.xbrl_dir)
+        self.assertEqual(result["method"], "direct")
+        self.assertAlmostEqual(result["current"], 900_000_000_000)
+        self.assertAlmostEqual(result["prior"], 850_000_000_000)
+
     def test_nonconsolidated_fallback_when_no_consolidated(self):
         """連結タグがない場合は個別タグにフォールバックする"""
         xml = _make_xbrl("""
@@ -237,6 +255,24 @@ class TestOperatingProfitFallbacks(unittest.TestCase):
         result = extract_operating_profit(self.xbrl_dir)
         self.assertEqual(result["method"], "direct")
         self.assertAlmostEqual(result["current"], 150_000_000_000)
+
+    def test_pure_nonconsolidated_context_over_segment_context(self):
+        """個別フォールバックでもセグメント修飾値より純コンテキストを優先する"""
+        xml = _make_xbrl("""
+            <jppfs_cor:OperatingIncomeLoss contextRef="CurrentYearDuration_NonConsolidatedMember"
+                unitRef="JPY" decimals="-6">150000000000</jppfs_cor:OperatingIncomeLoss>
+            <jppfs_cor:OperatingIncomeLoss contextRef="CurrentYearDuration_NonConsolidatedMember_SomeSegmentMember"
+                unitRef="JPY" decimals="-6">25000000000</jppfs_cor:OperatingIncomeLoss>
+            <jppfs_cor:OperatingIncomeLoss contextRef="Prior1YearDuration_NonConsolidatedMember"
+                unitRef="JPY" decimals="-6">140000000000</jppfs_cor:OperatingIncomeLoss>
+            <jppfs_cor:OperatingIncomeLoss contextRef="Prior1YearDuration_NonConsolidatedMember_SomeSegmentMember"
+                unitRef="JPY" decimals="-6">20000000000</jppfs_cor:OperatingIncomeLoss>
+        """)
+        (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
+        result = extract_operating_profit(self.xbrl_dir)
+        self.assertEqual(result["method"], "direct")
+        self.assertAlmostEqual(result["current"], 150_000_000_000)
+        self.assertAlmostEqual(result["prior"], 140_000_000_000)
 
     def test_not_found(self):
         """該当タグが一切ない場合は not_found を返す"""

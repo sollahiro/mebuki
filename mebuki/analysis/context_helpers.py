@@ -33,6 +33,19 @@ def _is_nonconsolidated_prior_duration(ctx: str) -> bool:
     return any(p in ctx for p in PRIOR_DURATION_CONTEXT_PATTERNS) and "_NonConsolidated" in ctx
 
 
+def _is_pure_context(ctx: str, patterns: list[str]) -> bool:
+    """セグメント修飾のない完全一致コンテキストかどうか。"""
+    return any(ctx == p for p in patterns)
+
+
+def _is_pure_nonconsolidated_context(ctx: str, patterns: list[str]) -> bool:
+    """個別財務諸表のセグメント修飾なしコンテキストかどうか。"""
+    return any(
+        ctx == f"{p}_NonConsolidatedMember" or ctx == f"{p}_NonConsolidated"
+        for p in patterns
+    )
+
+
 def _is_consolidated_instant(ctx: str) -> bool:
     """連結の期末残高コンテキストかどうか。"""
     return any(p in ctx for p in INSTANT_CONTEXT_PATTERNS) and "_NonConsolidated" not in ctx

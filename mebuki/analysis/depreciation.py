@@ -24,6 +24,8 @@ from mebuki.analysis.context_helpers import (
     _is_consolidated_prior_duration,
     _is_nonconsolidated_duration,
     _is_nonconsolidated_prior_duration,
+    _is_pure_context,
+    _is_pure_nonconsolidated_context,
 )
 from mebuki.analysis.xbrl_utils import (
     collect_numeric_elements,
@@ -36,26 +38,18 @@ from mebuki.constants.xbrl import (
     CF_DEPRECIATION_IFRS_TAGS,
     CF_DEPRECIATION_JGAAP_TAGS,
     DURATION_CONTEXT_PATTERNS,
+    IFRS_DEPRECIATION_MARKER_TAGS,
     PRIOR_DURATION_CONTEXT_PATTERNS,
+    USGAAP_MARKER_TAGS,
 )
 from mebuki.utils.xbrl_result_types import DepreciationResult, XbrlTagElements
 
 _CF_DA_RELEVANT_TAGS: frozenset[str] = frozenset(
     CF_DEPRECIATION_JGAAP_TAGS
     + CF_DEPRECIATION_IFRS_TAGS
-    + [
-        "TotalAssetsUSGAAPSummaryOfBusinessResults",
-        "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
-        "InterestBearingLiabilitiesCLIFRS",
-        "BorrowingsCLIFRS",
-        "BondsPayableNCLIFRS",
-        "BorrowingsNCLIFRS",
-    ]
+    + USGAAP_MARKER_TAGS
+    + IFRS_DEPRECIATION_MARKER_TAGS
 )
-
-
-def _is_pure_context(ctx: str, patterns: list[str]) -> bool:
-    return any(ctx == p for p in patterns)
 
 
 def _find_consolidated_duration_value(
@@ -93,12 +87,12 @@ def _find_nonconsolidated_duration_value(
     current_pure = prior_pure = None
     for ctx, val in tag_elements[tag].items():
         if _is_nonconsolidated_duration(ctx):
-            if _is_pure_context(ctx, DURATION_CONTEXT_PATTERNS):
+            if _is_pure_nonconsolidated_context(ctx, DURATION_CONTEXT_PATTERNS):
                 current_pure = val
             else:
                 current = val
         elif _is_nonconsolidated_prior_duration(ctx):
-            if _is_pure_context(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
+            if _is_pure_nonconsolidated_context(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
                 prior_pure = val
             else:
                 prior = val
@@ -109,23 +103,11 @@ def _find_nonconsolidated_duration_value(
 
 
 def _detect_accounting_standard(tag_elements: XbrlTagElements) -> str:
-    usgaap_tags = {
-        "TotalAssetsUSGAAPSummaryOfBusinessResults",
-        "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
-    }
-    ifrs_marker_tags = [
-        "InterestBearingLiabilitiesCLIFRS",
-        "BorrowingsCLIFRS",
-        "BondsPayableNCLIFRS",
-        "BorrowingsNCLIFRS",
-        "DepreciationAndAmortizationOpeCFIFRS",                   # DA タグ自身で IFRS 判定（集約型 IBD タグしか持たない企業に対応）
-        "DepreciationAndAmortizationOfIntangibleAssetsOpeCFIFRS",  # 日立等が使用するIFRS変種タグ
-    ]
-    if any(t in tag_elements for t in usgaap_tags) and not any(
-        t in tag_elements for t in ifrs_marker_tags
+    if any(t in tag_elements for t in USGAAP_MARKER_TAGS) and not any(
+        t in tag_elements for t in IFRS_DEPRECIATION_MARKER_TAGS
     ):
         return "US-GAAP"
-    if any(t in tag_elements for t in ifrs_marker_tags):
+    if any(t in tag_elements for t in IFRS_DEPRECIATION_MARKER_TAGS):
         return "IFRS"
     return "J-GAAP"
 

@@ -25,6 +25,8 @@ from mebuki.analysis.context_helpers import (
     _is_consolidated_prior_duration,
     _is_nonconsolidated_duration,
     _is_nonconsolidated_prior_duration,
+    _is_pure_context,
+    _is_pure_nonconsolidated_context,
 )
 from mebuki.utils.xbrl_result_types import InterestExpenseResult, XbrlTagElements
 from mebuki.analysis.xbrl_utils import (
@@ -36,29 +38,19 @@ from mebuki.analysis.xbrl_utils import (
 from mebuki.constants.financial import MILLION_YEN
 from mebuki.constants.xbrl import (
     DURATION_CONTEXT_PATTERNS,
+    IFRS_INTEREST_EXPENSE_MARKER_TAGS,
     INTEREST_EXPENSE_IFRS_TAGS,
     INTEREST_EXPENSE_JGAAP_TAGS,
     PRIOR_DURATION_CONTEXT_PATTERNS,
+    USGAAP_MARKER_TAGS,
 )
 
 _IE_RELEVANT_TAGS: frozenset[str] = frozenset(
     INTEREST_EXPENSE_JGAAP_TAGS
     + INTEREST_EXPENSE_IFRS_TAGS
-    + [
-        # 会計基準判定用マーカー（gross_profit.py / interest_bearing_debt.py と共通）
-        "TotalAssetsUSGAAPSummaryOfBusinessResults",
-        "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
-        "InterestBearingLiabilitiesCLIFRS",
-        "BorrowingsCLIFRS",
-        "BondsPayableNCLIFRS",
-        "BorrowingsNCLIFRS",
-    ]
+    + USGAAP_MARKER_TAGS
+    + IFRS_INTEREST_EXPENSE_MARKER_TAGS
 )
-
-
-def _is_pure_context(ctx: str, patterns: list[str]) -> bool:
-    """コンテキストがパターンに完全一致するか（セグメント修飾なし）。"""
-    return any(ctx == p for p in patterns)
 
 
 def _find_consolidated_duration_value(
@@ -96,12 +88,12 @@ def _find_nonconsolidated_duration_value(
     current_pure = prior_pure = None
     for ctx, val in tag_elements[tag].items():
         if _is_nonconsolidated_duration(ctx):
-            if _is_pure_context(ctx, DURATION_CONTEXT_PATTERNS):
+            if _is_pure_nonconsolidated_context(ctx, DURATION_CONTEXT_PATTERNS):
                 current_pure = val
             else:
                 current = val
         elif _is_nonconsolidated_prior_duration(ctx):
-            if _is_pure_context(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
+            if _is_pure_nonconsolidated_context(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
                 prior_pure = val
             else:
                 prior = val
@@ -113,24 +105,11 @@ def _find_nonconsolidated_duration_value(
 
 def _detect_accounting_standard(tag_elements: XbrlTagElements) -> str:
     """会計基準を判定: 'J-GAAP' | 'IFRS' | 'US-GAAP'"""
-    usgaap_tags = {
-        "TotalAssetsUSGAAPSummaryOfBusinessResults",
-        "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
-    }
-    ifrs_marker_tags = [
-        "InterestBearingLiabilitiesCLIFRS",
-        "BorrowingsCLIFRS",
-        "BondsPayableNCLIFRS",
-        "BorrowingsNCLIFRS",
-        # 損益計算書のIFRSタグでも判定できる（貸借対照表タグが存在しない企業に対応）
-        "InterestExpensesIFRS",
-        "FinanceCostsIFRS",
-    ]
-    if any(t in tag_elements for t in usgaap_tags) and not any(
-        t in tag_elements for t in ifrs_marker_tags
+    if any(t in tag_elements for t in USGAAP_MARKER_TAGS) and not any(
+        t in tag_elements for t in IFRS_INTEREST_EXPENSE_MARKER_TAGS
     ):
         return "US-GAAP"
-    if any(t in tag_elements for t in ifrs_marker_tags):
+    if any(t in tag_elements for t in IFRS_INTEREST_EXPENSE_MARKER_TAGS):
         return "IFRS"
     return "J-GAAP"
 

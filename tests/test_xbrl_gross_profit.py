@@ -207,6 +207,24 @@ class TestGrossProfitConsolidatedPriority(unittest.TestCase):
         self.assertEqual(result["method"], "direct")
         self.assertAlmostEqual(result["current"], 200_000_000_000)  # 連結値
 
+    def test_pure_context_over_segment_context(self):
+        """同一タグにセグメント修飾値があっても純コンテキストを優先する"""
+        xml = _make_xbrl_duration("""
+            <jppfs_cor:GrossProfit contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">200000000000</jppfs_cor:GrossProfit>
+            <jppfs_cor:GrossProfit contextRef="CurrentYearDuration_SomeSegmentMember"
+                unitRef="JPY" decimals="-6">50000000000</jppfs_cor:GrossProfit>
+            <jppfs_cor:GrossProfit contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">180000000000</jppfs_cor:GrossProfit>
+            <jppfs_cor:GrossProfit contextRef="Prior1YearDuration_SomeSegmentMember"
+                unitRef="JPY" decimals="-6">45000000000</jppfs_cor:GrossProfit>
+        """)
+        (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
+        result = extract_gross_profit(self.xbrl_dir)
+        self.assertEqual(result["method"], "direct")
+        self.assertAlmostEqual(result["current"], 200_000_000_000)
+        self.assertAlmostEqual(result["prior"], 180_000_000_000)
+
     def test_falls_back_to_nonconsolidated(self):
         """連結値がなく個別値のみの場合、個別値を返す"""
         xml = _make_xbrl_duration("""
@@ -217,6 +235,24 @@ class TestGrossProfitConsolidatedPriority(unittest.TestCase):
         result = extract_gross_profit(self.xbrl_dir)
         self.assertEqual(result["method"], "direct")
         self.assertAlmostEqual(result["current"], 50_000_000_000)
+
+    def test_pure_nonconsolidated_context_over_segment_context(self):
+        """個別フォールバックでもセグメント修飾値より純コンテキストを優先する"""
+        xml = _make_xbrl_duration("""
+            <jppfs_cor:GrossProfit contextRef="CurrentYearDuration_NonConsolidatedMember"
+                unitRef="JPY" decimals="-6">50000000000</jppfs_cor:GrossProfit>
+            <jppfs_cor:GrossProfit contextRef="CurrentYearDuration_NonConsolidatedMember_SomeSegmentMember"
+                unitRef="JPY" decimals="-6">10000000000</jppfs_cor:GrossProfit>
+            <jppfs_cor:GrossProfit contextRef="Prior1YearDuration_NonConsolidatedMember"
+                unitRef="JPY" decimals="-6">45000000000</jppfs_cor:GrossProfit>
+            <jppfs_cor:GrossProfit contextRef="Prior1YearDuration_NonConsolidatedMember_SomeSegmentMember"
+                unitRef="JPY" decimals="-6">9000000000</jppfs_cor:GrossProfit>
+        """)
+        (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
+        result = extract_gross_profit(self.xbrl_dir)
+        self.assertEqual(result["method"], "direct")
+        self.assertAlmostEqual(result["current"], 50_000_000_000)
+        self.assertAlmostEqual(result["prior"], 45_000_000_000)
 
 
 class TestGrossProfitNotFound(unittest.TestCase):
@@ -245,6 +281,19 @@ class TestGrossProfitNotFound(unittest.TestCase):
         result = extract_gross_profit(self.xbrl_dir)
         self.assertEqual(result["method"], "not_found")
         self.assertIsNone(result["current"])
+
+    def test_pre_parsed_keeps_usgaap_cash_marker(self):
+        """pre_parsed 経由でも US-GAAP 判定マーカーを落とさない"""
+        result = extract_gross_profit(
+            self.xbrl_dir,
+            pre_parsed={
+                "CashAndCashEquivalentsUSGAAPSummaryOfBusinessResults": {
+                    "CurrentYearDuration": 100_000_000_000.0
+                }
+            },
+        )
+        self.assertEqual(result["method"], "not_found")
+        self.assertEqual(result["accounting_standard"], "US-GAAP")
 
     def test_prior_only(self):
         """前期値のみ存在する場合も正常に返す"""

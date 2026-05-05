@@ -21,6 +21,8 @@ from mebuki.analysis.context_helpers import (
     _is_consolidated_prior_duration,
     _is_nonconsolidated_duration,
     _is_nonconsolidated_prior_duration,
+    _is_pure_context,
+    _is_pure_nonconsolidated_context,
 )
 from mebuki.analysis.xbrl_utils import (
     collect_numeric_elements,
@@ -30,10 +32,14 @@ from mebuki.analysis.xbrl_utils import (
 )
 from mebuki.constants.financial import MILLION_YEN
 from mebuki.constants.xbrl import (
+    DURATION_CONTEXT_PATTERNS,
     GROSS_PROFIT_DIRECT_TAGS,
+    IFRS_PL_MARKER_TAGS,
     OPERATING_PROFIT_DIRECT_TAGS,
     ORDINARY_INCOME_TAGS,
+    PRIOR_DURATION_CONTEXT_PATTERNS,
     SGA_DIRECT_TAGS,
+    USGAAP_MARKER_TAGS,
 )
 from mebuki.utils.xbrl_result_types import OperatingProfitResult, XbrlTagElements
 
@@ -42,14 +48,8 @@ _OP_RELEVANT_TAGS: frozenset[str] = frozenset(
     + ORDINARY_INCOME_TAGS
     + GROSS_PROFIT_DIRECT_TAGS
     + SGA_DIRECT_TAGS
-    + [
-        "TotalAssetsUSGAAPSummaryOfBusinessResults",
-        "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
-        "InterestBearingLiabilitiesCLIFRS",
-        "BorrowingsCLIFRS",
-        "BondsPayableNCLIFRS",
-        "BorrowingsNCLIFRS",
-    ]
+    + USGAAP_MARKER_TAGS
+    + IFRS_PL_MARKER_TAGS
 )
 
 
@@ -61,12 +61,25 @@ def _find_duration_value(
     is_cur = _is_consolidated_duration if consolidated else _is_nonconsolidated_duration
     is_pri = _is_consolidated_prior_duration if consolidated else _is_nonconsolidated_prior_duration
     current = prior = None
+    current_pure = prior_pure = None
+    current_patterns = DURATION_CONTEXT_PATTERNS
+    prior_patterns = PRIOR_DURATION_CONTEXT_PATTERNS
+    is_pure = _is_pure_context if consolidated else _is_pure_nonconsolidated_context
     for ctx, val in tag_elements[tag].items():
         if is_cur(ctx):
-            current = val
+            if is_pure(ctx, current_patterns):
+                current_pure = val
+            else:
+                current = val
         elif is_pri(ctx):
-            prior = val
-    return current, prior
+            if is_pure(ctx, prior_patterns):
+                prior_pure = val
+            else:
+                prior = val
+    return (
+        current_pure if current_pure is not None else current,
+        prior_pure if prior_pure is not None else prior,
+    )
 
 
 def _try_tags(
@@ -107,21 +120,11 @@ def _try_computed_op(
 
 
 def _detect_accounting_standard(tag_elements: XbrlTagElements) -> str:
-    usgaap_tags = {
-        "TotalAssetsUSGAAPSummaryOfBusinessResults",
-        "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
-    }
-    ifrs_markers = [
-        "InterestBearingLiabilitiesCLIFRS",
-        "BorrowingsCLIFRS",
-        "BondsPayableNCLIFRS",
-        "BorrowingsNCLIFRS",
-    ]
-    if any(t in tag_elements for t in usgaap_tags) and not any(
-        t in tag_elements for t in ifrs_markers
+    if any(t in tag_elements for t in USGAAP_MARKER_TAGS) and not any(
+        t in tag_elements for t in IFRS_PL_MARKER_TAGS
     ):
         return "US-GAAP"
-    if any(t in tag_elements for t in ifrs_markers):
+    if any(t in tag_elements for t in IFRS_PL_MARKER_TAGS):
         return "IFRS"
     return "J-GAAP"
 

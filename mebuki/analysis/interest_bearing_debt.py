@@ -33,9 +33,11 @@ from mebuki.analysis.ibd_usgaap_html import _extract_usgaap_from_html
 from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
 from mebuki.utils.xbrl_result_types import InterestBearingDebtResult, MetricComponent, XbrlTagElements
 from mebuki.constants.xbrl import (
-    INTEREST_BEARING_DEBT_TAGS,
-    COMPONENT_DEFINITIONS,
     AGGREGATE_IFRS_DEFINITIONS,
+    COMPONENT_DEFINITIONS,
+    IFRS_BALANCE_SHEET_MARKER_TAGS,
+    INTEREST_BEARING_DEBT_TAGS,
+    USGAAP_MARKER_TAGS,
 )
 
 # XBRL解析で収集対象とするローカルタグ名のセット（不要要素のスキップに使用）
@@ -43,18 +45,8 @@ _IBD_RELEVANT_TAGS: frozenset[str] = frozenset(
     INTEREST_BEARING_DEBT_TAGS
     + [tag for comp in COMPONENT_DEFINITIONS for tag in comp["tags"]]
     + [agg["tag"] for agg in AGGREGATE_IFRS_DEFINITIONS]
-    + [
-        # US-GAAP判定用
-        "TotalAssetsUSGAAPSummaryOfBusinessResults",
-        "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
-        "CashAndCashEquivalentsUSGAAPSummaryOfBusinessResults",
-        # IFRSマーカー判定用
-        "InterestBearingLiabilitiesCLIFRS",
-        "InterestBearingLiabilitiesNCLIFRS",
-        "BorrowingsCLIFRS",
-        "BondsPayableNCLIFRS",
-        "BorrowingsNCLIFRS",
-    ]
+    + USGAAP_MARKER_TAGS
+    + IFRS_BALANCE_SHEET_MARKER_TAGS
 )
 
 
@@ -94,43 +86,20 @@ def _detect_accounting_standard(tag_elements: XbrlTagElements) -> str:
     """会計基準を判定: 'J-GAAP' | 'IFRS' | 'US-GAAP'"""
     if _is_usgaap_xbrl(tag_elements):
         return "US-GAAP"
-    ifrs_marker_tags = [
-        "InterestBearingLiabilitiesCLIFRS",
-        "InterestBearingLiabilitiesNCLIFRS",
-        "BorrowingsCLIFRS",
-        "BondsPayableNCLIFRS",
-        "BorrowingsNCLIFRS",
-        "BondsAndBorrowingsCLIFRS",
-        "BondsAndBorrowingsNCLIFRS",
-    ]
-    if any(t in tag_elements for t in ifrs_marker_tags):
+    if any(t in tag_elements for t in IFRS_BALANCE_SHEET_MARKER_TAGS):
         return "IFRS"
     return "J-GAAP"
 
 
 def _is_usgaap_xbrl(tag_elements: XbrlTagElements) -> bool:
     """XBRLインスタンスのタグ群がUS-GAAP企業かどうかを判定。"""
-    usgaap_summary_tags = {
-        "TotalAssetsUSGAAPSummaryOfBusinessResults",
-        "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
-        "CashAndCashEquivalentsUSGAAPSummaryOfBusinessResults",
-    }
-    has_usgaap = any(t in tag_elements for t in usgaap_summary_tags)
+    has_usgaap = any(t in tag_elements for t in USGAAP_MARKER_TAGS)
     if not has_usgaap:
         return False
 
     # IFRSマーカータグが存在する場合は、*USGAAPSummaryOfBusinessResults タグが
     # 旧期間比較データとして残存しているだけ（IFRS移行後の企業）と判断する
-    ifrs_marker_tags = [
-        "InterestBearingLiabilitiesCLIFRS",
-        "InterestBearingLiabilitiesNCLIFRS",
-        "BorrowingsCLIFRS",
-        "BondsPayableNCLIFRS",
-        "BorrowingsNCLIFRS",
-        "BondsAndBorrowingsCLIFRS",
-        "BondsAndBorrowingsNCLIFRS",
-    ]
-    if any(t in tag_elements for t in ifrs_marker_tags):
+    if any(t in tag_elements for t in IFRS_BALANCE_SHEET_MARKER_TAGS):
         return False
 
     debt_tags = [
@@ -182,7 +151,7 @@ def extract_interest_bearing_debt(
     accounting_standard = _detect_accounting_standard(tag_elements)
 
     # US-GAAP 企業: HTML解析にフォールバック
-    if _is_usgaap_xbrl(tag_elements):
+    if accounting_standard == "US-GAAP":
         htm_files = list(xbrl_dir.rglob("*.htm")) + list(xbrl_dir.rglob("*.html"))
         for htm_file in htm_files:
             result = _extract_usgaap_from_html(htm_file)

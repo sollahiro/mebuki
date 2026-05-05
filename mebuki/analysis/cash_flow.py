@@ -14,23 +14,27 @@ XBRLインスタンス文書から連結キャッシュフロー計算書の
 
 from pathlib import Path
 
-from mebuki.analysis.context_helpers import _is_consolidated_duration, _is_consolidated_prior_duration
+from mebuki.analysis.context_helpers import (
+    _is_consolidated_duration,
+    _is_consolidated_prior_duration,
+    _is_pure_context,
+)
 from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
 from mebuki.utils.xbrl_result_types import CashFlowResult, XbrlTagElements
-from mebuki.constants.xbrl import CF_INVESTING_TAGS, CF_OPERATING_TAGS
+from mebuki.constants.xbrl import (
+    CF_INVESTING_TAGS,
+    CF_OPERATING_TAGS,
+    DURATION_CONTEXT_PATTERNS,
+    IFRS_PL_MARKER_TAGS,
+    PRIOR_DURATION_CONTEXT_PATTERNS,
+    USGAAP_MARKER_TAGS,
+)
 
 _CF_RELEVANT_TAGS: frozenset[str] = frozenset(
     CF_OPERATING_TAGS
     + CF_INVESTING_TAGS
-    + [
-        # 会計基準判定用マーカー（gross_profit.py と同一セット）
-        "TotalAssetsUSGAAPSummaryOfBusinessResults",
-        "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
-        "InterestBearingLiabilitiesCLIFRS",
-        "BorrowingsCLIFRS",
-        "BondsPayableNCLIFRS",
-        "BorrowingsNCLIFRS",
-    ]
+    + USGAAP_MARKER_TAGS
+    + IFRS_PL_MARKER_TAGS
 )
 
 
@@ -42,12 +46,22 @@ def _find_duration_value(
     if tag not in tag_elements:
         return None, None
     current = prior = None
+    current_pure = prior_pure = None
     for ctx, val in tag_elements[tag].items():
         if _is_consolidated_duration(ctx):
-            current = val
+            if _is_pure_context(ctx, DURATION_CONTEXT_PATTERNS):
+                current_pure = val
+            else:
+                current = val
         elif _is_consolidated_prior_duration(ctx):
-            prior = val
-    return current, prior
+            if _is_pure_context(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
+                prior_pure = val
+            else:
+                prior = val
+    return (
+        current_pure if current_pure is not None else current,
+        prior_pure if prior_pure is not None else prior,
+    )
 
 
 def extract_cash_flow(
@@ -80,21 +94,11 @@ def extract_cash_flow(
                 tag_elements[tag].update(ctx_map)
 
     # 会計基準判定
-    usgaap_markers = {
-        "TotalAssetsUSGAAPSummaryOfBusinessResults",
-        "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
-    }
-    ifrs_markers = [
-        "InterestBearingLiabilitiesCLIFRS",
-        "BorrowingsCLIFRS",
-        "BondsPayableNCLIFRS",
-        "BorrowingsNCLIFRS",
-    ]
-    if any(t in tag_elements for t in usgaap_markers) and not any(
-        t in tag_elements for t in ifrs_markers
+    if any(t in tag_elements for t in USGAAP_MARKER_TAGS) and not any(
+        t in tag_elements for t in IFRS_PL_MARKER_TAGS
     ):
         accounting_standard = "US-GAAP"
-    elif any(t in tag_elements for t in ifrs_markers):
+    elif any(t in tag_elements for t in IFRS_PL_MARKER_TAGS):
         accounting_standard = "IFRS"
     else:
         accounting_standard = "J-GAAP"
