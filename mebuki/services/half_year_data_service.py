@@ -143,13 +143,14 @@ def _apply_h2_edinet_data(
     fy_cfi = to_float(fy_rec.get("CFI"))
     fy_cfo_m = fy_cfo / MILLION_YEN if fy_cfo is not None else None
     fy_cfi_m = fy_cfi / MILLION_YEN if fy_cfi is not None else None
+    fy_source = "EDINET" if fy_rec.get("_xbrl_source") else "EXTERNAL"
 
     if fy_cfo_m is not None and h1_cfo_m is not None:
         data["CFO"] = fy_cfo_m - h1_cfo_m
-        _set_metric_source(data, "CFO", source="derived", unit="million_yen", method="FY J-QUANTS CFO - H1 EDINET CFO")
+        _set_metric_source(data, "CFO", source="derived", unit="million_yen", method=f"FY {fy_source} CFO - H1 EDINET CFO")
     if fy_cfi_m is not None and h1_cfi_m is not None:
         data["CFI"] = fy_cfi_m - h1_cfi_m
-        _set_metric_source(data, "CFI", source="derived", unit="million_yen", method="FY J-QUANTS CFI - H1 EDINET CFI")
+        _set_metric_source(data, "CFI", source="derived", unit="million_yen", method=f"FY {fy_source} CFI - H1 EDINET CFI")
     cfo = data.get("CFO")
     cfi = data.get("CFI")
     if cfo is not None and cfi is not None:
@@ -230,12 +231,19 @@ class HalfYearDataService:
             if cached and cached.get("_cache_version") == _CACHE_VERSION:
                 return serialize_half_year_periods(cached["periods"], include_debug_fields=include_debug_fields)
 
-        financial_data = await self.api_client.get_financial_summary(
-            code=code,
-            period_types=["FY", "2Q"],
-            include_fields=None,
+        edinet_fetcher = EdinetFetcher(
+            self.api_client,
+            self.edinet_client,
+            cache_manager=self.cache_manager,
         )
-        if not financial_data:
+        try:
+            fy_records, q2_records = await asyncio.gather(
+                edinet_fetcher.build_xbrl_annual_records(code, years),
+                edinet_fetcher.build_xbrl_half_year_records(code, years + 1),
+            )
+            financial_data = fy_records + q2_records
+        except Exception as e:
+            logger.warning(f"[HALF] {code}: EDINET-only財務データ構築スキップ - {e}")
             return []
 
         base_periods = build_half_year_periods(financial_data, years=years)
@@ -245,11 +253,6 @@ class HalfYearDataService:
         # EDINET からの補完（GrossProfit + CFO/CFI for H1）
         # 表示中の FY 数だけ 2Q EDINET を取得（26H1 等の extra 分も含む）
         unique_fy_ends = len(set(p["fy_end"] for p in base_periods))
-        edinet_fetcher = EdinetFetcher(
-            self.api_client,
-            self.edinet_client,
-            cache_manager=self.cache_manager,
-        )
         try:
             half_edinet, fy_gp, ibd_by_year, fy_op = await asyncio.gather(
                 edinet_fetcher.extract_half_year_edinet_data(code, financial_data, max_years=unique_fy_ends),
@@ -286,7 +289,7 @@ class HalfYearDataService:
             if isinstance(result, dict):
                 fy_op_by_end[fy_end] = result
 
-        # FY J-Quants レコードを fy_end → record で引けるようにしておく
+        # FY レコードを fy_end → record で引けるようにしておく
         fy_by_end: dict[str, dict[str, Any]] = {}
         for r in financial_data:
             if r.get("CurPerType") == "FY":
@@ -294,7 +297,7 @@ class HalfYearDataService:
                 if fy_end_8:
                     fy_by_end[fy_end_8] = r
 
-        # 2Q J-Quants レコードを fy_end → record で引けるようにしておく
+        # 2Q レコードを fy_end → record で引けるようにしておく
         q2_by_end: dict[str, dict[str, Any]] = {}
         for r in financial_data:
             if r.get("CurPerType") == "2Q":

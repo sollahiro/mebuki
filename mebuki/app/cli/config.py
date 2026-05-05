@@ -28,13 +28,11 @@ def cmd_config(args, parser):
 
     elif args.config_subcommand == "set":
         if not args.key or args.value is None:
-            print("キーと値を指定してください。例: mebuki config set jquantsApiKey YOUR_KEY", file=sys.stderr)
+            print("キーと値を指定してください。例: mebuki config set edinet-key YOUR_KEY", file=sys.stderr)
             return
 
         # マッピング（CLIからの入力をバックエンドのキー名に変換）
         key_map = {
-            "jquantsApiKey": "jquantsApiKey",
-            "jquants-key": "jquantsApiKey",
             "edinetApiKey": "edinetApiKey",
             "edinet-key": "edinetApiKey",
             "years": "analysisYears",
@@ -58,26 +56,19 @@ def cmd_config(args, parser):
         print(f"設定を更新しました: {target_key}", file=sys.stderr)
 
     elif args.config_subcommand == "check":
-        j_key = settings_store.jquants_api_key
         e_key = settings_store.edinet_api_key
         print("\nAPI設定チェック:", file=sys.stderr)
-        print(f"  J-QUANTS APIキー: {'✅ 設定済み' if j_key else '❌ 未設定'}", file=sys.stderr)
         print(f"  EDINET APIキー:   {'✅ 設定済み' if e_key else '❌ 未設定'}", file=sys.stderr)
-        if not j_key or not e_key:
+        if not e_key:
             print("\n未設定のキーは以下のコマンドで設定できます:", file=sys.stderr)
-            if not j_key:
-                print("  mebuki config set jquants-key <KEY>", file=sys.stderr)
-            if not e_key:
-                print("  mebuki config set edinet-key <KEY>", file=sys.stderr)
+            print("  mebuki config set edinet-key <KEY>", file=sys.stderr)
 
     elif args.config_subcommand == "init":
         print("\nmebuki 初期設定", file=sys.stderr)
         print("-" * 40, file=sys.stderr)
-        j_key = input("J-QUANTS APIキー (空でスキップ): ").strip()
         e_key = input("EDINET APIキー (空でスキップ): ").strip()
 
         updates = {}
-        if j_key: updates["jquantsApiKey"] = j_key
         if e_key: updates["edinetApiKey"] = e_key
 
         if updates:

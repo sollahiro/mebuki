@@ -16,7 +16,7 @@ def build_parser() -> argparse.ArgumentParser:
     # analyze
     analyze_parser = subparsers.add_parser("analyze", help="銘柄を分析")
     analyze_parser.add_argument("code", help="銘柄コード")
-    analyze_parser.add_argument("--scope", choices=["raw"], default=None, help="取得スコープ（raw: J-QUANTS生データ）")
+    analyze_parser.add_argument("--scope", choices=["raw"], default=None, help="取得スコープ（raw: EDINET XBRL抽出レコード）")
     analyze_parser.add_argument("--years", type=int, help="分析年数")
     analyze_parser.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
     analyze_parser.add_argument("--no-cache", action="store_true", help="キャッシュを使用しない")
@@ -46,7 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
     config_sub = config_parser.add_subparsers(dest="config_subcommand", help="設定サブコマンド")
     config_sub.add_parser("show", help="設定を表示")
     set_parser = config_sub.add_parser("set", help="値を設定")
-    set_parser.add_argument("key", help="設定キー (jquants-key, edinet-key, years 等)")
+    set_parser.add_argument("key", help="設定キー (edinet-key, years 等)")
     set_parser.add_argument("value", help="設定値")
     config_sub.add_parser("init", help="対話形式で初期設定")
     config_sub.add_parser("check", help="API設定の確認")

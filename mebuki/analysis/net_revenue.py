@@ -1,8 +1,8 @@
 """
 IFRS純収益・事業利益 XBRL抽出モジュール
 
-IFRS適用の金融会社（クレディセゾン等）は J-QUANTS の Sales/OP フィールドが
-空になるため、XBRL から純収益（NetRevenueIFRS）と事業利益
+IFRS適用の金融会社（クレディセゾン等）で売上高・営業利益タグが
+空になる場合に、XBRL から純収益（NetRevenueIFRS）と事業利益
 （BusinessProfitIFRSSummaryOfBusinessResults）を抽出してフォールバックに使う。
 """
 from pathlib import Path

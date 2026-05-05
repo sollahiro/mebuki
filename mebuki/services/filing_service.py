@@ -24,15 +24,29 @@ class FilingService:
         max_documents: int = 10,
     ) -> list[dict[str, Any]]:
         """EDINET書類を検索"""
-        fin_data = await self.api_client.get_financial_summary(code=code)
         edinet_fetcher = EdinetFetcher(self.api_client, self.edinet_client)
-        return await edinet_fetcher.search_recent_reports(
-            code=code,
-            jquants_data=fin_data,
-            max_years=max_years,
-            doc_types=doc_types,
-            max_documents=max_documents,
-        )
+        requested = set(doc_types or [])
+        docs: list[dict[str, Any]] = []
+
+        if not requested or requested.intersection({"120", "130"}):
+            docs.extend(await edinet_fetcher._search_edinet_annual_docs(code, max_years))
+        if not requested or requested.intersection({"140", "160"}):
+            docs.extend(await edinet_fetcher._search_edinet_half_docs(code, max_years))
+
+        if requested:
+            docs = [doc for doc in docs if doc.get("docTypeCode") in requested]
+
+        seen: set[str] = set()
+        unique_docs: list[dict[str, Any]] = []
+        for doc in sorted(docs, key=lambda d: str(d.get("submitDateTime") or ""), reverse=True):
+            doc_id = doc.get("docID")
+            if not isinstance(doc_id, str) or doc_id in seen:
+                continue
+            seen.add(doc_id)
+            unique_docs.append(doc)
+            if len(unique_docs) >= max_documents:
+                break
+        return unique_docs
 
     async def extract_filing_content(
         self,
@@ -58,7 +72,7 @@ class FilingService:
             meta = {
                 "fiscal_year": doc.get("fiscal_year"),
                 "period_type": doc.get("period_type"),
-                "jquants_fy_end": doc.get("jquants_fy_end"),
+                "edinet_fy_end": doc.get("edinet_fy_end"),
             }
 
         xbrl_dir = await self.edinet_client.download_document(doc_id, 1)

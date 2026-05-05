@@ -286,10 +286,6 @@ async def cmd_analyze(args):
 
         print("-" * (16 + 11 * len(periods)), file=sys.stderr)
 
-        upcoming = result.get("upcoming_earnings")
-        if upcoming:
-            print(f"\n次回決算予定: {upcoming.get('date', '不明')}  {upcoming.get('FQ', '')}", file=sys.stderr)
-
         print("\n詳細な分析や定性情報は MCP版（Claude等）をご利用ください。", file=sys.stderr)
 
         # ウォッチリスト追加の確認（対話端末のみ）
@@ -374,8 +370,8 @@ async def cmd_filing(args):
                 print(f"fiscal_year: {result['fiscal_year']}", file=sys.stderr)
             if result.get("period_type"):
                 print(f"period_type: {result['period_type']}", file=sys.stderr)
-            if result.get("jquants_fy_end"):
-                print(f"fy_end:      {result['jquants_fy_end']}", file=sys.stderr)
+            if result.get("edinet_fy_end"):
+                print(f"fy_end:      {result['edinet_fy_end']}", file=sys.stderr)
             secs = result.get("sections", {})
             if not secs:
                 print("セクションデータが見つかりませんでした。", file=sys.stderr)

@@ -2,7 +2,7 @@
 個別詳細分析モジュール
 
 個別銘柄の詳細分析を実行します。
-FinancialFetcher / EdinetFetcher を組み合わせてオーケストレーションします。
+EdinetFetcher を中心に財務データとEDINET補完指標を組み立てます。
 """
 
 import logging
@@ -11,10 +11,10 @@ from typing import Any, cast
 from pathlib import Path
 from collections.abc import Callable
 
-from mebuki.api.jquants_client import JQuantsAPIClient
 from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.infrastructure.settings import settings_store
 from mebuki.constants.financial import PERCENT, MILLION_YEN
+from mebuki.analysis.calculator import calculate_metrics_flexible
 from mebuki.utils.cache import CacheManager
 from mebuki.utils.operating_profit_change import (
     apply_operating_profit_change_from_xbrl,
@@ -24,7 +24,6 @@ from mebuki.utils.wacc import load_rf_rates, resolve_rf_for_date, calculate_wacc
 from mebuki.utils.metrics_types import CalculatedData, MetricSource, YearEntry
 from mebuki.utils.xbrl_result_types import OrderBookResult
 
-from .financial_fetcher import FinancialFetcher
 from .edinet_fetcher import EdinetFetcher
 
 logger = logging.getLogger(__name__)
@@ -404,11 +403,11 @@ class IndividualAnalyzer:
 
     def __init__(
         self,
-        api_client: JQuantsAPIClient | None = None,
+        api_client: object | None = None,
         edinet_client: EdinetAPIClient | None = None,
         cache_manager: CacheManager | None = None,
     ):
-        self.api_client = api_client or JQuantsAPIClient(api_key=settings_store.jquants_api_key)
+        self.api_client = api_client
 
         if edinet_client is not None:
             self.edinet_client = edinet_client
@@ -430,7 +429,6 @@ class IndividualAnalyzer:
             )
         self._cache_manager = cache_manager
 
-        self._financial_fetcher = FinancialFetcher(self.api_client)
         self._edinet_fetcher = EdinetFetcher(
             self.api_client,
             self.edinet_client,
@@ -450,24 +448,18 @@ class IndividualAnalyzer:
 
         data_service などの上位層が private メソッドを直接呼ばずに済むよう提供する。
         """
+        stock_info = prefetched_stock_info or {"Code": code}
+        financial_data = prefetched_financial_data or []
+        annual_data: list[dict[str, Any]] = []
+
         if prefetched_stock_info is not None and prefetched_financial_data is not None:
             from mebuki.utils.financial_data import extract_annual_data
 
-            stock_info = prefetched_stock_info or {"Code": code}
-            financial_data = prefetched_financial_data
             try:
                 annual_data = extract_annual_data(financial_data, include_2q=include_2q)
             except Exception as e:
                 logger.error(f"銘柄コード {code}: 年度データ抽出中にエラーが発生しました - {e}", exc_info=True)
                 return {}
-        else:
-            stock_info, financial_data, annual_data = await self._financial_fetcher.fetch_financial_data(code, include_2q)
-            if not stock_info:
-                stock_info = {"Code": code}
-            if not annual_data:
-                annual_data = []
-            if financial_data is None:
-                financial_data = []
 
         if not annual_data:
             fallback_years = analysis_years or max_documents
@@ -479,8 +471,10 @@ class IndividualAnalyzer:
         available_years = sum(1 for d in annual_data if d.get("CurPerType") == "FY")
         actual_years = min(available_years, analysis_years) if analysis_years else available_years
 
-        metrics = await self._financial_fetcher.calculate_metrics(code, annual_data, actual_years)
-        if not metrics:
+        try:
+            metrics = calculate_metrics_flexible(annual_data, actual_years)
+        except Exception as e:
+            logger.error(f"銘柄コード {code}: 指標計算中にエラーが発生しました - {e}", exc_info=True)
             return {}
 
         edinet_data: dict[str, Any] = {}

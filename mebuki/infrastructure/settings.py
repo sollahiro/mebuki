@@ -36,7 +36,6 @@ class SettingsStore:
         logger.info(f"Using persistent storage at: {self.user_data_path}")
 
         self._settings: dict[str, Any] = {
-            "jquantsApiKey": "",
             "edinetApiKey": "",
             "analysisYears": 5,
             "cacheDir": str(cache_dir),
@@ -64,7 +63,7 @@ class SettingsStore:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config_data = json.load(f)
                 
-            for key in ["jquantsApiKey", "edinetApiKey"]:
+            for key in ["edinetApiKey"]:
                 if key in config_data:
                     self._settings[key] = config_data[key]
 
@@ -103,12 +102,7 @@ class SettingsStore:
             save_data = self._settings.copy()
             
             # APIキーは空文字にしておく（キーチェーン優先のため）
-            save_data["jquantsApiKey"] = ""
             save_data["edinetApiKey"] = ""
-            
-            # jquantsPlan は保存しない
-            if "jquantsPlan" in save_data:
-                del save_data["jquantsPlan"]
             
             with open(self.config_path, 'w', encoding='utf-8') as f:
                 json.dump(save_data, f, indent=2, ensure_ascii=False)
@@ -126,7 +120,7 @@ class SettingsStore:
             save: ファイルに即座に保存するか（CLI利用時など）
         """
         # APIキーが含まれている場合はキーチェーンに保存
-        for key in ["jquantsApiKey", "edinetApiKey"]:
+        for key in ["edinetApiKey"]:
             if settings.get(key):
                 try:
                     keystore.set_password("mebuki", key, settings[key])
@@ -136,7 +130,7 @@ class SettingsStore:
                     logger.error(f"Failed to save {key} to keychain: {e}")
         
         # その他の設定を更新
-        self._settings.update({k: v for k, v in settings.items() if k not in ["jquantsApiKey", "edinetApiKey"]})
+        self._settings.update({k: v for k, v in settings.items() if k not in ["edinetApiKey"]})
         
         if save:
             self.save()
@@ -153,7 +147,7 @@ class SettingsStore:
             設定値
         """
         # APIキーの場合はキーチェーンから取得を試みる
-        if key in ["jquantsApiKey", "edinetApiKey"]:
+        if key in ["edinetApiKey"]:
             try:
                 val = keystore.get_password("mebuki", key)
                 if val:
@@ -173,7 +167,7 @@ class SettingsStore:
         settings = self._settings.copy()
 
         # キーチェーンから値を上書き
-        for key in ["jquantsApiKey", "edinetApiKey"]:
+        for key in ["edinetApiKey"]:
             try:
                 val = keystore.get_password("mebuki", key)
                 if val:
@@ -204,17 +198,6 @@ class SettingsStore:
         return masked
     
     @property
-    def jquants_api_key(self) -> str | None:
-        """J-QUANTS APIキーを取得"""
-        try:
-            value = keystore.get_password("mebuki", "jquantsApiKey")
-            if value:
-                return value
-        except Exception as e:
-            logger.debug(f"Keychain access error for jquantsApiKey: {e}")
-        return self._settings.get("jquantsApiKey")
-    
-    @property
     def edinet_api_key(self) -> str | None:
         """EDINET APIキーを取得"""
         try:
@@ -233,11 +216,6 @@ class SettingsStore:
             return int(val) if val is not None else None
         except (ValueError, TypeError):
             return None
-
-    @property
-    def jquants_plan(self) -> str:
-        """J-QUANTSプランを取得"""
-        return self._settings.get("jquantsPlan", "free")
 
     @property
     def cache_dir(self) -> str:

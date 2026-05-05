@@ -55,7 +55,7 @@ async def list_tools() -> list[Tool]:
                     "scope": {
                         "type": "string",
                         "enum": ["raw"],
-                        "description": "Omit for standard financial summary. 'raw': return raw J-QUANTS records.",
+                        "description": "Omit for standard financial summary. 'raw': return EDINET XBRL-derived records.",
                     },
                     "years": {
                         "type": "number",
@@ -69,7 +69,7 @@ async def list_tools() -> list[Tool]:
                     "use_cache": {
                         "type": "boolean",
                         "default": True,
-                        "description": "If false, bypass cache and re-fetch the latest data from J-QUANTS and EDINET. Use when you want up-to-date figures or when ROIC/IBD/BS fields are missing.",
+                        "description": "If false, bypass cache and re-fetch the latest data from EDINET. Use when you want up-to-date figures or when ROIC/IBD/BS fields are missing.",
                     },
                     "include_debug_fields": {
                         "type": "boolean",

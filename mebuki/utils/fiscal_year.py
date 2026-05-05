@@ -67,7 +67,7 @@ def calculate_fiscal_year(fy_end: str | None, fy_start: str | None = None) -> in
             return None
         
         # 従来の「3月決算はマイナス1年」ロジックは廃止し、開始年が不明なら終了年or実績ベースとする
-        # ただし互換性のためJ-Quantsの慣習（fy_endの月に関わらず、fy_startの年が年度）に従う
+        # ただし互換性のため、fy_endの月に関わらずfy_startの年を年度とする
         # 3月決算なら通常fy_startは前年4月なので、fy_end.year - 1 と同等になる
         period_date = datetime.strptime(normalized_date, "%Y-%m-%d")
         if period_date.month < 12:

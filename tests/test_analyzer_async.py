@@ -6,50 +6,25 @@ import pytest
 from mebuki.services.analyzer import IndividualAnalyzer
 
 
-class _StubFinancialFetcher:
-    def __init__(
-        self,
-        financial_data: list[dict],
-        annual_data: list[dict] | None = None,
-        stock_info: dict | None = None,
-    ):
-        self.financial_data = financial_data
-        self.annual_data = annual_data
-        self.stock_info = stock_info if stock_info is not None else {"Code": "7203", "CompanyName": "テスト株式会社"}
-        self.calculate_annual_data: list[dict] | None = None
-
-    async def fetch_financial_data(self, code: str, include_2q: bool) -> tuple[dict, list[dict], list[dict]]:
-        return (
-            self.stock_info,
-            self.financial_data,
-            self.annual_data if self.annual_data is not None else [
-                {"CurPerType": "FY", "CurFYEn": "2024-03-31"},
-                {"CurPerType": "FY", "CurFYEn": "2023-03-31"},
-            ],
-        )
-
-    async def calculate_metrics(self, code: str, annual_data: list[dict], actual_years: int) -> dict:
-        self.calculate_annual_data = annual_data
-        return {
-            "code": code,
-            "analysis_years": actual_years,
-            "years": [
-                {
-                    "fy_end": "2024-03-31",
-                    "FinancialPeriod": "FY",
-                    "RawData": {},
-                    "CalculatedData": {"Sales": 1000.0},
-                }
-            ],
-        }
-
-
 class _ConcurrentEdinetFetcher:
     def __init__(self) -> None:
         self.predownload_started = asyncio.Event()
         self.fetch_started = asyncio.Event()
         self.extract_pre_parsed_map: dict | None = None
         self.fetch_max_documents: int | None = None
+
+    async def build_xbrl_annual_records(self, code: str, max_years: int) -> list[dict]:
+        return [{
+            "CurPerType": "FY",
+            "CurFYEn": "2024-03-31",
+            "CurFYSt": "2023-04-01",
+            "DiscDate": "2024-06-01",
+            "Sales": 1_000_000_000,
+            "OP": 100_000_000,
+            "NP": 80_000_000,
+            "Eq": 500_000_000,
+            "_xbrl_source": True,
+        }]
 
     async def predownload_and_parse(self, code: str, financial_data: list[dict], actual_years: int) -> dict:
         self.predownload_started.set()
@@ -142,9 +117,8 @@ class _EdinetOnlyFetcher:
 
 
 def _make_analyzer(financial_data: list[dict], edinet_fetcher: object) -> IndividualAnalyzer:
-    analyzer = IndividualAnalyzer(api_client=object(), edinet_client=object())
-    analyzer._financial_fetcher = _StubFinancialFetcher(financial_data)
-    analyzer._edinet_fetcher = edinet_fetcher
+    analyzer = IndividualAnalyzer(api_client=object(), edinet_client=None)
+    analyzer._edinet_fetcher = edinet_fetcher  # type: ignore[assignment]
     return analyzer
 
 
@@ -164,19 +138,16 @@ async def test_fetch_analysis_data_fetches_edinet_metadata_in_parallel_with_pred
 
 
 @pytest.mark.asyncio
-async def test_fetch_analysis_data_uses_edinet_annual_records_without_jquants_data() -> None:
+async def test_fetch_analysis_data_uses_edinet_annual_records_without_prefetched_data() -> None:
     edinet_fetcher = _EdinetOnlyFetcher()
-    analyzer = IndividualAnalyzer(api_client=object(), edinet_client=object())
-    financial_fetcher = _StubFinancialFetcher([], annual_data=[])
-    analyzer._financial_fetcher = financial_fetcher
-    analyzer._edinet_fetcher = edinet_fetcher
+    analyzer = IndividualAnalyzer(api_client=object(), edinet_client=None)
+    analyzer._edinet_fetcher = edinet_fetcher  # type: ignore[assignment]
 
     with patch("mebuki.services.analyzer._apply_wacc"):
         result = await analyzer.fetch_analysis_data("7203", analysis_years=1)
 
     assert result["edinet_data"] == {}
     assert result["metrics"]["analysis_years"] == 1
-    assert financial_fetcher.calculate_annual_data is not None
-    assert financial_fetcher.calculate_annual_data[0]["_xbrl_source"] is True
-    assert edinet_fetcher.predownload_financial_data == financial_fetcher.calculate_annual_data
-    assert edinet_fetcher.fetch_financial_data == financial_fetcher.calculate_annual_data
+    assert result["annual_data"][0]["_xbrl_source"] is True
+    assert edinet_fetcher.predownload_financial_data == result["annual_data"]
+    assert edinet_fetcher.fetch_financial_data == result["annual_data"]

@@ -4,7 +4,7 @@
 XBRLインスタンス文書から連結損益計算書の
 売上高・営業利益・当期純利益を抽出する。
 
-J-Quants なし運用時の基幹財務データ取得に使用する。
+EDINET-only運用時の基幹財務データ取得に使用する。
 
 タグ体系:
   J-GAAP:   NetSales / OperatingIncomeLoss / ProfitLossAttributableToOwnersOfParent

@@ -248,7 +248,7 @@ def cmd_mcp(args, parser):
             config_data["extensions"]["mebuki"] = {
                 "enabled": True,
                 "name": "mebuki",
-                "description": "Expert investment analyst tool for Japanese stocks. Provides high-precision financial data from J-QUANTS and EDINET.",
+                "description": "Expert investment analyst tool for Japanese stocks. Provides high-precision financial data from EDINET.",
                 "type": "stdio",
                 "cmd": executable,
                 "args": cmd_args,

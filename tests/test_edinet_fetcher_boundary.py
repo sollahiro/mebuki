@@ -22,68 +22,49 @@ def _financial_record(
 
 
 @pytest.mark.asyncio
-async def test_search_recent_reports_prepares_jquants_data_in_service_layer() -> None:
+async def test_get_annual_docs_falls_back_to_edinet_discovery_without_doc_ids() -> None:
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    edinet_client.search_documents = AsyncMock(return_value=[{"docID": "S100TEST"}])
     fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    fetcher._search_edinet_annual_docs = AsyncMock(return_value=[{"docID": "S100TEST"}])  # type: ignore[method-assign]
 
-    docs = await fetcher.search_recent_reports(
-        code="72030",
-        jquants_data=[
+    docs = await fetcher._get_annual_docs(
+        "72030",
+        [
             _financial_record("2023-04-01", "2024-03-31", "2024-06-01"),
             _financial_record("2022-04-01", "2023-03-31", "2023-06-01"),
         ],
-        max_years=1,
-        doc_types=["120"],
-        max_documents=5,
+        1,
     )
 
     assert docs == [{"docID": "S100TEST"}]
-    edinet_client.search_documents.assert_awaited_once()
-    _, kwargs = edinet_client.search_documents.await_args
-    assert kwargs["code"] == "72030"
-    assert kwargs["years"] == [2023]
-    assert kwargs["doc_type_code"] == "120"
-    assert kwargs["max_documents"] == 5
-    assert kwargs["jquants_data"] == [
-        {
-            "CurFYEn": "2024-03-31",
-            "CurPerEn": "",
-            "CurFYSt": "2023-04-01",
-            "DiscDate": "2024-06-01",
-            "CurPerType": "FY",
-            "fiscal_year": 2023,
-        }
-    ]
+    fetcher._search_edinet_annual_docs.assert_awaited_once_with("72030", 1)
 
 
 @pytest.mark.asyncio
 async def test_fetch_latest_annual_report_selects_latest_120_doc() -> None:
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    edinet_client.search_documents = AsyncMock(return_value=[
+    docs = [
         {"docID": "OLD", "docTypeCode": "120", "submitDateTime": "2023-06-01T10:00:00"},
         {"docID": "Q2", "docTypeCode": "140", "submitDateTime": "2024-02-01T10:00:00"},
         {"docID": "NEW", "docTypeCode": "120", "submitDateTime": "2024-06-01T10:00:00"},
-    ])
+    ]
     fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    fetcher._search_edinet_annual_docs = AsyncMock(return_value=docs)  # type: ignore[method-assign]
 
-    doc = await fetcher.fetch_latest_annual_report(
-        "72030",
-        [_financial_record("2023-04-01", "2024-03-31", "2024-06-01")],
-    )
+    doc = await fetcher.fetch_latest_annual_report("72030")
 
     assert doc is not None
     assert doc["docID"] == "NEW"
 
 
 @pytest.mark.asyncio
-async def test_get_half_year_docs_calls_search_documents_once_on_repeated_calls() -> None:
+async def test_get_half_year_docs_calls_discovery_once_on_repeated_calls() -> None:
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    edinet_client.search_documents = AsyncMock(return_value=[{"docID": "S100HALF"}])
     fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    fetcher._search_edinet_half_docs = AsyncMock(return_value=[{"docID": "S100HALF"}])  # type: ignore[method-assign]
     financial_data = [
         _financial_record("2023-04-01", "2024-03-31", "2023-11-10", period_type="2Q"),
     ]
@@ -93,7 +74,7 @@ async def test_get_half_year_docs_calls_search_documents_once_on_repeated_calls(
 
     assert first == [{"docID": "S100HALF"}]
     assert second == [{"docID": "S100HALF"}]
-    edinet_client.search_documents.assert_awaited_once()
+    fetcher._search_edinet_half_docs.assert_awaited_once_with("72030", 1)
 
 
 @pytest.mark.asyncio
@@ -110,7 +91,6 @@ async def test_get_annual_docs_reads_from_persistent_cache(tmp_path) -> None:
     )
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    edinet_client.search_documents = AsyncMock(return_value=[{"docID": "UNUSED"}])
     fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client, cache_manager=cache_manager)
 
     docs = await fetcher._get_annual_docs(
@@ -120,7 +100,6 @@ async def test_get_annual_docs_reads_from_persistent_cache(tmp_path) -> None:
     )
 
     assert docs == [{"docID": "S100CACHED"}]
-    edinet_client.search_documents.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -129,8 +108,8 @@ async def test_get_annual_docs_saves_to_persistent_cache_after_api_call(tmp_path
     cache_manager = CacheManager(cache_dir=str(tmp_path))
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    edinet_client.search_documents = AsyncMock(return_value=[{"docID": "S100TEST"}])
     fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client, cache_manager=cache_manager)
+    fetcher._search_edinet_annual_docs = AsyncMock(return_value=[{"docID": "S100TEST"}])  # type: ignore[method-assign]
 
     docs = await fetcher._get_annual_docs(
         code,
@@ -148,8 +127,8 @@ async def test_get_annual_docs_saves_to_persistent_cache_after_api_call(tmp_path
 async def test_get_annual_docs_ignores_q2_records_for_year_selection() -> None:
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    edinet_client.search_documents = AsyncMock(return_value=[{"docID": "S100ANNUAL"}])
     fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    fetcher._search_edinet_annual_docs = AsyncMock(return_value=[{"docID": "S100ANNUAL"}])  # type: ignore[method-assign]
 
     docs = await fetcher._get_annual_docs(
         "59320",
@@ -165,9 +144,32 @@ async def test_get_annual_docs_ignores_q2_records_for_year_selection() -> None:
     )
 
     assert docs == [{"docID": "S100ANNUAL"}]
-    _, kwargs = edinet_client.search_documents.await_args
-    assert kwargs["years"] == [2024, 2023, 2022, 2021, 2020]
-    assert [record["CurPerType"] for record in kwargs["jquants_data"]] == ["FY"] * 5
+    fetcher._search_edinet_annual_docs.assert_awaited_once_with("59320", 5)
+
+
+@pytest.mark.asyncio
+async def test_get_annual_docs_reuses_xbrl_record_doc_ids() -> None:
+    edinet_client = Mock()
+    edinet_client.api_key = "dummy"
+    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+
+    docs = await fetcher._get_annual_docs(
+        "72030",
+        [{
+            "CurPerType": "FY",
+            "CurFYEn": "2024-03-31",
+            "DiscDate": "2024-06-01",
+            "_docID": "S100ANNUAL",
+        }],
+        1,
+    )
+
+    assert docs == [{
+        "docID": "S100ANNUAL",
+        "edinet_fy_end": "2024-03-31",
+        "period_type": "FY",
+        "submitDateTime": "2024-06-01",
+    }]
 
 
 @pytest.mark.asyncio
@@ -184,7 +186,6 @@ async def test_get_half_year_docs_reads_from_persistent_cache(tmp_path) -> None:
     )
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    edinet_client.search_documents = AsyncMock(return_value=[{"docID": "UNUSED"}])
     fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client, cache_manager=cache_manager)
     financial_data = [
         _financial_record("2023-04-01", "2024-03-31", "2023-11-10", period_type="2Q"),
@@ -193,15 +194,45 @@ async def test_get_half_year_docs_reads_from_persistent_cache(tmp_path) -> None:
     docs = await fetcher._get_half_year_docs(code, financial_data, max_years)
 
     assert docs == [{"docID": "S100HALFCACHED"}]
-    edinet_client.search_documents.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_half_year_docs_reuses_xbrl_record_doc_ids() -> None:
+    edinet_client = Mock()
+    edinet_client.api_key = "dummy"
+    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+
+    docs = await fetcher._get_half_year_docs(
+        "72030",
+        [{
+            "CurPerType": "2Q",
+            "CurFYEn": "2024-03-31",
+            "CurPerSt": "2023-04-01",
+            "CurPerEn": "2023-09-30",
+            "DiscDate": "2023-11-10",
+            "_docID": "S100HALF",
+        }],
+        1,
+    )
+
+    assert docs == [{
+        "docID": "S100HALF",
+        "edinet_fy_end": "2024-03-31",
+        "period_type": "2Q",
+        "submitDateTime": "2023-11-10",
+        "edinet_period_start": "2023-04-01",
+        "periodStart": "2023-04-01",
+        "edinet_period_end": "2023-09-30",
+        "periodEnd": "2023-09-30",
+    }]
 
 
 @pytest.mark.asyncio
 async def test_get_half_year_docs_returns_empty_when_no_q2_records() -> None:
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    edinet_client.search_documents = AsyncMock(return_value=[{"docID": "UNUSED"}])
     fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    fetcher._search_edinet_half_docs = AsyncMock(return_value=[])  # type: ignore[method-assign]
 
     docs = await fetcher._get_half_year_docs(
         "72030",
@@ -213,7 +244,91 @@ async def test_get_half_year_docs_returns_empty_when_no_q2_records() -> None:
     )
 
     assert docs == []
-    edinet_client.search_documents.assert_not_awaited()
+    fetcher._search_edinet_half_docs.assert_awaited_once_with("72030", 2)
+
+
+@pytest.mark.asyncio
+async def test_build_xbrl_half_year_records_builds_2q_record(monkeypatch) -> None:
+    edinet_client = Mock()
+    edinet_client.api_key = "dummy"
+    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    fetcher._download_and_parse_docs = AsyncMock(return_value={"20250331": (Path("."), {})})  # type: ignore[method-assign]
+
+    monkeypatch.setattr(
+        "mebuki.services.edinet_fetcher.extract_income_statement",
+        lambda *args, **kwargs: {
+            "sales": 50_000_000,
+            "operating_profit": 6_000_000,
+            "net_profit": 4_000_000,
+            "accounting_standard": "J-GAAP",
+        },
+    )
+    monkeypatch.setattr(
+        "mebuki.services.edinet_fetcher.extract_balance_sheet",
+        lambda *args, **kwargs: {"net_assets": 40_000_000},
+    )
+    monkeypatch.setattr(
+        "mebuki.services.edinet_fetcher.extract_cash_flow",
+        lambda *args, **kwargs: {
+            "cfo": {"current": 7_000_000},
+            "cfi": {"current": -2_000_000},
+        },
+    )
+    monkeypatch.setattr(
+        "mebuki.services.edinet_fetcher.extract_shareholder_metrics",
+        lambda *args, **kwargs: {
+            "EPS": 40.0,
+            "BPS": 400.0,
+            "AvgSh": 100_000.0,
+            "ShOutFY": 120_000.0,
+            "DivTotalAnn": None,
+            "PayoutRatioAnn": None,
+            "CashEq": 9_000_000,
+            "DivAnn": None,
+            "Div2Q": 25.0,
+        },
+    )
+
+    records = await fetcher.build_xbrl_half_year_records(
+        "72030",
+        1,
+        docs=[{
+            "docID": "S100HALF",
+            "edinet_fy_end": "2025-03-31",
+            "edinet_period_start": "2024-04-01",
+            "edinet_period_end": "2024-09-30",
+            "submitDateTime": "2024-11-14T10:00:00",
+        }],
+    )
+
+    assert records == [{
+        "Code": "72030",
+        "CurFYEn": "2025-03-31",
+        "CurFYSt": "2024-04-01",
+        "CurPerSt": "2024-04-01",
+        "CurPerEn": "2024-09-30",
+        "CurPerType": "2Q",
+        "DiscDate": "2024-11-14",
+        "Sales": 50_000_000,
+        "SalesLabel": None,
+        "OP": 6_000_000,
+        "NP": 4_000_000,
+        "Eq": 40_000_000,
+        "CFO": 7_000_000,
+        "CFI": -2_000_000,
+        "EPS": 40.0,
+        "BPS": 400.0,
+        "AvgSh": 100_000.0,
+        "ShOutFY": 120_000.0,
+        "DivTotalAnn": None,
+        "PayoutRatioAnn": None,
+        "CashEq": 9_000_000,
+        "DivAnn": None,
+        "Div2Q": 25.0,
+        "_xbrl_source": True,
+        "_accounting_standard": "J-GAAP",
+        "_docID": "S100HALF",
+    }]
 
 
 @pytest.mark.asyncio
@@ -247,6 +362,10 @@ async def test_build_xbrl_annual_records_falls_back_to_ordinary_revenue_for_sale
             "cfi": {"current": -1_763_839_000_000},
         },
     )
+    monkeypatch.setattr(
+        "mebuki.services.edinet_fetcher.extract_shareholder_metrics",
+        lambda *args, **kwargs: {},
+    )
 
     records = await fetcher.build_xbrl_annual_records(
         "83090",
@@ -254,7 +373,7 @@ async def test_build_xbrl_annual_records_falls_back_to_ordinary_revenue_for_sale
         docs=[
             {
                 "docID": "S100VXKF",
-                "jquants_fy_end": "2025-03-31",
+                "edinet_fy_end": "2025-03-31",
                 "submitDateTime": "2025-06-25T10:00:00",
             }
         ],
@@ -296,6 +415,10 @@ async def test_build_xbrl_annual_records_uses_operating_profit_fallback(monkeypa
             "cfi": {"current": -541_953_000_000},
         },
     )
+    monkeypatch.setattr(
+        "mebuki.services.edinet_fetcher.extract_shareholder_metrics",
+        lambda *args, **kwargs: {"CashEq": 172_111_000_000},
+    )
 
     records = await fetcher.build_xbrl_annual_records(
         "49010",
@@ -303,13 +426,14 @@ async def test_build_xbrl_annual_records_uses_operating_profit_fallback(monkeypa
         docs=[
             {
                 "docID": "S100W3XJ",
-                "jquants_fy_end": "2025-03-31",
+                "edinet_fy_end": "2025-03-31",
                 "submitDateTime": "2025-06-27T10:00:00",
             }
         ],
     )
 
     assert records[0]["OP"] == 340_594_000_000
+    assert records[0]["CashEq"] == 172_111_000_000
 
 
 @pytest.mark.asyncio
@@ -343,6 +467,10 @@ async def test_build_xbrl_annual_records_defers_ordinary_income_to_edinet_applie
             "cfi": {"current": -186_948_000_000},
         },
     )
+    monkeypatch.setattr(
+        "mebuki.services.edinet_fetcher.extract_shareholder_metrics",
+        lambda *args, **kwargs: {},
+    )
 
     records = await fetcher.build_xbrl_annual_records(
         "83060",
@@ -350,7 +478,7 @@ async def test_build_xbrl_annual_records_defers_ordinary_income_to_edinet_applie
         docs=[
             {
                 "docID": "S100W4FB",
-                "jquants_fy_end": "2025-03-31",
+                "edinet_fy_end": "2025-03-31",
                 "submitDateTime": "2025-06-25T10:00:00",
             }
         ],

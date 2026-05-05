@@ -89,7 +89,6 @@ class CachePruner:
         known_root_prefixes = (
             "individual_analysis_",
             "half_year_periods_",
-            "earnings_calendar_",
             "mof_",
             "boj_",
         )

@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 
 from mebuki import __version__
-from mebuki.api.jquants_client import JQuantsAPIClient
 from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.infrastructure.settings import settings_store
 from mebuki.constants.financial import (
@@ -23,11 +22,9 @@ from mebuki.utils.master_types import StockSearchResult
 from mebuki.utils.output_serializer import serialize_metrics_result
 
 _CACHE_VERSION = ".".join(__version__.split(".")[:2])
-_JQUANTS_CACHE_VERSION = "jquants-v1"
 
 from .analyzer import IndividualAnalyzer
 from .company_info_service import CompanyInfoService
-from .earnings_calendar_service import EarningsCalendarService
 from .filing_service import FilingService
 from .half_year_data_service import HalfYearDataService
 
@@ -103,7 +100,7 @@ class DataService:
     """財務データおよび有報データの取得を行うクラス"""
 
     def __init__(self):
-        self.api_client = JQuantsAPIClient(api_key=settings_store.jquants_api_key)
+        self.api_client: Any = None
         edinet_cache = Path(settings_store.cache_dir) / "edinet"
         self.edinet_client = EdinetAPIClient(
             api_key=settings_store.edinet_api_key,
@@ -114,10 +111,6 @@ class DataService:
             enabled=settings_store.cache_enabled,
         )
         self.company_info_service = CompanyInfoService()
-        self.earnings_calendar_service = EarningsCalendarService(
-            self.api_client,
-            self.cache_manager,
-        )
         self.filing_service = FilingService(self.api_client, self.edinet_client)
         self.half_year_data_service = HalfYearDataService(
             self.api_client,
@@ -127,37 +120,26 @@ class DataService:
 
     def _sync_child_services(self) -> None:
         """テストや再初期化で差し替えられた共有依存を委譲先にも反映する。"""
-        self.earnings_calendar_service.api_client = self.api_client
-        self.earnings_calendar_service.cache_manager = self.cache_manager
         self.filing_service.api_client = self.api_client
         self.filing_service.edinet_client = self.edinet_client
         self.half_year_data_service.api_client = self.api_client
         self.half_year_data_service.edinet_client = self.edinet_client
         self.half_year_data_service.cache_manager = self.cache_manager
 
-    async def _refresh_earnings_calendar_if_needed(self) -> None:
-        """1日1回、決算カレンダーのストアを更新する"""
-        self._sync_child_services()
-        await self.earnings_calendar_service.refresh_if_needed()
-
     async def close(self) -> None:
         """全APIクライアントのセッションをクローズする"""
-        await self.api_client.close()
+        if self.api_client is not None and hasattr(self.api_client, "close"):
+            await self.api_client.close()
         await self.edinet_client.close()
 
     def reinitialize(self) -> None:
         """設定変更時に呼び出され、APIクライアントなどの設定を更新します。"""
         logger.info("再初期化中: APIクライアントの設定を更新します")
-        self.api_client.update_api_key(settings_store.jquants_api_key)
         self.edinet_client.update_api_key(settings_store.edinet_api_key)
 
         self.cache_manager.cache_dir = Path(settings_store.cache_dir)
         self.cache_manager.enabled = settings_store.cache_enabled
         self.cache_manager.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.earnings_calendar_service = EarningsCalendarService(
-            self.api_client,
-            self.cache_manager,
-        )
         self.filing_service = FilingService(self.api_client, self.edinet_client)
         self.half_year_data_service = HalfYearDataService(
             self.api_client,
@@ -173,32 +155,6 @@ class DataService:
             cache_manager=self.cache_manager,
         )
 
-    async def _fetch_jquants_financial_data(
-        self,
-        code: str,
-    ) -> tuple[dict[str, Any] | None, list[dict[str, Any]] | None]:
-        """J-QUANTS の stock_info と financial_data をキャッシュ経由で返す。"""
-        from mebuki.services.financial_fetcher import FinancialFetcher
-
-        cache_key = f"jquants_financial_{code}"
-        cached = self.cache_manager.get(cache_key)
-        if cached and cached.get("_cache_version") == _JQUANTS_CACHE_VERSION:
-            return cached.get("stock_info"), cached.get("financial_data")
-
-        stock_info, financial_data, _ = await FinancialFetcher(self.api_client).fetch_financial_data(
-            code, include_2q=True
-        )
-        if stock_info and financial_data:
-            self.cache_manager.set(
-                cache_key,
-                {
-                    "_cache_version": _JQUANTS_CACHE_VERSION,
-                    "stock_info": stock_info,
-                    "financial_data": financial_data,
-                },
-            )
-        return stock_info, financial_data
-
     async def search_companies(self, query: str) -> list[StockSearchResult]:
         """銘柄コードまたは名称で企業を検索します。"""
         return await self.company_info_service.search_companies(query)
@@ -206,10 +162,6 @@ class DataService:
     def fetch_stock_basic_info(self, code: str) -> dict[str, Any]:
         """銘柄の基本情報を取得"""
         return self.company_info_service.fetch_stock_basic_info(code)
-
-    def _attach_upcoming_earnings(self, result: dict[str, Any], code: str) -> None:
-        """決算スケジュールを result に付与する（該当なければ何もしない）"""
-        self.earnings_calendar_service.attach_upcoming_earnings(result, code)
 
     async def get_financial_data(
         self,
@@ -222,18 +174,15 @@ class DataService:
     ) -> dict[str, Any] | list[dict[str, Any]]:
         """財務データ取得の統一公開API。scope=None で財務サマリー、scope="raw" で生データ。"""
         if scope == "raw":
-            raw_data = await self.api_client.get_financial_summary(code=code)
+            analyzer = self.get_analyzer()
+            max_years = analysis_years or settings_store.analysis_years or 5
+            raw_data = await analyzer._edinet_fetcher.build_xbrl_annual_records(code, max_years)
             return [
                 {k: v for k, v in record.items() if v is not None and v != ""}
                 for record in raw_data
             ]
 
         result = await self.get_raw_analysis_data(code, use_cache=use_cache, include_2q=include_2q, analysis_years=analysis_years, include_debug_fields=include_debug_fields)
-        try:
-            await self._refresh_earnings_calendar_if_needed()
-            self._attach_upcoming_earnings(result, code)
-        except Exception:
-            pass
         return result
 
     async def get_half_year_periods(
@@ -306,11 +255,8 @@ class DataService:
                 result = {k: v for k, v in cached.items() if k != "_cache_version" and k != "llm_financial_analysis"}
                 return _apply_debug_filter(result, include_debug_fields)
 
-        stock_info, financial_data = await self._fetch_jquants_financial_data(code)
-        if not stock_info:
-            stock_info = {"Code": code}
-        if financial_data is None:
-            financial_data = []
+        stock_info = {"Code": code, **self.fetch_stock_basic_info(code)}
+        financial_data: list[dict[str, Any]] = []
 
         result = await analyzer.fetch_analysis_data(
             code,

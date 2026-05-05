@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Any, TypeAlias
 
 from mebuki import __version__
-from mebuki.api.jquants_client import JQuantsAPIClient
 from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.analysis.balance_sheet import extract_balance_sheet
 from mebuki.analysis.cash_flow import extract_cash_flow
@@ -26,10 +25,13 @@ from mebuki.analysis.interest_expense import extract_interest_expense
 from mebuki.analysis.net_revenue import extract_net_revenue
 from mebuki.analysis.operating_profit import extract_operating_profit
 from mebuki.analysis.order_book import extract_order_book
+from mebuki.analysis.shareholder_metrics import extract_shareholder_metrics
 from mebuki.analysis.tax_expense import extract_tax_expense
 from mebuki.utils.cache import CacheManager
-from mebuki.utils.jquants_utils import prepare_edinet_search_data
-from mebuki.utils.edinet_discovery import build_document_index_for_code
+from mebuki.utils.edinet_discovery import (
+    build_document_index_for_code,
+    build_half_year_document_index_for_code,
+)
 from mebuki.utils.xbrl_result_types import GrossProfitResult, HalfYearEdinetEntry, XbrlTagElements
 
 logger = logging.getLogger(__name__)
@@ -46,6 +48,17 @@ def _infer_fy_start(fy_end: str) -> str:
         return start_dt.strftime("%Y-%m-%d")
     except (ValueError, OverflowError):
         return ""
+
+
+def _infer_fy_end_from_period_start(period_start: str) -> str:
+    """期首日から会計期末日を推測する（翌年同日の前日）。"""
+    from datetime import datetime, timedelta
+    try:
+        start_dt = datetime.strptime(period_start[:10], "%Y-%m-%d")
+        end_dt = start_dt.replace(year=start_dt.year + 1) - timedelta(days=1)
+        return end_dt.strftime("%Y-%m-%d")
+    except (ValueError, OverflowError):
+        return ""
 _XBRL_PARSE_CACHE_VERSION = ".".join(__version__.split(".")[:2]) + ":xbrl-parse"
 
 _PreParsedMap: TypeAlias = dict[str, tuple[Path, XbrlTagElements]]
@@ -56,6 +69,34 @@ _DocCacheKey: TypeAlias = tuple[str, int] | tuple[str, int, str]
 
 def _fy_end_key(value: object) -> str:
     return value.replace("-", "") if isinstance(value, str) else ""
+
+
+def _docs_from_xbrl_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """EDINET由来レコードに残した _docID から検索済み書類形式を復元する。"""
+    docs: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for record in records:
+        doc_id = record.get("_docID")
+        fy_end = record.get("CurFYEn")
+        if not isinstance(doc_id, str) or not doc_id or not isinstance(fy_end, str):
+            continue
+        if doc_id in seen:
+            continue
+        seen.add(doc_id)
+        doc: dict[str, Any] = {
+            "docID": doc_id,
+            "edinet_fy_end": fy_end,
+            "period_type": record.get("CurPerType"),
+            "submitDateTime": record.get("DiscDate", ""),
+        }
+        if isinstance(record.get("CurPerSt"), str):
+            doc["edinet_period_start"] = record["CurPerSt"]
+            doc["periodStart"] = record["CurPerSt"]
+        if isinstance(record.get("CurPerEn"), str):
+            doc["edinet_period_end"] = record["CurPerEn"]
+            doc["periodEnd"] = record["CurPerEn"]
+        docs.append(doc)
+    return docs
 
 
 def _is_valid_xbrl_parse_cache(data: object) -> bool:
@@ -118,7 +159,7 @@ class EdinetFetcher:
 
     def __init__(
         self,
-        api_client: JQuantsAPIClient,
+        api_client: object | None,
         edinet_client: EdinetAPIClient | None,
         *,
         cache_manager: CacheManager | None = None,
@@ -156,21 +197,16 @@ class EdinetFetcher:
                         self._doc_cache[key] = cached["docs"]
                         return self._doc_cache[key]
 
-                annual_financial_data = [
+                annual_records = [
                     record for record in financial_data
                     if record.get("CurPerType") == "FY"
                 ]
+                docs_from_records = _docs_from_xbrl_records(annual_records)
 
-                if annual_financial_data:
-                    docs = await self.search_recent_reports(
-                        code=code,
-                        jquants_data=annual_financial_data,
-                        max_years=max_years,
-                        doc_types=["120"],
-                        max_documents=max_years,
-                    )
+                if docs_from_records:
+                    docs = docs_from_records[:max_years]
                 else:
-                    docs = await self._search_without_jquants(code, max_years)
+                    docs = await self._search_edinet_annual_docs(code, max_years)
                 self._doc_cache[key] = docs
                 if self.cache_manager is not None:
                     self.cache_manager.set(
@@ -179,19 +215,32 @@ class EdinetFetcher:
                     )
             return self._doc_cache[key]
 
-    async def _search_without_jquants(
+    async def _search_edinet_annual_docs(
         self,
         code: str,
         max_years: int,
     ) -> list[dict[str, Any]]:
-        """J-Quants なしで EDINET の有価証券報告書を発見する。
+        """EDINET の有価証券報告書を発見する。
 
-        financial_data が空のときのフォールバック。
         build_document_index_for_code() による3段階フォールバック検索を行う。
         """
         if not self.edinet_client:
             return []
         return await build_document_index_for_code(
+            code,
+            self.edinet_client,
+            analysis_years=max_years,
+        )
+
+    async def _search_edinet_half_docs(
+        self,
+        code: str,
+        max_years: int,
+    ) -> list[dict[str, Any]]:
+        """EDINET の半期/2Q報告書を発見する。"""
+        if not self.edinet_client:
+            return []
+        return await build_half_year_document_index_for_code(
             code,
             self.edinet_client,
             analysis_years=max_years,
@@ -253,14 +302,13 @@ class EdinetFetcher:
                         return self._doc_cache[key]
 
                 records = self._prepare_q2_records(financial_data, max_years)
-                if not records or not self.edinet_client:
+                docs_from_records = _docs_from_xbrl_records(records)
+                if not self.edinet_client:
                     docs: list[dict[str, Any]] = []
+                elif docs_from_records:
+                    docs = docs_from_records[:max_years]
                 else:
-                    docs = await self.edinet_client.search_documents(
-                        code=code,
-                        jquants_data=records,
-                        max_documents=max_years,
-                    )
+                    docs = await self._search_edinet_half_docs(code, max_years)
                 self._doc_cache[key] = docs
                 if self.cache_manager is not None:
                     self.cache_manager.set(
@@ -269,52 +317,12 @@ class EdinetFetcher:
                     )
             return self._doc_cache[key]
 
-    async def search_recent_reports(
-        self,
-        code: str,
-        jquants_data: list[dict[str, Any]],
-        max_years: int = 5,
-        doc_types: list[str] | None = None,
-        max_documents: int = 10,
-    ) -> list[dict[str, Any]]:
-        """J-QUANTS年度データをもとに、直近N年分のEDINET書類を検索する。
-
-        EDINET API client はレコード単位の検索だけを担当し、J-QUANTS側の
-        年度抽出・対象期間選定はサービス層で行う。
-        """
-        if not self.edinet_client or not self.edinet_client.api_key or not jquants_data:
-            return []
-
-        annual_data_idx, years_list = prepare_edinet_search_data(
-            jquants_data,
-            max_records=max_years * 3,
-        )
-        target_years = years_list[:max_years]
-        recent_data = [
-            record for record in annual_data_idx
-            if record.get("fiscal_year") in target_years
-        ]
-
-        return await self.edinet_client.search_documents(
-            code=code,
-            years=target_years,
-            jquants_data=recent_data,
-            doc_type_code=doc_types[0] if doc_types and len(doc_types) == 1 else None,
-            max_documents=max_documents,
-        )
-
     async def fetch_latest_annual_report(
         self,
         code: str,
-        jquants_data: list[dict[str, Any]],
     ) -> dict[str, Any] | None:
         """最新の有価証券報告書(120)を1件取得する。"""
-        docs = await self.search_recent_reports(
-            code,
-            jquants_data,
-            max_years=10,
-            doc_types=["120"],
-        )
+        docs = await self._search_edinet_annual_docs(code, 10)
         annual_reports = [doc for doc in docs if doc.get("docTypeCode") == "120"]
         if annual_reports:
             return sorted(annual_reports, key=lambda x: x.get("submitDateTime", ""), reverse=True)[0]
@@ -348,7 +356,7 @@ class EdinetFetcher:
         client = self.edinet_client
 
         async def _dl_parse(doc: dict[str, Any]) -> tuple[str, tuple[Path, XbrlTagElements] | None]:
-            fy_end_8 = _fy_end_key(doc.get("jquants_fy_end"))
+            fy_end_8 = _fy_end_key(doc.get("edinet_fy_end"))
             doc_id = doc["docID"]
             if not fy_end_8:
                 return "", None
@@ -405,7 +413,7 @@ class EdinetFetcher:
         result_check: Callable[[dict[str, Any]], bool] | None = None,
         pre_parsed_map: _PreParsedMap | None = None,
     ) -> tuple[str, dict[str, Any] | None]:
-        fy_end_8 = _fy_end_key(doc.get("jquants_fy_end"))
+        fy_end_8 = _fy_end_key(doc.get("edinet_fy_end"))
         if not fy_end_8:
             return "", None
         if self.edinet_client is None:
@@ -490,16 +498,7 @@ class EdinetFetcher:
             return
 
         try:
-            annual_data_idx, years_list = prepare_edinet_search_data(
-                financial_data, max_records=max_documents * 3
-            )
-
-            all_docs = await self.edinet_client.search_documents(
-                code,
-                years=years_list,
-                jquants_data=annual_data_idx,
-                max_documents=max_documents,
-            )
+            all_docs = await self._get_annual_docs(code, financial_data, max_documents)
 
             if not all_docs:
                 logger.info(f"EDINET書類が見つかりませんでした: code={code}")
@@ -512,7 +511,7 @@ class EdinetFetcher:
                 dt = doc.get("docTypeCode")
                 label = "有価証券報告書" if dt == "120" else "半期報告書"
                 year = doc.get("fiscal_year")
-                fy_key = doc.get("jquants_fy_end") or str(year)
+                fy_key = doc.get("edinet_fy_end") or str(year)
 
                 report_info = {
                     "docID": doc_id,
@@ -520,7 +519,7 @@ class EdinetFetcher:
                     "docType": label,
                     "docTypeCode": dt,
                     "fiscal_year": year,
-                    "jquants_fy_end": fy_key,
+                    "edinet_fy_end": fy_key,
                 }
 
                 yield {"year": year, "fy_key": fy_key, "report": report_info}
@@ -532,14 +531,14 @@ class EdinetFetcher:
         self,
         code: str,
         years: list[int],
-        jquants_annual_data: list[dict[str, Any]] | None = None,
+        annual_data: list[dict[str, Any]] | None = None,
         progress_callback: Callable | None = None,
         max_documents: int = 20,
     ) -> dict[int, list[dict[str, Any]]]:
         """指定年度の有価証券報告書を取得"""
         results = {}
         async for data in self.fetch_edinet_reports_stream(
-            code, jquants_annual_data or [], max_documents
+            code, annual_data or [], max_documents
         ):
             fy_key = data["fy_key"]
             report = data["report"]
@@ -571,7 +570,7 @@ class EdinetFetcher:
         docs = await self._get_annual_docs(code, financial_data, max_years)
         result: dict[str, str] = {}
         for doc in docs:
-            fy_end = _fy_end_key(doc.get("jquants_fy_end"))
+            fy_end = _fy_end_key(doc.get("edinet_fy_end"))
             if fy_end:
                 result[fy_end] = doc["docID"]
         return result
@@ -666,7 +665,7 @@ class EdinetFetcher:
 
         out: dict[str, HalfYearEdinetEntry] = {}
         for doc in docs:
-            fy_end_8 = _fy_end_key(doc.get("jquants_fy_end"))
+            fy_end_8 = _fy_end_key(doc.get("edinet_fy_end"))
             if not fy_end_8 or fy_end_8 not in pre_parsed_map:
                 continue
             xbrl_path, pre_parsed = pre_parsed_map[fy_end_8]
@@ -758,11 +757,11 @@ class EdinetFetcher:
         max_years: int,
         docs: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
-        """XBRL から J-Quants 互換の年度財務レコードを構築する。
+        """XBRL から年度財務レコードを構築する。
 
-        J-Quants なし運用時に calculate_metrics_flexible へ渡せる形式の
-        年度レコードリストを返す。各レコードは CurFYEn/CurFYSt/Sales/OP/NP/Eq/CFO/CFI
-        を含む。値はすべて円単位（J-Quants と同じ）。
+        calculate_metrics_flexible へ渡せる形式の年度レコードリストを返す。
+        各レコードは CurFYEn/CurFYSt/Sales/OP/NP/Eq/CFO/CFI を含む。
+        値はすべて円単位。
 
         Args:
             code: 銘柄コード
@@ -770,13 +769,13 @@ class EdinetFetcher:
             docs: 事前に取得した EDINET 書類リスト（省略時は自動発見）
 
         Returns:
-            J-Quants 形式の年度レコードリスト（新しい年度順）
+            年度レコードリスト（新しい年度順）
         """
         if not self.edinet_client:
             return []
 
         if docs is None:
-            docs = await self._search_without_jquants(code, max_years)
+            docs = await self._search_edinet_annual_docs(code, max_years)
         if not docs:
             return []
 
@@ -790,8 +789,8 @@ class EdinetFetcher:
             if doc.get("_is_amendment"):
                 continue  # 訂正書類は pre_parsed_map 経由でオリジナルに上書き済み
 
-            fy_end_8 = _fy_end_key(doc.get("jquants_fy_end"))
-            fy_end = doc.get("jquants_fy_end", "")  # YYYY-MM-DD
+            fy_end_8 = _fy_end_key(doc.get("edinet_fy_end"))
+            fy_end = doc.get("edinet_fy_end", "")  # YYYY-MM-DD
             if not fy_end or fy_end_8 not in pre_parsed_map:
                 continue
 
@@ -818,6 +817,11 @@ class EdinetFetcher:
                 operating_profit_label = op_result.get("label")
             bs_result = extract_balance_sheet(xbrl_path, pre_parsed=pre_parsed)
             cf_result = extract_cash_flow(xbrl_path, pre_parsed=pre_parsed)
+            sh_result = extract_shareholder_metrics(
+                xbrl_path,
+                pre_parsed=pre_parsed,
+                net_profit=is_result.get("net_profit"),
+            )
 
             fy_st = _infer_fy_start(fy_end)
             submit_date = (doc.get("submitDateTime") or "")[:10]
@@ -828,7 +832,7 @@ class EdinetFetcher:
                 "CurFYSt": fy_st,
                 "CurPerType": "FY",
                 "DiscDate": submit_date,
-                # IS: 円単位（J-Quants と同単位）
+                # IS: 円単位
                 "Sales": sales,
                 "SalesLabel": sales_label,
                 "OP": None if operating_profit_label == "経常利益" else operating_profit,
@@ -838,6 +842,16 @@ class EdinetFetcher:
                 # CF: 円単位
                 "CFO": cf_result["cfo"].get("current"),
                 "CFI": cf_result["cfi"].get("current"),
+                # 株式・配当・現金同等物
+                "EPS": sh_result.get("EPS"),
+                "BPS": sh_result.get("BPS"),
+                "AvgSh": sh_result.get("AvgSh"),
+                "ShOutFY": sh_result.get("ShOutFY"),
+                "DivTotalAnn": sh_result.get("DivTotalAnn"),
+                "PayoutRatioAnn": sh_result.get("PayoutRatioAnn"),
+                "CashEq": sh_result.get("CashEq"),
+                "DivAnn": sh_result.get("DivAnn"),
+                "Div2Q": sh_result.get("Div2Q"),
                 # メタ情報（calculate_metrics_flexible には影響しない）
                 "_xbrl_source": True,
                 "_accounting_standard": is_result.get("accounting_standard"),
@@ -846,6 +860,105 @@ class EdinetFetcher:
             records.append(record)
             logger.info(
                 f"[XBRL-IS] {code} {fy_end}: "
+                f"Sales={record['Sales']}, OP={record['OP']}, NP={record['NP']}, "
+                f"Eq={record['Eq']}, CFO={record['CFO']}, CFI={record['CFI']}"
+            )
+
+        return records
+
+    async def build_xbrl_half_year_records(
+        self,
+        code: str,
+        max_years: int,
+        docs: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
+        """XBRL から2Q財務レコードを構築する。
+
+        build_half_year_periods() へ渡せる形式の半期累計レコードを返す。
+        値はすべて円単位。
+        """
+        if not self.edinet_client:
+            return []
+
+        if docs is None:
+            docs = await self._search_edinet_half_docs(code, max_years)
+        if not docs:
+            return []
+
+        pre_parsed_map = await self._download_and_parse_docs(docs, code)
+
+        records: list[dict[str, Any]] = []
+        for doc in docs:
+            fy_end = str(doc.get("edinet_fy_end") or "")
+            period_start = str(doc.get("edinet_period_start") or doc.get("periodStart") or "")
+            period_end = str(doc.get("edinet_period_end") or doc.get("periodEnd") or "")
+            if not fy_end and period_start:
+                fy_end = _infer_fy_end_from_period_start(period_start)
+            fy_end_8 = _fy_end_key(fy_end)
+            if not fy_end or fy_end_8 not in pre_parsed_map:
+                continue
+
+            xbrl_path, pre_parsed = pre_parsed_map[fy_end_8]
+
+            is_result = extract_income_statement(xbrl_path, pre_parsed=pre_parsed)
+            sales = is_result.get("sales")
+            operating_profit = is_result.get("operating_profit")
+            operating_profit_label = None
+            sales_label = None
+            if sales is None:
+                gp_for_sales = extract_gross_profit(xbrl_path, pre_parsed=pre_parsed)
+                sales = gp_for_sales.get("current_sales")
+                if sales is not None:
+                    sales_label = "経常収益"
+                if sales is None:
+                    op_for_sales = extract_operating_profit(xbrl_path, pre_parsed=pre_parsed)
+                    sales = op_for_sales.get("current_sales")
+                    if sales is not None:
+                        sales_label = "経常収益"
+            if operating_profit is None:
+                op_result = extract_operating_profit(xbrl_path, pre_parsed=pre_parsed)
+                operating_profit = op_result.get("current")
+                operating_profit_label = op_result.get("label")
+            bs_result = extract_balance_sheet(xbrl_path, pre_parsed=pre_parsed)
+            cf_result = extract_cash_flow(xbrl_path, pre_parsed=pre_parsed)
+            sh_result = extract_shareholder_metrics(
+                xbrl_path,
+                pre_parsed=pre_parsed,
+                net_profit=is_result.get("net_profit"),
+            )
+
+            submit_date = (doc.get("submitDateTime") or "")[:10]
+            record: dict[str, Any] = {
+                "Code": code,
+                "CurFYEn": fy_end,
+                "CurFYSt": period_start or _infer_fy_start(fy_end),
+                "CurPerSt": period_start,
+                "CurPerEn": period_end,
+                "CurPerType": "2Q",
+                "DiscDate": submit_date,
+                "Sales": sales,
+                "SalesLabel": sales_label,
+                "OP": None if operating_profit_label == "経常利益" else operating_profit,
+                "NP": is_result.get("net_profit"),
+                "Eq": bs_result.get("net_assets"),
+                "CFO": cf_result["cfo"].get("current"),
+                "CFI": cf_result["cfi"].get("current"),
+                "EPS": sh_result.get("EPS"),
+                "BPS": sh_result.get("BPS"),
+                "AvgSh": sh_result.get("AvgSh"),
+                "ShOutFY": sh_result.get("ShOutFY"),
+                "DivTotalAnn": sh_result.get("DivTotalAnn"),
+                "PayoutRatioAnn": sh_result.get("PayoutRatioAnn"),
+                "CashEq": sh_result.get("CashEq"),
+                "DivAnn": sh_result.get("DivAnn"),
+                "Div2Q": sh_result.get("Div2Q"),
+                "_xbrl_source": True,
+                "_accounting_standard": is_result.get("accounting_standard"),
+                "_docID": doc.get("docID"),
+            }
+            records.append(record)
+            logger.info(
+                f"[XBRL-2Q] {code} {fy_end}: "
                 f"Sales={record['Sales']}, OP={record['OP']}, NP={record['NP']}, "
                 f"Eq={record['Eq']}, CFO={record['CFO']}, CFI={record['CFI']}"
             )

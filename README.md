@@ -1,6 +1,6 @@
 ![mebuki](/assets/mebuki_ascii.png)
 
-mebukiは、J-QUANTS API、EDINET APIを最大限に活用した、**MCP (Model Context Protocol) 対応** の財務分析 Python CLI ツールです。
+mebukiは、EDINET APIを最大限に活用した、**MCP (Model Context Protocol) 対応** の財務分析 Python CLI ツールです。
 
 ---
 
@@ -40,8 +40,7 @@ CLI の初期設定コマンドを実行します：
 ```bash
 mebuki config init
 ```
-以下のキーが必要です（J-QUANTS の Light プラン以上を推奨）：
-- **J-QUANTS APIキー**: [公式サイト](https://jpx-jquants.com/)で取得
+以下のキーが必要です：
 - **EDINET APIキー**: [公式サイト](https://disclosure2.edinet-fsa.go.jp/)で取得
 
 ### 3. AI アシスタントへの登録

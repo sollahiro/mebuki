@@ -307,7 +307,7 @@ def apply_operating_profit_change_from_xbrl(
     """有報XBRLの前期比較値を使って営業利益前年差分解を付与する。
 
     各年度の有報に含まれる前期数値（Prior1YearDuration コンテキスト）を使うため、
-    J-QUANTSデータと前年リストへの依存なしに全年度の前年差を計算できる。
+    外部の前年リストへ依存せずに全年度の前年差を計算できる。
     gp_by_year / op_by_year は YYYYMMDD キーの XBRL 抽出結果 dict。
     """
     for year in years:

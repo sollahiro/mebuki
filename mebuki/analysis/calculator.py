@@ -134,11 +134,14 @@ def _extract_raw_values(year_data: dict[str, Any]) -> RawData:
         'EPS': to_float(year_data.get("EPS")),
         'BPS': to_float(year_data.get("BPS")),
         'AvgSh': to_float(year_data.get("AvgSh")),
+        'ShOutFY': to_float(year_data.get("ShOutFY")),
         'DivTotalAnn': to_float(year_data.get("DivTotalAnn")),
         'PayoutRatioAnn': to_float(year_data.get("PayoutRatioAnn")),
         'CashEq': to_float(year_data.get("CashAndCashEquivalents")) or to_float(year_data.get("CashEq")) or to_float(year_data.get("Cash")),
+        'Div2Q': to_float(year_data.get("Div2Q")),
         'DivAnn': to_float(year_data.get("DivAnn")),
-        'NxFDivAnn': to_float(year_data.get("NxFDivAnn"))
+        'NxFDivAnn': to_float(year_data.get("NxFDivAnn")),
+        '_xbrl_source': bool(year_data.get("_xbrl_source")),
     }
 
 
@@ -160,15 +163,16 @@ def _calculate_base_values(raw_values: RawData) -> CalculatedData:
         'PayoutRatio': payout_ratio_ann * PERCENT if payout_ratio_ann is not None else None,
         'CFC': (cfo_m + cfi_m) if (cfo_m is not None and cfi_m is not None) else None
     }
+    base_source = "edinet" if raw_values.get("_xbrl_source") else "external"
     values["MetricSources"] = {
-        "Sales": {"source": "jquants", "unit": "million_yen"},
-        "OP": {"source": "jquants", "unit": "million_yen"},
-        "NP": {"source": "jquants", "unit": "million_yen"},
-        "Eq": {"source": "jquants", "unit": "million_yen"},
-        "CFO": {"source": "jquants", "unit": "million_yen"},
-        "CFI": {"source": "jquants", "unit": "million_yen"},
-        "CashEq": {"source": "jquants", "unit": "million_yen"},
-        "PayoutRatio": {"source": "jquants", "unit": "percent"},
+        "Sales": {"source": base_source, "unit": "million_yen"},
+        "OP": {"source": base_source, "unit": "million_yen"},
+        "NP": {"source": base_source, "unit": "million_yen"},
+        "Eq": {"source": base_source, "unit": "million_yen"},
+        "CFO": {"source": base_source, "unit": "million_yen"},
+        "CFI": {"source": base_source, "unit": "million_yen"},
+        "CashEq": {"source": base_source, "unit": "million_yen"},
+        "PayoutRatio": {"source": base_source, "unit": "percent"},
         "CFC": {"source": "derived", "method": "CFO + CFI", "unit": "million_yen"},
     }
     sales_label = raw_values.get("SalesLabel")

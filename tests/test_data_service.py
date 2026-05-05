@@ -1,13 +1,11 @@
 """
 DataService のユニットテスト
 
-JQuantsAPIClient / EdinetAPIClient / IndividualAnalyzer をモック化し、
-キャッシュロジック・データ変換・カレンダー付与などのビジネスロジックを検証する。
+EdinetAPIClient / IndividualAnalyzer をモック化し、
+キャッシュロジック・データ変換などのビジネスロジックを検証する。
 """
 import pytest
-from datetime import date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
-from typing import Any
 
 
 # ──────────────────────────────────────────────────────────────
@@ -19,18 +17,17 @@ def svc(tmp_path):
     """
     DataService を外部依存ゼロで構築する。
     - settings_store は tmp_path を向くスタブ
-    - JQuantsAPIClient / EdinetAPIClient は AsyncMock
+    - EdinetAPIClient は AsyncMock
     - CacheManager は tmp_path に実ファイルを作成（TTL ロジックも動作確認できる）
     """
     with (
         patch("mebuki.services.data_service.settings_store") as mock_settings,
-        patch("mebuki.services.data_service.JQuantsAPIClient"),
         patch("mebuki.services.data_service.EdinetAPIClient"),
     ):
-        mock_settings.jquants_api_key = ""
         mock_settings.edinet_api_key = ""
         mock_settings.cache_dir = str(tmp_path)
         mock_settings.cache_enabled = True
+        mock_settings.analysis_years = 5
 
         from mebuki.services.data_service import DataService
         ds = DataService()
@@ -93,131 +90,31 @@ class TestFetchStockBasicInfo:
 
 
 # ──────────────────────────────────────────────────────────────
-# _attach_upcoming_earnings
-# ──────────────────────────────────────────────────────────────
-
-class TestAttachUpcomingEarnings:
-    def _make_entry(self, code: str, date_str: str, fq: str = "本決算") -> dict:
-        return {"Code": code, "Date": date_str, "FQ": fq, "SectorNm": "製造業", "Section": "プライム"}
-
-    def test_attaches_matching_future_entry(self, svc):
-        future = (date.today().replace(year=date.today().year + 1)).isoformat()
-        entry = self._make_entry("72030", future)
-        svc.cache_manager.set("earnings_calendar_store", [entry])
-
-        result: dict[str, Any] = {}
-        svc._attach_upcoming_earnings(result, "72030")
-        assert "upcoming_earnings" in result
-        assert result["upcoming_earnings"]["FQ"] == "本決算"
-
-    def test_ignores_past_entry(self, svc):
-        past = "2020-01-01"
-        entry = self._make_entry("72030", past)
-        svc.cache_manager.set("earnings_calendar_store", [entry])
-
-        result: dict[str, Any] = {}
-        svc._attach_upcoming_earnings(result, "72030")
-        assert "upcoming_earnings" not in result
-
-    def test_no_match_for_different_ticker(self, svc):
-        future = (date.today().replace(year=date.today().year + 1)).isoformat()
-        entry = self._make_entry("60980", future)
-        svc.cache_manager.set("earnings_calendar_store", [entry])
-
-        result: dict[str, Any] = {}
-        svc._attach_upcoming_earnings(result, "72030")
-        assert "upcoming_earnings" not in result
-
-    def test_empty_store_is_noop(self, svc):
-        svc.cache_manager.set("earnings_calendar_store", [])
-        result: dict[str, Any] = {}
-        svc._attach_upcoming_earnings(result, "72030")
-        assert "upcoming_earnings" not in result
-
-
-# ──────────────────────────────────────────────────────────────
-# _refresh_earnings_calendar_if_needed
-# ──────────────────────────────────────────────────────────────
-
-class TestRefreshEarningsCalendar:
-    @pytest.mark.asyncio
-    async def test_skips_if_already_fetched_today(self, svc):
-        today = date.today().isoformat()
-        svc.cache_manager.set("earnings_calendar_last_fetched", today)
-        await svc._refresh_earnings_calendar_if_needed()
-        svc.api_client.get_earnings_calendar.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_fetches_and_stores_on_first_call(self, svc):
-        future = (date.today().replace(year=date.today().year + 1)).isoformat()
-        svc.api_client.get_earnings_calendar.return_value = [
-            {"Date": future, "Code": "72030", "FQ": "本決算", "SectorNm": "製造業", "Section": "プライム"},
-        ]
-        await svc._refresh_earnings_calendar_if_needed()
-        svc.api_client.get_earnings_calendar.assert_called_once()
-        stored = svc.cache_manager.get("earnings_calendar_store")
-        assert any(e["Code"] == "72030" for e in stored)
-
-    @pytest.mark.asyncio
-    async def test_filters_past_dates(self, svc):
-        svc.api_client.get_earnings_calendar.return_value = [
-            {"Date": "2020-01-01", "Code": "72030", "FQ": "本決算"},
-        ]
-        await svc._refresh_earnings_calendar_if_needed()
-        stored = svc.cache_manager.get("earnings_calendar_store") or []
-        assert stored == []
-
-    @pytest.mark.asyncio
-    async def test_filters_non_target_fq(self, svc):
-        future = (date.today().replace(year=date.today().year + 1)).isoformat()
-        svc.api_client.get_earnings_calendar.return_value = [
-            {"Date": future, "Code": "72030", "FQ": "第１四半期"},
-        ]
-        await svc._refresh_earnings_calendar_if_needed()
-        stored = svc.cache_manager.get("earnings_calendar_store") or []
-        assert stored == []
-
-    @pytest.mark.asyncio
-    async def test_no_duplicates_on_second_refresh(self, svc):
-        future = (date.today().replace(year=date.today().year + 1)).isoformat()
-        entry = {"Date": future, "Code": "72030", "FQ": "本決算"}
-        svc.api_client.get_earnings_calendar.return_value = [entry]
-        await svc._refresh_earnings_calendar_if_needed()
-        # last_fetched をリセットして2回目を実行
-        svc.cache_manager.set("earnings_calendar_last_fetched", "2000-01-01")
-        await svc._refresh_earnings_calendar_if_needed()
-        stored = svc.cache_manager.get("earnings_calendar_store") or []
-        codes = [e["Code"] for e in stored]
-        assert codes.count("72030") == 1
-
-    @pytest.mark.asyncio
-    async def test_api_error_does_not_raise(self, svc):
-        svc.api_client.get_earnings_calendar.side_effect = RuntimeError("network error")
-        await svc._refresh_earnings_calendar_if_needed()  # 例外を外に出さない
-
-
-# ──────────────────────────────────────────────────────────────
 # get_financial_data (scope="raw")
 # ──────────────────────────────────────────────────────────────
 
 class TestGetFinancialDataRaw:
     @pytest.mark.asyncio
     async def test_raw_scope_returns_cleaned_records(self, svc):
-        svc.api_client.get_financial_summary.return_value = [
-            {"LocalCode": "72030", "NP": 1000000.0, "EmptyField": "", "NullField": None},
-        ]
-        result = await svc.get_financial_data("72030", scope="raw")
+        analyzer = MagicMock()
+        analyzer._edinet_fetcher.build_xbrl_annual_records = AsyncMock(return_value=[
+            {"Code": "72030", "NP": 1000000.0, "EmptyField": "", "NullField": None},
+        ])
+        with patch.object(svc, "get_analyzer", return_value=analyzer):
+            result = await svc.get_financial_data("72030", scope="raw")
         assert isinstance(result, list)
-        assert result[0]["LocalCode"] == "72030"
+        assert result[0]["Code"] == "72030"
         assert "EmptyField" not in result[0]
         assert "NullField" not in result[0]
 
     @pytest.mark.asyncio
     async def test_raw_scope_bypasses_cache(self, svc):
-        svc.api_client.get_financial_summary.return_value = []
-        await svc.get_financial_data("72030", scope="raw")
-        await svc.get_financial_data("72030", scope="raw")
-        assert svc.api_client.get_financial_summary.call_count == 2
+        analyzer = MagicMock()
+        analyzer._edinet_fetcher.build_xbrl_annual_records = AsyncMock(return_value=[])
+        with patch.object(svc, "get_analyzer", return_value=analyzer):
+            await svc.get_financial_data("72030", scope="raw")
+            await svc.get_financial_data("72030", scope="raw")
+        assert analyzer._edinet_fetcher.build_xbrl_annual_records.await_count == 2
 
 
 # ──────────────────────────────────────────────────────────────
@@ -493,15 +390,14 @@ class TestGetRawAnalysisData:
         assert result == {}
 
     @pytest.mark.asyncio
-    async def test_jquants_missing_data_still_calls_analyzer_for_edinet_fallback(self, svc):
-        """J-QUANTS財務データが空でもEDINET-onlyフォールバックへ進む。"""
+    async def test_edinet_only_calls_analyzer_with_empty_prefetch(self, svc):
+        """Analyzer側のEDINET-only構築へ進む。"""
         mock_analyzer = AsyncMock()
         mock_analyzer.fetch_analysis_data.return_value = {
             "metrics": {"years": []},
             "edinet_data": {},
         }
         with (
-            patch.object(svc, "_fetch_jquants_financial_data", AsyncMock(return_value=(None, None))),
             patch.object(svc, "get_analyzer", return_value=mock_analyzer),
             patch.object(svc, "fetch_stock_basic_info", return_value={"name": ""}),
         ):
@@ -509,80 +405,8 @@ class TestGetRawAnalysisData:
 
         assert result["code"] == "72030"
         _, kwargs = mock_analyzer.fetch_analysis_data.call_args
-        assert kwargs["prefetched_stock_info"] == {"Code": "72030"}
+        assert kwargs["prefetched_stock_info"] == {"Code": "72030", "name": ""}
         assert kwargs["prefetched_financial_data"] == []
-
-    @pytest.mark.asyncio
-    async def test_jquants_cache_hit_skips_api(self, svc):
-        """J-QUANTSキャッシュヒット時はAPI呼び出しが発生しない。"""
-        from mebuki.services.data_service import _JQUANTS_CACHE_VERSION
-
-        svc.cache_manager.set(
-            "jquants_financial_72030",
-            {
-                "_cache_version": _JQUANTS_CACHE_VERSION,
-                "stock_info": {"Code": "72030", "CoName": "トヨタ"},
-                "financial_data": [{"CurPerType": "FY", "CurFYEn": "2024-03-31"}],
-            },
-        )
-        mock_analyzer = AsyncMock()
-        mock_analyzer.fetch_analysis_data.return_value = {
-            "metrics": {"years": []},
-            "edinet_data": {},
-        }
-        with patch.object(svc, "get_analyzer", return_value=mock_analyzer):
-            await svc.get_raw_analysis_data("72030", use_cache=False)
-
-        svc.api_client.get_financial_summary.assert_not_called()
-        svc.api_client.get_equity_master.assert_not_called()
-        _, kwargs = mock_analyzer.fetch_analysis_data.call_args
-        assert kwargs["prefetched_stock_info"] == {"Code": "72030", "CoName": "トヨタ"}
-        assert kwargs["prefetched_financial_data"] == [{"CurPerType": "FY", "CurFYEn": "2024-03-31"}]
-
-    @pytest.mark.asyncio
-    async def test_jquants_cache_miss_fetches_and_stores(self, svc):
-        """J-QUANTSキャッシュミス時はAPIを呼び出してキャッシュに保存する。"""
-        from mebuki.services.data_service import _JQUANTS_CACHE_VERSION
-
-        svc.api_client.get_equity_master.return_value = [{"Code": "72030", "CoName": "トヨタ"}]
-        svc.api_client.get_financial_summary.return_value = [{"CurPerType": "FY", "CurFYEn": "2024-03-31"}]
-
-        mock_analyzer = AsyncMock()
-        mock_analyzer.fetch_analysis_data.return_value = {
-            "metrics": {"years": []},
-            "edinet_data": {},
-        }
-        with patch.object(svc, "get_analyzer", return_value=mock_analyzer):
-            await svc.get_raw_analysis_data("72030", use_cache=False)
-
-        stored = svc.cache_manager.get("jquants_financial_72030")
-        assert stored is not None
-        assert stored["_cache_version"] == _JQUANTS_CACHE_VERSION
-        assert stored["stock_info"] == {"Code": "72030", "CoName": "トヨタ"}
-
-    @pytest.mark.asyncio
-    async def test_jquants_cache_version_mismatch_refetches(self, svc):
-        """J-QUANTSキャッシュのバージョン不一致時は再取得する。"""
-        svc.cache_manager.set(
-            "jquants_financial_72030",
-            {
-                "_cache_version": "old-version",
-                "stock_info": {"Code": "72030"},
-                "financial_data": [],
-            },
-        )
-        svc.api_client.get_equity_master.return_value = [{"Code": "72030", "CoName": "トヨタ最新"}]
-        svc.api_client.get_financial_summary.return_value = [{"CurPerType": "FY", "CurFYEn": "2024-03-31"}]
-
-        mock_analyzer = AsyncMock()
-        mock_analyzer.fetch_analysis_data.return_value = {
-            "metrics": {"years": []},
-            "edinet_data": {},
-        }
-        with patch.object(svc, "get_analyzer", return_value=mock_analyzer):
-            await svc.get_raw_analysis_data("72030", use_cache=False)
-
-        svc.api_client.get_financial_summary.assert_called_once()
 
 
 # ──────────────────────────────────────────────────────────────
@@ -639,27 +463,58 @@ class TestHalfYearDataService:
         result = await service.get_half_year_periods("72030", years=3, use_cache=True)
 
         assert result == cached_periods
-        service.api_client.get_financial_summary.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_empty_financial_data_returns_empty(self, tmp_path):
         service = self._make_service(tmp_path)
-        service.api_client.get_financial_summary.return_value = []
+        with patch("mebuki.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
+            fetcher = fetcher_cls.return_value
+            fetcher.build_xbrl_annual_records = AsyncMock(return_value=[])
+            fetcher.build_xbrl_half_year_records = AsyncMock(return_value=[])
 
-        result = await service.get_half_year_periods("72030", years=3, use_cache=False)
+            result = await service.get_half_year_periods("72030", years=3, use_cache=False)
 
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_edinet_failure_returns_base_periods(self, tmp_path):
+    async def test_empty_prefetch_uses_edinet_only_records(self, tmp_path):
         service = self._make_service(tmp_path)
-        service.api_client.get_financial_summary.return_value = [self._fy_record(), self._q2_record()]
+        fy_record = self._fy_record()
+        fy_record["CurFYEn"] = "2024-03-31"
+        q2_record = self._q2_record()
+        q2_record["CurFYEn"] = "2024-03-31"
 
         with patch("mebuki.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
             fetcher = fetcher_cls.return_value
-            fetcher.extract_half_year_edinet_data.side_effect = RuntimeError("edinet down")
-            fetcher.extract_gross_profit_by_year.return_value = {}
-            fetcher.extract_ibd_by_year.return_value = {}
+            fetcher.build_xbrl_annual_records = AsyncMock(return_value=[fy_record])
+            fetcher.build_xbrl_half_year_records = AsyncMock(return_value=[q2_record])
+            fetcher.extract_half_year_edinet_data = AsyncMock(return_value={})
+            fetcher.extract_gross_profit_by_year = AsyncMock(return_value={})
+            fetcher.extract_ibd_by_year = AsyncMock(return_value={})
+            fetcher.extract_operating_profit_by_year = AsyncMock(return_value={})
+
+            result = await service.get_half_year_periods("72030", years=1, use_cache=False)
+
+        assert [p["label"] for p in result] == ["24H1", "24H2"]
+        assert result[0]["data"]["Sales"] == 45.0
+        assert result[1]["data"]["Sales"] == 55.0
+        fetcher.build_xbrl_annual_records.assert_awaited_once_with("72030", 1)
+        fetcher.build_xbrl_half_year_records.assert_awaited_once_with("72030", 2)
+
+    @pytest.mark.asyncio
+    async def test_edinet_failure_returns_base_periods(self, tmp_path):
+        service = self._make_service(tmp_path)
+        fy_record = self._fy_record()
+        q2_record = self._q2_record()
+
+        with patch("mebuki.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
+            fetcher = fetcher_cls.return_value
+            fetcher.build_xbrl_annual_records = AsyncMock(return_value=[fy_record])
+            fetcher.build_xbrl_half_year_records = AsyncMock(return_value=[q2_record])
+            fetcher.extract_half_year_edinet_data = AsyncMock(side_effect=RuntimeError("edinet down"))
+            fetcher.extract_gross_profit_by_year = AsyncMock(return_value={})
+            fetcher.extract_ibd_by_year = AsyncMock(return_value={})
+            fetcher.extract_operating_profit_by_year = AsyncMock(return_value={})
 
             result = await service.get_half_year_periods("72030", years=1, use_cache=False)
 
@@ -674,13 +529,17 @@ class TestHalfYearDataService:
     @pytest.mark.asyncio
     async def test_edinet_failure_excludes_debug_fields_by_default(self, tmp_path):
         service = self._make_service(tmp_path)
-        service.api_client.get_financial_summary.return_value = [self._fy_record(), self._q2_record()]
+        fy_record = self._fy_record()
+        q2_record = self._q2_record()
 
         with patch("mebuki.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
             fetcher = fetcher_cls.return_value
-            fetcher.extract_half_year_edinet_data.side_effect = RuntimeError("edinet down")
-            fetcher.extract_gross_profit_by_year.return_value = {}
-            fetcher.extract_ibd_by_year.return_value = {}
+            fetcher.build_xbrl_annual_records = AsyncMock(return_value=[fy_record])
+            fetcher.build_xbrl_half_year_records = AsyncMock(return_value=[q2_record])
+            fetcher.extract_half_year_edinet_data = AsyncMock(side_effect=RuntimeError("edinet down"))
+            fetcher.extract_gross_profit_by_year = AsyncMock(return_value={})
+            fetcher.extract_ibd_by_year = AsyncMock(return_value={})
+            fetcher.extract_operating_profit_by_year = AsyncMock(return_value={})
 
             result = await service.get_half_year_periods("72030", years=1, use_cache=False)
 
@@ -690,13 +549,17 @@ class TestHalfYearDataService:
     @pytest.mark.asyncio
     async def test_edinet_failure_includes_debug_fields_when_requested(self, tmp_path):
         service = self._make_service(tmp_path)
-        service.api_client.get_financial_summary.return_value = [self._fy_record(), self._q2_record()]
+        fy_record = self._fy_record()
+        q2_record = self._q2_record()
 
         with patch("mebuki.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
             fetcher = fetcher_cls.return_value
-            fetcher.extract_half_year_edinet_data.side_effect = RuntimeError("edinet down")
-            fetcher.extract_gross_profit_by_year.return_value = {}
-            fetcher.extract_ibd_by_year.return_value = {}
+            fetcher.build_xbrl_annual_records = AsyncMock(return_value=[fy_record])
+            fetcher.build_xbrl_half_year_records = AsyncMock(return_value=[q2_record])
+            fetcher.extract_half_year_edinet_data = AsyncMock(side_effect=RuntimeError("edinet down"))
+            fetcher.extract_gross_profit_by_year = AsyncMock(return_value={})
+            fetcher.extract_ibd_by_year = AsyncMock(return_value={})
+            fetcher.extract_operating_profit_by_year = AsyncMock(return_value={})
 
             result = await service.get_half_year_periods("72030", years=1, use_cache=False, include_debug_fields=True)
 

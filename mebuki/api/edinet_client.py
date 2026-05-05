@@ -2,14 +2,12 @@ import asyncio
 import logging
 import ssl
 from pathlib import Path
-from datetime import datetime, timedelta
 from typing import Any
 
 import aiohttp
 import certifi
 
 from ..constants.api import EDINET_API_BASE_URL
-from ..utils.fiscal_year import normalize_date_format, parse_date_string
 from .edinet_cache_store import EdinetCacheStore
 
 logger = logging.getLogger(__name__)
@@ -177,157 +175,6 @@ class EdinetAPIClient:
     def _save_search_cache(self, filename: str, data: list[dict[str, Any]]) -> None:
         """検索結果をキャッシュに保存"""
         self.cache_store.save_search_cache(filename, data)
-
-    async def _search_record(
-        self,
-        record: dict[str, Any],
-        code_4digit: str,
-        doc_type_code: str | None,
-        now: datetime,
-    ) -> dict[str, Any] | None:
-        """1レコード分の日付範囲探索を行い、見つかった書類を返す（なければ None）"""
-        fy_end = record.get("CurFYEn", "")
-        per_en = record.get("CurPerEn", "")
-        fy_st = record.get("CurFYSt", "")
-        disc_date_str = record.get("DiscDate", "")
-        period_type = record.get("CurPerType") or record.get("period_type", "FY")
-
-        fiscal_year = record.get("fiscal_year")
-        if not fiscal_year and fy_st:
-            fy_st_date = parse_date_string(fy_st)
-            if fy_st_date:
-                fiscal_year = fy_st_date.year
-
-        target_period_end_str = per_en if period_type != "FY" and per_en else fy_end
-        period_end_date = parse_date_string(target_period_end_str)
-        disc_date_formatted = normalize_date_format(disc_date_str)
-
-        if not period_end_date:
-            return None
-
-        try:
-            if disc_date_formatted:
-                disc_date_obj = datetime.strptime(disc_date_formatted, "%Y-%m-%d")
-                if disc_date_obj > now:
-                    return None
-                search_start = max(disc_date_obj, period_end_date)
-            else:
-                search_start = period_end_date
-
-            search_end = min(period_end_date + timedelta(days=97), now)
-
-            target_doc_types = [doc_type_code] if doc_type_code else (
-                ["120"] if period_type == "FY" else (
-                    ["140", "160"] if period_type in ["2Q", "Q2"] else []
-                )
-            )
-
-            if not target_doc_types:
-                return None
-
-            async def _search_dates(start: datetime, end: datetime) -> dict[str, Any] | None:
-                """start〜end の日付範囲を後方探索し、マッチした書類を返す（なければ None）"""
-                if start > end:
-                    return None
-                dates = []
-                curr = end
-                while curr >= start:
-                    dates.append(curr.strftime("%Y-%m-%d"))
-                    curr -= timedelta(days=1)
-
-                logger.info(f"🔍 [EDINET] Searching period={period_type}, fiscal_year={fiscal_year}, target={end.strftime('%Y-%m-%d')} back to {start.strftime('%Y-%m-%d')}")
-
-                for i in range(0, len(dates), 10):
-                    batch = dates[i:i + 10]
-                    batch_results = await asyncio.gather(
-                        *[self._get_documents_for_date(d) for d in batch],
-                        return_exceptions=True,
-                    )
-                    results_map: dict[str, list[dict[str, Any]]] = {}
-                    for date_str, result in zip(batch, batch_results):
-                        if isinstance(result, BaseException):
-                            logger.error(f"Error fetching docs for {date_str}: {result}")
-                            results_map[date_str] = []
-                        else:
-                            results_map[date_str] = result
-
-                    for date_str in batch:
-                        for doc in results_map.get(date_str, []):
-                            sec_code = str(doc.get("secCode", "")).strip()
-                            if not sec_code.startswith(code_4digit):
-                                continue
-                            dt = doc.get("docTypeCode", "")
-                            if target_doc_types and dt not in target_doc_types:
-                                continue
-                            desc = doc.get("docDescription", "")
-                            if desc and ("訂正" in desc or "補正" in desc):
-                                continue
-                            logger.info(f"✨ [EDINET HIT] {sec_code}: {desc} ({date_str}) ID={doc.get('docID')}")
-                            doc["fiscal_year"] = fiscal_year
-                            doc["jquants_fy_end"] = fy_end
-                            doc["period_type"] = period_type
-                            return doc
-                return None
-
-            found = await _search_dates(search_start, search_end)
-
-            # 通常ウィンドウ（97日）で見つからない場合、法定上限127日まで延長して差分を再検索
-            if found is None:
-                extended_end = min(period_end_date + timedelta(days=127), now)
-                if extended_end > search_end:
-                    logger.info(f"🔁 [EDINET] Fallback search: {(search_end + timedelta(days=1)).strftime('%Y-%m-%d')} to {extended_end.strftime('%Y-%m-%d')}")
-                    found = await _search_dates(search_end + timedelta(days=1), extended_end)
-
-            return found
-
-        except Exception as e:
-            logger.error(f"❌ [EDINET] Error processing record: {e}", exc_info=True)
-            return None
-
-    async def search_documents(
-        self,
-        code: str,
-        years: list[int] | None = None,
-        doc_type_code: str | None = None,
-        jquants_data: list[dict[str, Any]] | None = None,
-        max_documents: int = 2
-    ) -> list[dict[str, Any]]:
-        """
-        J-QUANTSのレコードに基づいてEDINET書類を検索（期間ベース）
-
-        最適化：レコード単位の探索を並列化し、かつ日付ごとのリスト取得も
-        並列化（Semaphoreで同時接続数を制御）することで高速化します。
-        """
-        if not self.api_key or not jquants_data:
-            return []
-
-        now = datetime.now()
-        code_4digit = code[:4] if len(code) >= 4 else code
-
-        record_results = await asyncio.gather(
-            *[self._search_record(record, code_4digit, doc_type_code, now) for record in jquants_data],
-            return_exceptions=True,
-        )
-
-        all_documents: list[dict[str, Any]] = []
-        for result in record_results:
-            if isinstance(result, BaseException):
-                logger.warning(f"[EDINET] Record search error: {result}")
-            elif result is not None:
-                all_documents.append(result)
-
-        # 重複除去 (docID)
-        seen_ids = set()
-        unique_docs = []
-        for d in all_documents:
-            if d["docID"] not in seen_ids:
-                seen_ids.add(d["docID"])
-                unique_docs.append(d)
-
-        if len(unique_docs) > max_documents:
-            unique_docs = unique_docs[:max_documents]
-
-        return unique_docs
 
     async def _get_documents_for_date(self, date_str: str) -> list[dict[str, Any]]:
         """特定の日付のドキュメント一覧を取得（キャッシュ対応）"""

@@ -45,11 +45,14 @@ class RawData(TypedDict, total=False):
     EPS: float | None
     BPS: float | None
     AvgSh: float | None
+    ShOutFY: float | None
     DivTotalAnn: float | None
     PayoutRatioAnn: float | None
     CashEq: float | None
+    Div2Q: float | None
     DivAnn: float | None
     NxFDivAnn: float | None
+    _xbrl_source: bool
 
 
 class CalculatedData(TypedDict, total=False):

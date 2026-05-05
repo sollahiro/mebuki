@@ -4,10 +4,10 @@
 
 import logging
 from typing import Any
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from .converters import to_float, is_valid_value, is_valid_financial_record, extract_year_month
-from mebuki.utils.fiscal_year import normalize_date_format, parse_date_string
+from mebuki.utils.fiscal_year import parse_date_string
 from mebuki.constants.financial import MILLION_YEN
 
 logger = logging.getLogger(__name__)
@@ -168,7 +168,7 @@ def build_half_year_periods(
     - 2Q データのない年は FY のみ（half=None, label="NNfy"）
 
     Args:
-        financial_data: J-QUANTS fin-summary の生レコードリスト
+        financial_data: FY/2Q の財務レコードリスト
         years: 対象 FY 件数（デフォルト 3）
 
     Returns:
@@ -242,14 +242,24 @@ def build_half_year_periods(
             return None
         return (fy_v - q2_v) / MILLION_YEN
 
+    def _record_source(record: dict[str, Any] | None) -> str:
+        return "edinet" if record and record.get("_xbrl_source") else "external"
+
     def _make_data(
         sales: float | None,
         op: float | None,
         np_: float | None,
         cfo: float | None,
         cfi: float | None,
+        *,
+        source: str,
+        flow_method: str | None = None,
     ) -> dict[str, Any]:
         cfc = (cfo + cfi) if cfo is not None and cfi is not None else None
+        metric_source = {"source": source, "unit": "million_yen"}
+        flow_source = {"source": source, "unit": "million_yen"}
+        if flow_method is not None:
+            flow_source = {"source": "derived", "unit": "million_yen", "method": flow_method}
         return {
             "Sales": sales,
             "OP": op,
@@ -260,12 +270,12 @@ def build_half_year_periods(
             "CFC": cfc,
             "FreeCF": cfc,
             "MetricSources": {
-                "Sales": {"source": "jquants", "unit": "million_yen"},
-                "OP": {"source": "jquants", "unit": "million_yen"},
+                "Sales": metric_source.copy(),
+                "OP": metric_source.copy(),
                 "OperatingMargin": {"source": "derived", "method": "OP / Sales", "unit": "percent"},
-                "NP": {"source": "jquants", "unit": "million_yen"},
-                "CFO": {"source": "jquants", "unit": "million_yen"},
-                "CFI": {"source": "jquants", "unit": "million_yen"},
+                "NP": metric_source.copy(),
+                "CFO": flow_source.copy(),
+                "CFI": flow_source.copy(),
                 "CFC": {"source": "derived", "method": "CFO + CFI", "unit": "million_yen"},
                 "FreeCF": {"source": "derived", "method": "alias of CFC", "unit": "million_yen"},
             },
@@ -294,11 +304,13 @@ def build_half_year_periods(
                         _m(q2_rec.get("NP")),
                         _m(q2_rec.get("CFO")),
                         _m(q2_rec.get("CFI")),
+                        source=_record_source(q2_rec),
                     ),
                 })
             continue
 
         if q2_rec and is_valid_financial_record(q2_rec):
+            h2_method_source = "EDINET" if _record_source(fy_rec) == "edinet" and _record_source(q2_rec) == "edinet" else "external"
             periods.append({
                 "label": f"{yr}H1",
                 "half": "H1",
@@ -309,6 +321,7 @@ def build_half_year_periods(
                     _m(q2_rec.get("NP")),
                     _m(q2_rec.get("CFO")),
                     _m(q2_rec.get("CFI")),
+                    source=_record_source(q2_rec),
                 ),
             })
             periods.append({
@@ -321,6 +334,8 @@ def build_half_year_periods(
                     _diff_m(fy_rec, q2_rec, "NP"),
                     _diff_m(fy_rec, q2_rec, "CFO"),
                     _diff_m(fy_rec, q2_rec, "CFI"),
+                    source="derived",
+                    flow_method=f"FY {h2_method_source} - H1 {h2_method_source}",
                 ),
             })
         else:
@@ -334,152 +349,8 @@ def build_half_year_periods(
                     _m(fy_rec.get("NP")),
                     _m(fy_rec.get("CFO")),
                     _m(fy_rec.get("CFI")),
+                    source=_record_source(fy_rec),
                 ),
             })
 
     return periods
-
-
-def get_monthly_avg_stock_price(
-    api_client,
-    code: str,
-    fiscal_year: str,
-    fy_end_month: int = 3
-) -> float | None:
-    """
-    指定した会計年度の月次平均株価を取得
-    
-    Args:
-        api_client: JQuantsAPIClientインスタンス
-        code: 銘柄コード（4桁または5桁）
-        fiscal_year: 会計年度（YYYY形式、例: "2024"）
-        fy_end_month: 会計年度末の月（デフォルト: 3月）
-    
-    Returns:
-        月次平均株価（調整後終値ベース）
-        取得できない場合はNone
-    """
-    try:
-        # 会計年度の期間を計算
-        # 例: 2024年度（3月決算）→ 2024-04-01 ～ 2025-03-31
-        year = int(fiscal_year)
-        start_date = datetime(year, fy_end_month + 1 if fy_end_month < 12 else 1, 1)
-        if fy_end_month == 12:
-            start_date = datetime(year + 1, 1, 1)
-        end_date = datetime(year + 1, fy_end_month, 1)
-        
-        # 月末日を取得
-        if end_date.month == 12:
-            end_date = datetime(end_date.year + 1, 1, 1) - timedelta(days=1)
-        else:
-            end_date = datetime(end_date.year, end_date.month + 1, 1) - timedelta(days=1)
-        
-        # 日付を文字列に変換（YYYY-MM-DD形式）
-        from_date_str = start_date.strftime("%Y-%m-%d")
-        to_date_str = end_date.strftime("%Y-%m-%d")
-        
-        # 株価データを取得
-        bars = api_client.get_daily_bars(
-            code=code,
-            from_date=from_date_str,
-            to_date=to_date_str
-        )
-        
-        if not bars:
-            return None
-        
-        # 調整後終値（AdjC）を使用して月次平均を計算
-        adj_close_values = []
-        for bar in bars:
-            adj_close = bar.get("AdjC") or bar.get("C")  # AdjCがなければC（終値）を使用
-            if adj_close is not None:
-                adj_close_values.append(float(adj_close))
-        
-        if not adj_close_values:
-            return None
-        
-        # 月次平均を計算
-        monthly_avg = sum(adj_close_values) / len(adj_close_values)
-        return monthly_avg
-        
-    except Exception:
-        # エラーが発生した場合はNoneを返す
-        return None
-
-
-def get_fiscal_year_end_price(
-    api_client,
-    code: str,
-    fiscal_year_end: str
-) -> float | None:
-    """
-    会計年度末の株価（終値）を取得
-    休日の場合は直前の営業日を使用
-    
-    Args:
-        api_client: JQuantsAPIClientインスタンス
-        code: 銘柄コード（4桁または5桁）
-        fiscal_year_end: 会計年度終了日（YYYY-MM-DD形式またはYYYYMMDD形式）
-    
-    Returns:
-        調整後終値（AdjC）
-        取得できない場合はNone
-    """
-    try:
-        # 日付形式を統一（YYYY-MM-DD形式に変換）
-        date_str = normalize_date_format(fiscal_year_end)
-        if date_str is None:
-            return None
-        
-        # get_price_at_dateを使用（休日対応）
-        # これにより、休日の場合は直前の営業日を自動的に取得
-        price = api_client.get_price_at_date(
-            code=code,
-            date=date_str,
-            use_nearest_trading_day=True
-        )
-        
-        return price
-        
-    except Exception as e:
-        # エラーが発生した場合はNoneを返す
-        return None
-
-
-
-def get_quarter_end_price(
-    api_client,
-    code: str,
-    quarter_end: str
-) -> float | None:
-    """
-    四半期末の株価（終値）を取得
-    休日の場合は直前の営業日を使用
-    
-    Args:
-        api_client: JQuantsAPIClientインスタンス
-        code: 銘柄コード（4桁または5桁）
-        quarter_end: 四半期末日（YYYY-MM-DD形式またはYYYYMMDD形式）
-    
-    Returns:
-        調整後終値（AdjC）
-        取得できない場合はNone
-    """
-    try:
-        # 日付形式を統一（YYYY-MM-DD形式に変換）
-        date_str = normalize_date_format(quarter_end)
-        if date_str is None:
-            return None
-        
-        # get_price_at_dateを使用（休日対応）
-        price = api_client.get_price_at_date(
-            code=code,
-            date=date_str,
-            use_nearest_trading_day=True
-        )
-        
-        return price
-        
-    except Exception as e:
-        # エラーが発生した場合はNoneを返す
-        return None

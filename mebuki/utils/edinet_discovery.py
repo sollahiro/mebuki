@@ -1,7 +1,6 @@
 """
-EDINET書類発見ユーティリティ（J-Quants不要）
+EDINET書類発見ユーティリティ
 
-J-Quantsの DiscDate を使わずに EDINET 書類を発見するための関数群。
 build_document_index_for_code() が主エントリーポイント。
 
 処理フロー:
@@ -14,7 +13,7 @@ build_document_index_for_code() が主エントリーポイント。
   ③ 直近スキャン範囲から訂正有価証券報告書（130）を parentDocID で突合して追加
 
 書類のフィールド付与:
-  jquants_fy_end  : 会計期末日 (YYYY-MM-DD)
+  edinet_fy_end  : 会計期末日 (YYYY-MM-DD)
   fiscal_year     : 期首年（開始年）
   period_type     : "FY" 固定
   _is_amendment   : 訂正書類のみ True
@@ -35,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 _ANNUAL_REPORT_DOC_TYPE = "120"
 _AMENDMENT_DOC_TYPE = "130"
+_HALF_YEAR_REPORT_DOC_TYPES = frozenset({"140", "160"})
 _BATCH_SIZE = 10
 _TIER1_WINDOW_DAYS = 14
 _TIER2_OFFSET_DAYS = 60   # 期末からの期待提出オフセット
@@ -46,6 +46,23 @@ def _safe_fy_end_date(month: int, day: int, year: int) -> date:
     """月末日を安全に処理しつつ会計期末日を構築する。"""
     last_day = calendar.monthrange(year, month)[1]
     return date(year, month, min(day, last_day))
+
+
+def _add_months_safe(value: date, months: int) -> date:
+    """月末日を安全に処理しつつ月数を加算する。"""
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    last_day = calendar.monthrange(year, month)[1]
+    return date(year, month, min(value.day, last_day))
+
+
+def _add_year_safe(value: date, years: int) -> date:
+    """うるう日を安全に処理しつつ年数を加算する。"""
+    try:
+        return value.replace(year=value.year + years)
+    except ValueError:
+        return value.replace(year=value.year + years, day=28)
 
 
 async def _fetch_date_range_cached(
@@ -217,10 +234,92 @@ def _attach_fy_metadata(
     fy_end_str: str,
     fiscal_year: int,
 ) -> None:
-    """書類に jquants_fy_end / fiscal_year / period_type を付与する（in-place）。"""
-    doc["jquants_fy_end"] = fy_end_str
+    """書類に edinet_fy_end / fiscal_year / period_type を付与する（in-place）。"""
+    doc["edinet_fy_end"] = fy_end_str
     doc["fiscal_year"] = fiscal_year
     doc["period_type"] = "FY"
+
+
+def _attach_half_metadata(
+    doc: dict[str, Any],
+    *,
+    fy_end_str: str,
+    fiscal_year: int,
+    period_start: date,
+    half_end: date,
+) -> None:
+    """半期書類にEDINET由来の年度メタ情報を付与する（in-place）。"""
+    doc["edinet_fy_end"] = fy_end_str
+    doc["fiscal_year"] = fiscal_year
+    doc["period_type"] = "2Q"
+    doc["edinet_period_start"] = period_start.strftime("%Y-%m-%d")
+    doc["edinet_period_end"] = half_end.strftime("%Y-%m-%d")
+
+
+async def _find_half_report_for_fy(
+    code: str,
+    period_start: date,
+    fy_end: date,
+    edinet_client: "EdinetAPIClient",
+) -> dict[str, Any] | None:
+    """指定年度の半期報告書（160）または旧2Q四半期報告書（140）を検索する。"""
+    code_4digit = code[:4] if len(code) >= 4 else code
+    half_end = _add_months_safe(period_start, 6) - timedelta(days=1)
+    fy_end_str = fy_end.strftime("%Y-%m-%d")
+    half_end_str = half_end.strftime("%Y-%m-%d")
+    period_start_str = period_start.strftime("%Y-%m-%d")
+    today = datetime.now().date()
+    search_start = half_end + timedelta(days=1)
+    search_end = min(half_end + timedelta(days=90), today)
+    if search_start > search_end:
+        return None
+
+    docs_by_date = await _fetch_date_range_cached(edinet_client, search_start, search_end)
+    candidates: list[dict[str, Any]] = []
+    for date_str in sorted(docs_by_date.keys(), reverse=True):
+        for doc in docs_by_date[date_str]:
+            if not str(doc.get("secCode", "")).strip().startswith(code_4digit):
+                continue
+            doc_type = doc.get("docTypeCode")
+            if doc_type not in _HALF_YEAR_REPORT_DOC_TYPES:
+                continue
+            desc = str(doc.get("docDescription") or "")
+            if "訂正" in desc or "補正" in desc:
+                continue
+
+            doc_period_end = str(doc.get("periodEnd") or "")
+            doc_period_start = str(doc.get("periodStart") or "")
+            if doc_type == "160":
+                # 半期報告書の一覧メタデータは periodEnd に通期の期末を持つ。
+                if doc_period_end and doc_period_end != fy_end_str:
+                    continue
+                if doc_period_start and doc_period_start != period_start_str:
+                    continue
+            else:
+                # 旧2Q四半期報告書は periodEnd が2Q末、periodStart は第2四半期開始日。
+                if doc_period_end and doc_period_end != half_end_str:
+                    continue
+                if "第2四半期" not in desc:
+                    continue
+            candidates.append(doc)
+
+    if not candidates:
+        logger.warning(f"[EDINET Discovery] {code} {fy_end_str}: 半期書類が見つかりませんでした")
+        return None
+
+    found = sorted(candidates, key=lambda d: str(d.get("submitDateTime") or ""), reverse=True)[0]
+    _attach_half_metadata(
+        found,
+        fy_end_str=fy_end_str,
+        fiscal_year=period_start.year,
+        period_start=period_start,
+        half_end=half_end,
+    )
+    logger.info(
+        f"[EDINET Discovery] {code} {fy_end_str}: 半期書類 hit "
+        f"periodEnd={half_end_str} docType={found.get('docTypeCode')}"
+    )
+    return found
 
 
 async def build_document_index_for_code(
@@ -230,10 +329,10 @@ async def build_document_index_for_code(
     initial_scan_days: int = 365,
     analysis_years: int = 5,
 ) -> list[dict[str, Any]]:
-    """J-Quants なしで指定銘柄の過去 analysis_years 年分の有価証券報告書を発見する。
+    """EDINETで指定銘柄の過去 analysis_years 年分の有価証券報告書を発見する。
 
     返却リストには通常書類（docTypeCode=120）と訂正書類（130）が含まれる。
-    各書類には jquants_fy_end / fiscal_year / period_type が付与されており、
+    各書類には edinet_fy_end / fiscal_year / period_type が付与されており、
     EdinetFetcher がそのまま利用できる形式。
     訂正書類には _is_amendment=True が付与される。
 
@@ -314,9 +413,9 @@ async def build_document_index_for_code(
     original_ids = {d["docID"] for d in docs if d.get("docID")}
     amendments = await _find_amendments(original_ids, edinet_client, amendments_start, today)
 
-    # 訂正書類に parentDocID → jquants_fy_end / fiscal_year を付与
+    # 訂正書類に parentDocID → edinet_fy_end / fiscal_year を付与
     fy_meta_by_doc_id: dict[str, tuple[str, int | None]] = {
-        d["docID"]: (d.get("jquants_fy_end", ""), d.get("fiscal_year"))
+        d["docID"]: (d.get("edinet_fy_end", ""), d.get("fiscal_year"))
         for d in docs
         if d.get("docID")
     }
@@ -324,7 +423,7 @@ async def build_document_index_for_code(
         parent_id: str = amendment.get("parentDocID", "")
         if parent_id in fy_meta_by_doc_id:
             fy_end_str_a, fy_a = fy_meta_by_doc_id[parent_id]
-            amendment["jquants_fy_end"] = fy_end_str_a
+            amendment["edinet_fy_end"] = fy_end_str_a
             amendment["fiscal_year"] = fy_a
             amendment["period_type"] = "FY"
         amendment["_is_amendment"] = True
@@ -334,4 +433,58 @@ async def build_document_index_for_code(
     n_annual = sum(1 for d in docs if d.get("docTypeCode") == _ANNUAL_REPORT_DOC_TYPE)
     n_amend = sum(1 for d in docs if d.get("docTypeCode") == _AMENDMENT_DOC_TYPE)
     logger.info(f"[EDINET Discovery] {code}: 有報{n_annual}件 訂正{n_amend}件 発見")
+    return docs
+
+
+async def build_half_year_document_index_for_code(
+    code: str,
+    edinet_client: "EdinetAPIClient",
+    *,
+    initial_scan_days: int = 365,
+    analysis_years: int = 5,
+) -> list[dict[str, Any]]:
+    """EDINETで指定銘柄の半期/2Q報告書を発見する。
+
+    最新有報から決算期パターンを確定し、各年度の期首から半期末を推定して
+    EDINET 日次一覧（キャッシュ対応）から docTypeCode=160/140 を検索する。
+    返却書類には edinet_fy_end / period_type="2Q" など、既存 fetcher が扱える
+    メタ情報を付与する。
+    """
+    annual_docs = [
+        doc for doc in await build_document_index_for_code(
+            code,
+            edinet_client,
+            initial_scan_days=initial_scan_days,
+            analysis_years=analysis_years,
+        )
+        if doc.get("docTypeCode") == _ANNUAL_REPORT_DOC_TYPE and not doc.get("_is_amendment")
+    ]
+    if not annual_docs:
+        return []
+
+    fy_periods: dict[str, tuple[date, date]] = {}
+    for doc in annual_docs:
+        fy_end_dt = parse_date_string(str(doc.get("edinet_fy_end") or doc.get("periodEnd") or ""))
+        fy_start_dt = parse_date_string(str(doc.get("periodStart") or ""))
+        if not fy_end_dt or not fy_start_dt:
+            continue
+        fy_periods[fy_end_dt.strftime("%Y-%m-%d")] = (fy_start_dt.date(), fy_end_dt.date())
+
+    if fy_periods:
+        newest_fy_end = max(fy_periods.keys())
+        start, end = fy_periods[newest_fy_end]
+        next_start = end + timedelta(days=1)
+        next_end = _add_year_safe(end, 1)
+        fy_periods[next_end.strftime("%Y-%m-%d")] = (next_start, next_end)
+
+    docs: list[dict[str, Any]] = []
+    for fy_end_str in sorted(fy_periods.keys(), reverse=True):
+        if len(docs) >= analysis_years:
+            break
+        period_start, fy_end = fy_periods[fy_end_str]
+        found = await _find_half_report_for_fy(code, period_start, fy_end, edinet_client)
+        if found is not None:
+            docs.append(found)
+
+    logger.info(f"[EDINET Discovery] {code}: 半期書類{len(docs)}件 発見")
     return docs
