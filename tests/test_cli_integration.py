@@ -11,6 +11,18 @@ def _run_cli(monkeypatch, argv: list[str]) -> None:
         main()
 
 
+def test_main_keyboard_interrupt_exits_cleanly(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(sys, "argv", ["mebuki", "search", "トヨタ", "--format", "json"])
+
+    with patch("mebuki.app.cli.analyze.master_data_manager.search", side_effect=KeyboardInterrupt):
+        exit_code = main()
+
+    captured = capsys.readouterr()
+    assert exit_code == 130
+    assert captured.out == ""
+    assert captured.err == "\n中断しました。\n"
+
+
 def test_main_search_outputs_json(monkeypatch, capsys) -> None:
     results = [
         {"code": "7203", "name": "トヨタ自動車", "market": "プライム", "sector": "輸送用機器"},

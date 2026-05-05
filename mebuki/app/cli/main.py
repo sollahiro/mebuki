@@ -1,56 +1,74 @@
 import sys
 import logging
 from .ui import print_banner
-from .analyze import cmd_search, cmd_analyze, cmd_filings, cmd_filing
-from .config import cmd_config
-from .cache import cmd_cache
-from .mcp import cmd_mcp
-from .portfolio import cmd_watch, cmd_portfolio
-from .sector import cmd_sector
 from .parser import build_parser
 
 logger = logging.getLogger(__name__)
 
 
-def main():
+def main() -> int:
     parser = build_parser()
 
-    if len(sys.argv) == 1:
-        print_banner()
-        parser.print_help()
-        return
+    try:
+        if len(sys.argv) == 1:
+            print_banner()
+            parser.print_help()
+            return 0
 
+        args = parser.parse_args()
+        if getattr(args, "format", "table") != "json":
+            print_banner()
 
-    args = parser.parse_args()
-    if getattr(args, "format", "table") != "json":
-        print_banner()
+        if args.command == "search":
+            from .analyze import cmd_search
 
-    if args.command == "search":
-        cmd_search(args)
-    elif args.command == "analyze":
-        import asyncio
-        asyncio.run(cmd_analyze(args))
-    elif args.command == "config":
-        cmd_config(args, parser)
-    elif args.command == "cache":
-        cmd_cache(args, parser)
-    elif args.command == "mcp":
-        cmd_mcp(args, parser)
-    elif args.command == "filings":
-        import asyncio
-        asyncio.run(cmd_filings(args))
-    elif args.command == "filing":
-        import asyncio
-        asyncio.run(cmd_filing(args))
-    elif args.command == "sector":
-        cmd_sector(args)
-    elif args.command == "watch":
-        cmd_watch(args)
-    elif args.command == "portfolio":
-        cmd_portfolio(args)
-    else:
-        parser.print_help()
+            cmd_search(args)
+        elif args.command == "analyze":
+            import asyncio
+            from .analyze import cmd_analyze
+
+            asyncio.run(cmd_analyze(args))
+        elif args.command == "config":
+            from .config import cmd_config
+
+            cmd_config(args, parser)
+        elif args.command == "cache":
+            from .cache import cmd_cache
+
+            cmd_cache(args, parser)
+        elif args.command == "mcp":
+            from .mcp import cmd_mcp
+
+            cmd_mcp(args, parser)
+        elif args.command == "filings":
+            import asyncio
+            from .analyze import cmd_filings
+
+            asyncio.run(cmd_filings(args))
+        elif args.command == "filing":
+            import asyncio
+            from .analyze import cmd_filing
+
+            asyncio.run(cmd_filing(args))
+        elif args.command == "sector":
+            from .sector import cmd_sector
+
+            cmd_sector(args)
+        elif args.command == "watch":
+            from .portfolio import cmd_watch
+
+            cmd_watch(args)
+        elif args.command == "portfolio":
+            from .portfolio import cmd_portfolio
+
+            cmd_portfolio(args)
+        else:
+            parser.print_help()
+        return 0
+    except KeyboardInterrupt:
+        print("\n中断しました。", file=sys.stderr)
+        return 130
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -1,3 +1,5 @@
-from mebuki.app.cli import main
+import sys
 
-main()
+from mebuki.app.cli.main import main
+
+sys.exit(main())
