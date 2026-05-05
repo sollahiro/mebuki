@@ -81,6 +81,10 @@ USGAAP_MARKER_TAGS: list[str] = [
     "TotalAssetsUSGAAPSummaryOfBusinessResults",
     "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
     "CashAndCashEquivalentsUSGAAPSummaryOfBusinessResults",
+    "RevenuesUSGAAPSummaryOfBusinessResults",
+    "NetIncomeLossAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
+    "CashFlowsFromUsedInOperatingActivitiesUSGAAPSummaryOfBusinessResults",
+    "CashFlowsFromUsedInInvestingActivitiesUSGAAPSummaryOfBusinessResults",
 ]
 
 IFRS_BALANCE_SHEET_MARKER_TAGS: list[str] = [
@@ -98,6 +102,10 @@ IFRS_PL_MARKER_TAGS: list[str] = [
     "BorrowingsCLIFRS",
     "BondsPayableNCLIFRS",
     "BorrowingsNCLIFRS",
+    "OperatingRevenuesIFRSKeyFinancialData",
+    "ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults",
+    "CashFlowsFromUsedInOperatingActivitiesIFRSSummaryOfBusinessResults",
+    "CashFlowsFromUsedInInvestingActivitiesIFRSSummaryOfBusinessResults",
 ]
 
 XBRL_SECTIONS: dict[str, _XBRLSection] = {
@@ -174,9 +182,11 @@ BALANCE_SHEET_COMPONENT_DEFINITIONS: list[_BalanceSheetComponentDef] = [
             "NetAssets",                                              # J-GAAP
             "EquityIFRS",                                             # IFRS
             "TotalEquityIFRS",                                        # IFRS 代替
+            "EquityIncludingPortionAttributableToNonControllingInterestIFRSSummaryOfBusinessResults",
             "EquityAttributableToOwnersOfParentIFRS",                 # IFRS 親会社所有者帰属持分
             "NetAssetsUSGAAP",                                        # US-GAAP
             "TotalEquityUSGAAP",                                      # US-GAAP 代替
+            "EquityIncludingPortionAttributableToNonControllingInterestUSGAAPSummaryOfBusinessResults",
             "EquityAttributableToOwnersOfParentUSGAAP",               # US-GAAP 親会社所有者帰属持分
             "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
         ],
@@ -364,20 +374,22 @@ BUSINESS_GROSS_PROFIT_COMPONENT_DEFINITIONS: list[_SignedComponentDef] = [
 
 # 営業活動によるキャッシュフロー
 CF_OPERATING_TAGS: list[str] = [
-    "NetCashProvidedByUsedInOperatingActivities",                       # J-GAAP 連結（CF計算書）
-    "NetCashProvidedByUsedInOperatingActivitiesSummaryOfBusinessResults", # J-GAAP 連結（決算短信）
     "CashFlowsFromUsedInOperationsIFRS",                                # IFRS（間接法）
     "CashFlowsFromUsedInOperatingActivitiesIFRS",                       # IFRS（直接法）
     "CashFlowsFromUsedInOperatingActivitiesIFRSSummaryOfBusinessResults", # IFRS（決算短信）
+    "CashFlowsFromUsedInOperatingActivitiesUSGAAPSummaryOfBusinessResults", # US-GAAP 要約情報
+    "NetCashProvidedByUsedInOperatingActivities",                       # J-GAAP 連結（CF計算書）
+    "NetCashProvidedByUsedInOperatingActivitiesSummaryOfBusinessResults", # J-GAAP 連結（決算短信）
 ]
 
 # 投資活動によるキャッシュフロー
 CF_INVESTING_TAGS: list[str] = [
-    "NetCashProvidedByUsedInInvestingActivities",                       # J-GAAP 連結（CF計算書）
-    "NetCashProvidedByUsedInInvestingActivitiesSummaryOfBusinessResults", # J-GAAP 連結（決算短信）
     "CashFlowsUsedInInvestingActivitiesIFRS",                           # IFRS
     "CashFlowsFromUsedInInvestingActivitiesIFRS",                       # IFRS（代替）
     "CashFlowsFromUsedInInvestingActivitiesIFRSSummaryOfBusinessResults", # IFRS（決算短信）
+    "CashFlowsFromUsedInInvestingActivitiesUSGAAPSummaryOfBusinessResults", # US-GAAP 要約情報
+    "NetCashProvidedByUsedInInvestingActivities",                       # J-GAAP 連結（CF計算書）
+    "NetCashProvidedByUsedInInvestingActivitiesSummaryOfBusinessResults", # J-GAAP 連結（決算短信）
 ]
 
 # 実効税率（Tax）タグ定義
@@ -486,20 +498,24 @@ AGGREGATE_IFRS_DEFINITIONS: list[_AggregateIFRSDef] = [
 # 売上高（Sales）タグ
 NET_SALES_TAGS: list[str] = [
     "NetSalesIFRS",                             # IFRS連結
-    "NetSales",                                 # J-GAAP連結
     "Revenue",                                  # IFRS代替
+    "OperatingRevenuesIFRSKeyFinancialData",    # IFRS 要約情報（スズキ等）
+    "OperatingRevenuesIFRSSummaryOfBusinessResults", # IFRS 要約情報
     "Revenues",                                 # US-GAAP
     "RevenuesUSGAAPSummaryOfBusinessResults",   # US-GAAP 要約情報
+    "NetSales",                                 # J-GAAP連結
     "NetSalesSummaryOfBusinessResults",         # J-GAAP 要約情報（決算短信）
 ]
 
 # 当期純利益（Net Profit）タグ（親会社帰属 → PL全体の優先順）
 NET_PROFIT_TAGS: list[str] = [
     "ProfitLossAttributableToOwnersOfParentIFRS",          # IFRS連結 親会社帰属
+    "ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults", # IFRS 要約情報
+    "NetIncomeLossAttributableToOwnersOfParentUSGAAP",      # US-GAAP 親会社帰属
+    "NetIncomeLossAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults", # US-GAAP 要約情報
+    "NetIncomeLoss",                                        # US-GAAP 代替
     "ProfitLossAttributableToOwnersOfParent",               # J-GAAP連結 親会社帰属
     "ProfitLoss",                                           # J-GAAP連結 全体
-    "NetIncomeLossAttributableToOwnersOfParentUSGAAP",      # US-GAAP 親会社帰属
-    "NetIncomeLoss",                                        # US-GAAP 代替
     "NetIncomeLossSummaryOfBusinessResults",                # J-GAAP 要約情報
 ]
 

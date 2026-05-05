@@ -330,6 +330,16 @@ class TestApplyOperatingProfit:
         op_by_year = {"20240331": {"current": 999_999_999, "label": "営業利益"}}
         _apply_operating_profit(years, op_by_year)
         assert years[0]["CalculatedData"]["OP"] == 50.0
+        assert years[0]["CalculatedData"]["OperatingMargin"] == pytest.approx(5.0)
+
+    def test_sets_label_and_margin_when_op_already_set(self):
+        years = [_make_year("2024-03-31", OP=50.0, Sales=1000.0)]
+        op_by_year = {"20240331": {"current": 50_000_000, "label": "経常利益"}}
+        _apply_operating_profit(years, op_by_year)
+        cd = years[0]["CalculatedData"]
+        assert cd["OP"] == 50.0
+        assert cd["OPLabel"] == "経常利益"
+        assert cd["OperatingMargin"] == pytest.approx(5.0)
 
     def test_sets_op_label_keijou(self):
         years = [_make_year("2024-03-31")]

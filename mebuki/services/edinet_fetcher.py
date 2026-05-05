@@ -799,6 +799,8 @@ class EdinetFetcher:
 
             is_result = extract_income_statement(xbrl_path, pre_parsed=pre_parsed)
             sales = is_result.get("sales")
+            operating_profit = is_result.get("operating_profit")
+            operating_profit_label = None
             sales_label = None
             if sales is None:
                 gp_for_sales = extract_gross_profit(xbrl_path, pre_parsed=pre_parsed)
@@ -810,6 +812,10 @@ class EdinetFetcher:
                     sales = op_for_sales.get("current_sales")
                     if sales is not None:
                         sales_label = "経常収益"
+            if operating_profit is None:
+                op_result = extract_operating_profit(xbrl_path, pre_parsed=pre_parsed)
+                operating_profit = op_result.get("current")
+                operating_profit_label = op_result.get("label")
             bs_result = extract_balance_sheet(xbrl_path, pre_parsed=pre_parsed)
             cf_result = extract_cash_flow(xbrl_path, pre_parsed=pre_parsed)
 
@@ -825,7 +831,7 @@ class EdinetFetcher:
                 # IS: 円単位（J-Quants と同単位）
                 "Sales": sales,
                 "SalesLabel": sales_label,
-                "OP": is_result.get("operating_profit"),
+                "OP": None if operating_profit_label == "経常利益" else operating_profit,
                 "NP": is_result.get("net_profit"),
                 # BS: 円単位
                 "Eq": bs_result.get("net_assets"),

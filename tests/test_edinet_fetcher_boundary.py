@@ -265,6 +265,100 @@ async def test_build_xbrl_annual_records_falls_back_to_ordinary_revenue_for_sale
     assert records[0]["OP"] == 367_694_000_000
 
 
+@pytest.mark.asyncio
+async def test_build_xbrl_annual_records_uses_operating_profit_fallback(monkeypatch) -> None:
+    edinet_client = Mock()
+    edinet_client.api_key = "dummy"
+    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    fetcher._download_and_parse_docs = AsyncMock(return_value={"20250331": (Path("."), {})})  # type: ignore[method-assign]
+
+    monkeypatch.setattr(
+        "mebuki.services.edinet_fetcher.extract_income_statement",
+        lambda *args, **kwargs: {
+            "sales": 3_195_828_000_000,
+            "operating_profit": None,
+            "net_profit": 260_951_000_000,
+            "accounting_standard": "US-GAAP",
+        },
+    )
+    monkeypatch.setattr(
+        "mebuki.services.edinet_fetcher.extract_operating_profit",
+        lambda *args, **kwargs: {"current": 340_594_000_000},
+    )
+    monkeypatch.setattr(
+        "mebuki.services.edinet_fetcher.extract_balance_sheet",
+        lambda *args, **kwargs: {"net_assets": 3_348_480_000_000},
+    )
+    monkeypatch.setattr(
+        "mebuki.services.edinet_fetcher.extract_cash_flow",
+        lambda *args, **kwargs: {
+            "cfo": {"current": 428_162_000_000},
+            "cfi": {"current": -541_953_000_000},
+        },
+    )
+
+    records = await fetcher.build_xbrl_annual_records(
+        "49010",
+        1,
+        docs=[
+            {
+                "docID": "S100W3XJ",
+                "jquants_fy_end": "2025-03-31",
+                "submitDateTime": "2025-06-27T10:00:00",
+            }
+        ],
+    )
+
+    assert records[0]["OP"] == 340_594_000_000
+
+
+@pytest.mark.asyncio
+async def test_build_xbrl_annual_records_defers_ordinary_income_to_edinet_applier(monkeypatch) -> None:
+    edinet_client = Mock()
+    edinet_client.api_key = "dummy"
+    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    fetcher._download_and_parse_docs = AsyncMock(return_value={"20250331": (Path("."), {})})  # type: ignore[method-assign]
+
+    monkeypatch.setattr(
+        "mebuki.services.edinet_fetcher.extract_income_statement",
+        lambda *args, **kwargs: {
+            "sales": 13_629_997_000_000,
+            "operating_profit": None,
+            "net_profit": 1_862_946_000_000,
+            "accounting_standard": "J-GAAP",
+        },
+    )
+    monkeypatch.setattr(
+        "mebuki.services.edinet_fetcher.extract_operating_profit",
+        lambda *args, **kwargs: {"current": 2_669_483_000_000, "label": "経常利益"},
+    )
+    monkeypatch.setattr(
+        "mebuki.services.edinet_fetcher.extract_balance_sheet",
+        lambda *args, **kwargs: {"net_assets": 21_728_132_000_000},
+    )
+    monkeypatch.setattr(
+        "mebuki.services.edinet_fetcher.extract_cash_flow",
+        lambda *args, **kwargs: {
+            "cfo": {"current": 6_415_000_000},
+            "cfi": {"current": -186_948_000_000},
+        },
+    )
+
+    records = await fetcher.build_xbrl_annual_records(
+        "83060",
+        1,
+        docs=[
+            {
+                "docID": "S100W4FB",
+                "jquants_fy_end": "2025-03-31",
+                "submitDateTime": "2025-06-25T10:00:00",
+            }
+        ],
+    )
+
+    assert records[0]["OP"] is None
+
+
 def test_prepare_q2_records_deduplicates_by_fy_end_keeping_latest_disc_date() -> None:
     fetcher = EdinetFetcher(api_client=Mock(), edinet_client=Mock())
 

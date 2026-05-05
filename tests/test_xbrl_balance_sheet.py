@@ -1,11 +1,13 @@
 import tempfile
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
 from mebuki.analysis.balance_sheet import extract_balance_sheet
 from mebuki.constants.financial import MILLION_YEN
 from mebuki.services.analyzer import _apply_balance_sheet
+from mebuki.utils.metrics_types import YearEntry
 
 NS_XBRLI = "http://www.xbrl.org/2003/instance"
 NS_JPPFS = "http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2024-11-01/jppfs_cor"
@@ -151,6 +153,23 @@ class TestBalanceSheetExtraction:
         assert result["non_current_liabilities"] == pytest.approx(771_286 * MILLION_YEN)
         assert result["net_assets"] == pytest.approx(3_352_682 * MILLION_YEN)
 
+    def test_prefers_usgaap_total_equity_summary_over_parent_equity_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            xbrl_dir = Path(tmp)
+            _write_xbrl(
+                xbrl_dir,
+                """
+                <jpcrp_cor:EquityIncludingPortionAttributableToNonControllingInterestUSGAAPSummaryOfBusinessResults
+                    contextRef="CurrentYearInstant" unitRef="JPY">3352682000000</jpcrp_cor:EquityIncludingPortionAttributableToNonControllingInterestUSGAAPSummaryOfBusinessResults>
+                <jpcrp_cor:EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults
+                    contextRef="CurrentYearInstant" unitRef="JPY">3348480000000</jpcrp_cor:EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults>
+                """,
+            )
+
+            result = extract_balance_sheet(xbrl_dir)
+
+        assert result["net_assets"] == pytest.approx(3_352_682 * MILLION_YEN)
+
     def test_partial_aggregate_label_shows_actual_tag(self):
         with tempfile.TemporaryDirectory() as tmp:
             xbrl_dir = Path(tmp)
@@ -190,7 +209,7 @@ class TestBalanceSheetExtraction:
 
 class TestApplyBalanceSheet:
     def test_sets_balance_sheet_fields_in_millions(self):
-        years = [{"fy_end": "2025-03-31", "CalculatedData": {}, "RawData": {}}]
+        years = cast(list[YearEntry], [{"fy_end": "2025-03-31", "CalculatedData": {}, "RawData": {}}])
         _apply_balance_sheet(
             years,
             {
@@ -208,7 +227,7 @@ class TestApplyBalanceSheet:
             },
         )
 
-        cd = years[0]["CalculatedData"]
+        cd = cast(dict[str, Any], years[0]["CalculatedData"])
         assert cd["CurrentAssets"] == pytest.approx(164_367)
         assert cd["NonCurrentAssets"] == pytest.approx(30_028)
         assert cd["CurrentLiabilities"] == pytest.approx(64_401)

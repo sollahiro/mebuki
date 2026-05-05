@@ -236,10 +236,10 @@ def _apply_operating_profit(
         if not op or op.get("current") is None:
             continue
         cd = year["CalculatedData"]
-        if cd.get("OP") is not None:
-            continue
-        op_m = op["current"] / MILLION_YEN
-        cd["OP"] = op_m
+        op_m = cd.get("OP")
+        if op_m is None:
+            op_m = op["current"] / MILLION_YEN
+            cd["OP"] = op_m
         if op.get("label") == "経常利益":
             cd["OPLabel"] = "経常利益"
         _set_metric_source(
