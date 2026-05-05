@@ -25,13 +25,17 @@ def _make_xbrl_zip(files: dict[str, bytes]) -> bytes:
     return buffer.getvalue()
 
 
+def _today_str() -> str:
+    return datetime.now().strftime("%Y-%m-%d")
+
+
 def test_load_search_cache_returns_fresh_empty_result(tmp_path):
     store = EdinetCacheStore(
         tmp_path,
         search_empty_ttl_days=1,
         search_hit_ttl_days=30,
     )
-    filename = store.search_cache_key("2024-06-01")
+    filename = store.search_cache_key(_today_str())
     store.save_search_cache(filename, [])
 
     assert store.load_search_cache(filename) == []
@@ -43,7 +47,7 @@ def test_load_search_cache_expires_empty_result_quickly(tmp_path):
         search_empty_ttl_days=1,
         search_hit_ttl_days=30,
     )
-    filename = store.search_cache_key("2024-06-01")
+    filename = store.search_cache_key(_today_str())
     store.save_search_cache(filename, [])
     _age(tmp_path / filename, days=1)
 
@@ -56,7 +60,7 @@ def test_load_search_cache_keeps_hit_result_longer_than_empty_result(tmp_path):
         search_empty_ttl_days=1,
         search_hit_ttl_days=30,
     )
-    filename = store.search_cache_key("2024-06-01")
+    filename = store.search_cache_key(_today_str())
     documents = [{"docID": "S100TEST", "docTypeCode": "120"}]
     store.save_search_cache(filename, documents)
     _age(tmp_path / filename, days=1)
@@ -70,7 +74,7 @@ def test_load_search_cache_expires_old_hit_result(tmp_path):
         search_empty_ttl_days=1,
         search_hit_ttl_days=30,
     )
-    filename = store.search_cache_key("2024-06-01")
+    filename = store.search_cache_key(_today_str())
     store.save_search_cache(filename, [{"docID": "S100TEST"}])
     _age(tmp_path / filename, days=30)
 
@@ -87,6 +91,30 @@ def test_load_search_cache_rejects_non_list_payload(tmp_path):
     (tmp_path / filename).write_text(json.dumps({"results": []}), encoding="utf-8")
 
     assert store.load_search_cache(filename) is None
+
+
+def test_load_search_cache_keeps_past_date_result_longer(tmp_path):
+    store = EdinetCacheStore(
+        tmp_path,
+        search_empty_ttl_days=1,
+        search_hit_ttl_days=30,
+        search_past_ttl_days=3650,
+    )
+    filename = store.search_cache_key("2024-06-01")
+    documents = [{"docID": "S100TEST", "docTypeCode": "120"}]
+    store.save_search_cache(filename, documents)
+    _age(tmp_path / filename, days=365)
+
+    assert store.load_search_cache(filename) == documents
+
+
+def test_document_index_roundtrip_requires_version_and_built_through(tmp_path):
+    store = EdinetCacheStore(tmp_path)
+    documents = [{"docID": "S100TEST", "docTypeCode": "120"}]
+    store.save_document_index(2024, documents, built_through="2024-12-31")
+
+    assert store.load_document_index(2024, required_through="2024-06-30") == documents
+    assert store.load_document_index(2024, required_through="2025-01-01") is None
 
 
 def test_store_xbrl_zip_evicts_oldest_dirs_when_over_limit(tmp_path):

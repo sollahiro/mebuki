@@ -70,6 +70,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="指定日数以上古い EDINET XBRL 展開ディレクトリを削除",
     )
+    prune_parser.add_argument(
+        "--edinet-doc-index-years",
+        type=int,
+        default=6,
+        help="保持する EDINET 年次インデックス年数（デフォルト: 6、0で全削除）",
+    )
     prune_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
 
     # mcp

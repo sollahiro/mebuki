@@ -159,6 +159,7 @@ def test_main_cache_prune_outputs_json(monkeypatch, capsys) -> None:
         include_boj=True,
         edinet_search_days=30,
         edinet_xbrl_days=60,
+        edinet_doc_index_years=6,
     )
 
 
@@ -172,6 +173,7 @@ def test_main_cache_stats_outputs_json(monkeypatch, capsys) -> None:
         "metadata_entries": 2,
         "root_json_files": 2,
         "edinet_search_files": 1,
+        "edinet_doc_index_files": 0,
         "edinet_xbrl_dirs": 0,
         "boj_files": 1,
         "boj_metadata_entries": 1,

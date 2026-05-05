@@ -9,6 +9,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
+from mebuki.constants.api import EDINET_DOCUMENT_INDEX_KEEP_YEARS
 from mebuki.utils.cache import CacheManager
 
 
@@ -34,6 +35,7 @@ class CacheStats:
     metadata_entries: int = 0
     root_json_files: int = 0
     edinet_search_files: int = 0
+    edinet_doc_index_files: int = 0
     edinet_xbrl_dirs: int = 0
     boj_files: int = 0
     boj_metadata_entries: int = 0
@@ -59,6 +61,7 @@ class CachePruner:
         include_boj: bool = True,
         edinet_search_days: int | None = None,
         edinet_xbrl_days: int | None = None,
+        edinet_doc_index_years: int | None = EDINET_DOCUMENT_INDEX_KEEP_YEARS,
     ) -> PruneSummary:
         summary = PruneSummary(dry_run=dry_run)
         if include_boj:
@@ -72,6 +75,14 @@ class CachePruner:
             summary = self._merge(
                 summary,
                 self._prune_edinet_xbrl(days=edinet_xbrl_days, dry_run=dry_run),
+            )
+        if edinet_doc_index_years is not None:
+            summary = self._merge(
+                summary,
+                self._prune_edinet_doc_indexes(
+                    keep_years=edinet_doc_index_years,
+                    dry_run=dry_run,
+                ),
             )
         return summary
 
@@ -106,6 +117,7 @@ class CachePruner:
             metadata_entries=len(metadata_keys),
             root_json_files=len(root_json_files),
             edinet_search_files=len(list(self.edinet_dir.glob("search_*.json"))),
+            edinet_doc_index_files=len(list(self.edinet_dir.glob("doc_index_*.json"))),
             edinet_xbrl_dirs=len([path for path in self.edinet_dir.glob("*_xbrl") if path.is_dir()]),
             boj_files=len(boj_files),
             boj_metadata_entries=len([key for key in metadata_keys if key.startswith("boj_")]),
@@ -163,6 +175,28 @@ class CachePruner:
             dry_run=dry_run,
         )
 
+    def _prune_edinet_doc_indexes(self, *, keep_years: int, dry_run: bool) -> PruneSummary:
+        if keep_years <= 0:
+            threshold_year = datetime.now().year + 1
+        else:
+            threshold_year = datetime.now().year - keep_years + 1
+        files = [
+            path
+            for path in self.edinet_dir.glob("doc_index_*.json")
+            if (year := _doc_index_year(path)) is not None and year < threshold_year
+        ]
+        freed = sum(path.stat().st_size for path in files if path.exists())
+        if not dry_run:
+            for path in files:
+                if path.exists():
+                    path.unlink()
+        return PruneSummary(
+            removed_files=len(files),
+            freed_bytes=freed,
+            scanned_files=len(files),
+            dry_run=dry_run,
+        )
+
     @staticmethod
     def _age_days(path: Path) -> int:
         mtime = datetime.fromtimestamp(path.stat().st_mtime)
@@ -184,3 +218,11 @@ class CachePruner:
             scanned_dirs=left.scanned_dirs + right.scanned_dirs,
             dry_run=left.dry_run and right.dry_run,
         )
+
+
+def _doc_index_year(path: Path) -> int | None:
+    year_text = path.stem.removeprefix("doc_index_")
+    try:
+        return int(year_text)
+    except ValueError:
+        return None

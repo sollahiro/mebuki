@@ -9,15 +9,18 @@ import logging
 import os
 import shutil
 import zipfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from mebuki.constants.api import (
+    EDINET_DOCUMENT_INDEX_VERSION,
     EDINET_SEARCH_EMPTY_TTL_DAYS,
     EDINET_SEARCH_HIT_TTL_DAYS,
+    EDINET_SEARCH_PAST_TTL_DAYS,
     EDINET_XBRL_MAX_BYTES,
 )
+from mebuki.utils.fiscal_year import parse_date_string
 
 logger = logging.getLogger(__name__)
 
@@ -31,17 +34,23 @@ class EdinetCacheStore:
         *,
         search_empty_ttl_days: int = EDINET_SEARCH_EMPTY_TTL_DAYS,
         search_hit_ttl_days: int = EDINET_SEARCH_HIT_TTL_DAYS,
+        search_past_ttl_days: int = EDINET_SEARCH_PAST_TTL_DAYS,
         max_xbrl_bytes: int | None = EDINET_XBRL_MAX_BYTES,
     ):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.search_empty_ttl_days = search_empty_ttl_days
         self.search_hit_ttl_days = search_hit_ttl_days
+        self.search_past_ttl_days = search_past_ttl_days
         self.max_xbrl_bytes = max_xbrl_bytes
 
     def search_cache_key(self, date_str: str) -> str:
         """日別検索キャッシュのファイル名を返す。"""
         return f"search_{date_str}.json"
+
+    def document_index_cache_key(self, year: int) -> str:
+        """年次書類インデックスのファイル名を返す。"""
+        return f"doc_index_{year}.json"
 
     def load_search_cache(self, filename: str) -> list[dict[str, Any]] | None:
         """日別検索結果をキャッシュから読み込む。"""
@@ -70,6 +79,62 @@ class EdinetCacheStore:
             )
         except Exception as e:
             logger.warning(f"Cache save failed: {e}")
+
+    def load_document_index(
+        self,
+        year: int,
+        *,
+        required_through: str | None = None,
+    ) -> list[dict[str, Any]] | None:
+        """年次書類インデックスをキャッシュから読み込む。"""
+        cache_path = self.cache_dir / self.document_index_cache_key(year)
+        if not cache_path.exists():
+            return None
+        try:
+            payload = json.loads(cache_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            logger.warning(f"Document index load failed: {e}")
+            return None
+        if not isinstance(payload, dict):
+            logger.warning(f"Document index load failed: expected dict in {cache_path}")
+            return None
+        if payload.get("_cache_version") != EDINET_DOCUMENT_INDEX_VERSION:
+            return None
+        if payload.get("year") != year:
+            return None
+        built_through = payload.get("built_through")
+        if required_through is not None and (
+            not isinstance(built_through, str) or built_through < required_through
+        ):
+            return None
+        documents = payload.get("documents")
+        if not isinstance(documents, list):
+            logger.warning(f"Document index load failed: expected documents list in {cache_path}")
+            return None
+        return documents
+
+    def save_document_index(
+        self,
+        year: int,
+        documents: list[dict[str, Any]],
+        *,
+        built_through: str,
+    ) -> None:
+        """年次書類インデックスを保存する。"""
+        cache_path = self.cache_dir / self.document_index_cache_key(year)
+        payload = {
+            "_cache_version": EDINET_DOCUMENT_INDEX_VERSION,
+            "year": year,
+            "built_through": built_through,
+            "documents": documents,
+        }
+        try:
+            cache_path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception as e:
+            logger.warning(f"Document index save failed: {e}")
 
     def xbrl_dir(self, doc_id: str, save_dir: str | Path | None = None) -> Path:
         """XBRL 展開ディレクトリのパスを返す。"""
@@ -125,9 +190,16 @@ class EdinetCacheStore:
                 raise ValueError(f"不正なZIPエントリ: {member}") from e
 
     def _is_search_cache_expired(self, cache_path: Path, *, has_results: bool) -> bool:
-        ttl_days = self.search_hit_ttl_days if has_results else self.search_empty_ttl_days
+        ttl_days = self._search_cache_ttl_days(cache_path, has_results=has_results)
         mtime = datetime.fromtimestamp(cache_path.stat().st_mtime)
         return (datetime.now() - mtime).days >= ttl_days
+
+    def _search_cache_ttl_days(self, cache_path: Path, *, has_results: bool) -> int:
+        date_part = cache_path.stem.removeprefix("search_")
+        cache_date = parse_date_string(date_part)
+        if cache_date is not None and cache_date.date() < datetime.now().date() - timedelta(days=1):
+            return self.search_past_ttl_days
+        return self.search_hit_ttl_days if has_results else self.search_empty_ttl_days
 
     def _evict_xbrl_if_needed(self, root: Path) -> None:
         if self.max_xbrl_bytes is None:

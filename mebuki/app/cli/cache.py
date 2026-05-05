@@ -23,6 +23,7 @@ def cmd_cache(args, parser) -> None:
         print(f"  metadata entries:   {data['metadata_entries']}", file=sys.stderr)
         print(f"  root json files:    {data['root_json_files']}", file=sys.stderr)
         print(f"  EDINET searches:    {data['edinet_search_files']}", file=sys.stderr)
+        print(f"  EDINET doc indexes: {data['edinet_doc_index_files']}", file=sys.stderr)
         print(f"  EDINET XBRL dirs:   {data['edinet_xbrl_dirs']}", file=sys.stderr)
         print(f"  BOJ files:          {data['boj_files']}", file=sys.stderr)
         print(f"  BOJ metadata keys:  {data['boj_metadata_entries']}", file=sys.stderr)
@@ -36,6 +37,7 @@ def cmd_cache(args, parser) -> None:
             include_boj=not args.keep_boj,
             edinet_search_days=args.edinet_search_days,
             edinet_xbrl_days=args.edinet_xbrl_days,
+            edinet_doc_index_years=args.edinet_doc_index_years,
         )
         data = summary.to_dict()
         if args.format == "json":

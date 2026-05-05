@@ -75,6 +75,42 @@ def test_prune_edinet_by_age(tmp_path) -> None:
     assert new_xbrl.exists()
 
 
+def test_prune_edinet_doc_indexes_keeps_recent_years_by_default(tmp_path) -> None:
+    current_year = datetime.now().year
+    edinet_dir = tmp_path / "edinet"
+    edinet_dir.mkdir()
+    old_index = edinet_dir / f"doc_index_{current_year - 6}.json"
+    kept_index = edinet_dir / f"doc_index_{current_year - 5}.json"
+    old_index.write_text("{}", encoding="utf-8")
+    kept_index.write_text("{}", encoding="utf-8")
+
+    summary = CachePruner(tmp_path).prune(dry_run=False, include_boj=False)
+
+    assert summary.removed_files == 1
+    assert not old_index.exists()
+    assert kept_index.exists()
+
+
+def test_prune_edinet_doc_indexes_can_keep_custom_years(tmp_path) -> None:
+    current_year = datetime.now().year
+    edinet_dir = tmp_path / "edinet"
+    edinet_dir.mkdir()
+    old_index = edinet_dir / f"doc_index_{current_year - 3}.json"
+    kept_index = edinet_dir / f"doc_index_{current_year - 2}.json"
+    old_index.write_text("{}", encoding="utf-8")
+    kept_index.write_text("{}", encoding="utf-8")
+
+    summary = CachePruner(tmp_path).prune(
+        dry_run=False,
+        include_boj=False,
+        edinet_doc_index_years=3,
+    )
+
+    assert summary.removed_files == 1
+    assert not old_index.exists()
+    assert kept_index.exists()
+
+
 def test_stats_counts_cache_categories(tmp_path) -> None:
     from mebuki.utils.cache import CacheManager
 
@@ -86,6 +122,7 @@ def test_stats_counts_cache_categories(tmp_path) -> None:
     edinet_dir = tmp_path / "edinet"
     edinet_dir.mkdir()
     (edinet_dir / "search_2024-01-01.json").write_text("[]", encoding="utf-8")
+    (edinet_dir / "doc_index_2024.json").write_text("{}", encoding="utf-8")
     xbrl_dir = edinet_dir / "S100TEST_xbrl"
     xbrl_dir.mkdir()
     (xbrl_dir / "doc.xbrl").write_text("xbrl", encoding="utf-8")
@@ -93,8 +130,9 @@ def test_stats_counts_cache_categories(tmp_path) -> None:
     pruner = CachePruner(tmp_path)
     stats = pruner.stats()
 
-    assert stats.total_files == 6
+    assert stats.total_files == 7
     assert stats.edinet_search_files == 1
+    assert stats.edinet_doc_index_files == 1
     assert stats.edinet_xbrl_dirs == 1
     assert stats.boj_files == 1
     assert stats.boj_metadata_entries == 1

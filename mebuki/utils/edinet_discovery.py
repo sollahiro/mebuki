@@ -74,6 +74,11 @@ async def _fetch_date_range_cached(
 
     EdinetCacheStore のキャッシュが利用されるため、他銘柄で取得済みの日付は無料。
     """
+    from mebuki.api.edinet_client import EdinetAPIClient
+
+    if isinstance(edinet_client, EdinetAPIClient):
+        return await edinet_client.get_documents_for_date_range(start, end)
+
     dates: list[str] = []
     curr = start
     while curr <= end:
@@ -104,27 +109,24 @@ async def _find_most_recent_annual_report(
     """
     code_4digit = code[:4] if len(code) >= 4 else code
     today = datetime.now().date()
+    scan_start = today - timedelta(days=scan_days - 1)
+    docs_by_date = await _fetch_date_range_cached(edinet_client, scan_start, today)
 
-    for batch_offset in range(0, scan_days, _BATCH_SIZE):
-        batch_end = today - timedelta(days=batch_offset)
-        batch_start = today - timedelta(days=batch_offset + _BATCH_SIZE - 1)
-        docs_by_date = await _fetch_date_range_cached(edinet_client, batch_start, batch_end)
-
-        for date_str in sorted(docs_by_date.keys(), reverse=True):
-            for doc in docs_by_date[date_str]:
-                sec = str(doc.get("secCode", "")).strip()
-                if not sec.startswith(code_4digit):
-                    continue
-                if doc.get("docTypeCode") != _ANNUAL_REPORT_DOC_TYPE:
-                    continue
-                if not doc.get("periodEnd"):
-                    continue
-                logger.info(
-                    f"[EDINET Discovery] {code}: 直近有報発見 "
-                    f"periodEnd={doc.get('periodEnd')} "
-                    f"submit={str(doc.get('submitDateTime', ''))[:10]}"
-                )
-                return doc
+    for date_str in sorted(docs_by_date.keys(), reverse=True):
+        for doc in docs_by_date[date_str]:
+            sec = str(doc.get("secCode", "")).strip()
+            if not sec.startswith(code_4digit):
+                continue
+            if doc.get("docTypeCode") != _ANNUAL_REPORT_DOC_TYPE:
+                continue
+            if not doc.get("periodEnd"):
+                continue
+            logger.info(
+                f"[EDINET Discovery] {code}: 直近有報発見 "
+                f"periodEnd={doc.get('periodEnd')} "
+                f"submit={str(doc.get('submitDateTime', ''))[:10]}"
+            )
+            return doc
 
     logger.warning(
         f"[EDINET Discovery] {code}: {scan_days}日間スキャンで有価証券報告書が見つかりませんでした"

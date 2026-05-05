@@ -1,13 +1,20 @@
 import asyncio
 import logging
+import re
 import ssl
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import aiohttp
 import certifi
 
-from ..constants.api import EDINET_API_BASE_URL
+from ..constants.api import (
+    EDINET_API_BASE_URL,
+    EDINET_DOCUMENT_INDEX_BATCH_SIZE,
+    EDINET_DOCUMENT_INDEX_MIN_RANGE_DAYS,
+)
+from mebuki.utils.fiscal_year import parse_date_string
 from .edinet_cache_store import EdinetCacheStore
 
 logger = logging.getLogger(__name__)
@@ -30,6 +37,7 @@ class EdinetAPIClient:
         self._session_loop: asyncio.AbstractEventLoop | None = None
         self._download_locks: dict[str, asyncio.Lock] = {}
         self._date_fetch_semaphore = asyncio.Semaphore(10)
+        self._document_index_locks: dict[int, asyncio.Lock] = {}
 
     def update_api_key(self, api_key: str | None) -> None:
         """APIキーを更新します。"""
@@ -72,13 +80,15 @@ class EdinetAPIClient:
         params["Subscription-Key"] = self.api_key
 
         last_exception: BaseException | None = None
+        retry_wait_seconds: float | None = None
         session = await self._get_session()
         timeout = aiohttp.ClientTimeout(total=30)
 
         for attempt in range(max_retries):
             try:
                 if attempt > 0:
-                    wait_time = 2 ** attempt
+                    wait_time = retry_wait_seconds if retry_wait_seconds is not None else 2 ** attempt
+                    retry_wait_seconds = None
                     logger.warning(f"⚠️ [EDINET API] Retry attempt {attempt+1}/{max_retries} after {wait_time}s...")
                     await asyncio.sleep(wait_time)
 
@@ -114,6 +124,8 @@ class EdinetAPIClient:
 
                 status_code = getattr(e, "status", None)
                 if status_code in [429, 500, 502, 503, 504] or isinstance(e, aiohttp.ClientConnectorError):
+                    if status_code == 429:
+                        retry_wait_seconds = _retry_after_seconds(e)
                     continue
                 else:
                     logger.error(f"❌ [EDINET API] Non-retryable error: {e}")
@@ -139,13 +151,15 @@ class EdinetAPIClient:
         params["Subscription-Key"] = self.api_key
 
         last_exception: BaseException | None = None
+        retry_wait_seconds: float | None = None
         session = await self._get_session()
         timeout = aiohttp.ClientTimeout(total=120)
 
         for attempt in range(max_retries):
             try:
                 if attempt > 0:
-                    wait_time = 2 ** attempt
+                    wait_time = retry_wait_seconds if retry_wait_seconds is not None else 2 ** attempt
+                    retry_wait_seconds = None
                     logger.warning(f"⚠️ [EDINET API] Retry attempt {attempt+1}/{max_retries} after {wait_time}s...")
                     await asyncio.sleep(wait_time)
 
@@ -157,6 +171,8 @@ class EdinetAPIClient:
                 last_exception = e
                 status_code = getattr(e, "status", None)
                 if status_code in [429, 500, 502, 503, 504] or isinstance(e, aiohttp.ClientConnectorError):
+                    if status_code == 429:
+                        retry_wait_seconds = _retry_after_seconds(e)
                     continue
                 raise
 
@@ -195,6 +211,105 @@ class EdinetAPIClient:
             except Exception:
                 return []
 
+    async def ensure_document_index_for_year(self, year: int) -> list[dict[str, Any]]:
+        """指定年の日次書類一覧を束ねたローカルインデックスを返す。"""
+        today = datetime.now().date()
+        year_start = date(year, 1, 1)
+        year_end = date(year, 12, 31)
+        if year_start > today:
+            return []
+        required_through_date = min(year_end, today)
+        required_through = required_through_date.strftime("%Y-%m-%d")
+
+        cached = self.cache_store.load_document_index(year, required_through=required_through)
+        if cached is not None:
+            return cached
+
+        if year not in self._document_index_locks:
+            self._document_index_locks[year] = asyncio.Lock()
+        async with self._document_index_locks[year]:
+            cached = self.cache_store.load_document_index(year, required_through=required_through)
+            if cached is not None:
+                return cached
+
+            docs = await self._build_document_index_for_year(year, required_through_date)
+            self.cache_store.save_document_index(year, docs, built_through=required_through)
+            return docs
+
+    async def get_documents_for_date_range(
+        self,
+        start: date,
+        end: date,
+        *,
+        use_index: bool = True,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """日付範囲の書類一覧を取得する。広い範囲では年次インデックスを優先する。"""
+        if start > end:
+            return {}
+
+        days = (end - start).days + 1
+        if use_index and days >= EDINET_DOCUMENT_INDEX_MIN_RANGE_DAYS:
+            try:
+                return await self._get_documents_for_date_range_from_index(start, end)
+            except Exception as e:
+                logger.warning(f"[EDINET] document index fallback to daily cache: {e}")
+
+        return await self._get_documents_for_date_range_daily(start, end)
+
+    async def _build_document_index_for_year(
+        self,
+        year: int,
+        required_through: date,
+    ) -> list[dict[str, Any]]:
+        dates = [
+            date(year, 1, 1) + timedelta(days=offset)
+            for offset in range((required_through - date(year, 1, 1)).days + 1)
+        ]
+
+        documents: list[dict[str, Any]] = []
+        for i in range(0, len(dates), EDINET_DOCUMENT_INDEX_BATCH_SIZE):
+            batch = dates[i: i + EDINET_DOCUMENT_INDEX_BATCH_SIZE]
+            responses = await asyncio.gather(
+                *[self._get_documents_for_date(d.strftime("%Y-%m-%d")) for d in batch],
+                return_exceptions=True,
+            )
+            for d, res in zip(batch, responses):
+                if isinstance(res, BaseException):
+                    continue
+                list_date = d.strftime("%Y-%m-%d")
+                for doc in res:
+                    indexed_doc = dict(doc)
+                    indexed_doc["_edinet_list_date"] = list_date
+                    documents.append(indexed_doc)
+        return documents
+
+    async def _get_documents_for_date_range_from_index(
+        self,
+        start: date,
+        end: date,
+    ) -> dict[str, list[dict[str, Any]]]:
+        result = _empty_date_range(start, end)
+        for year in range(start.year, end.year + 1):
+            for doc in await self.ensure_document_index_for_year(year):
+                doc_date = _document_list_date(doc)
+                if doc_date is None or doc_date < start or doc_date > end:
+                    continue
+                result[doc_date.strftime("%Y-%m-%d")].append(_strip_index_metadata(doc))
+        return result
+
+    async def _get_documents_for_date_range_daily(
+        self,
+        start: date,
+        end: date,
+    ) -> dict[str, list[dict[str, Any]]]:
+        result: dict[str, list[dict[str, Any]]] = {}
+        curr = start
+        while curr <= end:
+            date_str = curr.strftime("%Y-%m-%d")
+            result[date_str] = await self._get_documents_for_date(date_str)
+            curr += timedelta(days=1)
+        return result
+
     async def download_document(self, doc_id: str, doc_type: int = 1, save_dir: Path | None = None) -> Path | None:
         """書類をダウンロード（1=XBRLのみ維持。旧2=PDFは廃止）"""
         if doc_type != 1:
@@ -224,3 +339,44 @@ class EdinetAPIClient:
             except Exception as e:
                 logger.error(f"❌ [EDINET] XBRL Download error {doc_id}: {e}")
                 return None
+
+
+def _retry_after_seconds(error: BaseException) -> float | None:
+    headers = getattr(error, "headers", None)
+    retry_after = headers.get("Retry-After") if headers is not None else None
+    if retry_after:
+        try:
+            return max(float(retry_after), 0.0)
+        except ValueError:
+            pass
+
+    message = str(getattr(error, "message", "")) or str(error)
+    match = re.search(r"try again in\s+(\d+(?:\.\d+)?)\s+seconds", message, re.IGNORECASE)
+    if match:
+        return float(match.group(1))
+    return None
+
+
+def _document_list_date(doc: dict[str, Any]) -> date | None:
+    list_date = str(doc.get("_edinet_list_date") or "")[:10]
+    if list_date:
+        parsed = parse_date_string(list_date)
+        if parsed is not None:
+            return parsed.date()
+    submit_date = str(doc.get("submitDateTime") or "")[:10]
+    if not submit_date:
+        return None
+    parsed = parse_date_string(submit_date)
+    return parsed.date() if parsed is not None else None
+
+
+def _empty_date_range(start: date, end: date) -> dict[str, list[dict[str, Any]]]:
+    days = (end - start).days + 1
+    return {
+        (start + timedelta(days=offset)).strftime("%Y-%m-%d"): []
+        for offset in range(days)
+    }
+
+
+def _strip_index_metadata(doc: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in doc.items() if key != "_edinet_list_date"}
