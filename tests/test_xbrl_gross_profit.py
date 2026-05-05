@@ -242,6 +242,39 @@ class TestBusinessGrossProfitMethod(unittest.TestCase):
         self.assertAlmostEqual(result.get("current_sales"), 13_629_997_000_000)
         self.assertAlmostEqual(result.get("prior_sales"), 11_890_350_000_000)
 
+    def test_bank_business_gross_profit_allows_trading_income_without_expense(self):
+        """特定取引収益だけがある場合も、正符号の構成要素として採用する。"""
+        xml = _make_xbrl_duration("""
+            <jppfs_cor:TradingIncomeOIBNK contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">454258000000</jppfs_cor:TradingIncomeOIBNK>
+        """)
+        (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
+        result = extract_gross_profit(self.xbrl_dir)
+        self.assertEqual(result["method"], "business_gross_profit")
+        self.assertAlmostEqual(result["current"], 454_258_000_000)
+        trading_income = next(c for c in result["components"] if c["label"] == "特定取引収益")
+        trading_expense = next(c for c in result["components"] if c["label"] == "特定取引費用")
+        self.assertEqual(trading_income["tag"], "TradingIncomeOIBNK")
+        self.assertIsNone(trading_expense["tag"])
+        self.assertIsNone(trading_expense["current"])
+
+    def test_bank_business_gross_profit_allows_trading_expense_without_income(self):
+        """特定取引費用だけがある場合も、負符号の構成要素として採用する。"""
+        xml = _make_xbrl_duration("""
+            <jppfs_cor:TradingExpensesOEBNK contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">12000000000</jppfs_cor:TradingExpensesOEBNK>
+        """)
+        (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
+        result = extract_gross_profit(self.xbrl_dir)
+        self.assertEqual(result["method"], "business_gross_profit")
+        self.assertAlmostEqual(result["current"], -12_000_000_000)
+        trading_income = next(c for c in result["components"] if c["label"] == "特定取引収益")
+        trading_expense = next(c for c in result["components"] if c["label"] == "特定取引費用")
+        self.assertIsNone(trading_income["tag"])
+        self.assertIsNone(trading_income["current"])
+        self.assertEqual(trading_expense["tag"], "TradingExpensesOEBNK")
+        self.assertAlmostEqual(trading_expense["current"], -12_000_000_000)
+
 
 class TestGrossProfitConsolidatedPriority(unittest.TestCase):
 

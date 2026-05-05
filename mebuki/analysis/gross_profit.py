@@ -68,8 +68,6 @@ _GP_RELEVANT_TAGS: frozenset[str] = frozenset(
 )
 
 
-
-
 def _find_consolidated_duration_value(
     tag_elements: XbrlTagElements, tag: str
 ) -> tuple[float | None, float | None]:
@@ -192,7 +190,6 @@ def _extract_business_gross_profit(tag_elements: XbrlTagElements) -> GrossProfit
         result["current_sales"] = sales_c
         result["prior_sales"] = sales_p
     return result
-
 
 
 def _extract_usgaap_gp_from_html(xbrl_dir: Path) -> GrossProfitResult | None:
@@ -320,7 +317,7 @@ def extract_gross_profit(
         {
             "current": float | None,      # 当期（円）
             "prior":   float | None,      # 前期（円）
-            "method":  str,               # "direct" | "computed" | "not_found"
+            "method":  str,               # "direct" | "computed" | "business_gross_profit" | "usgaap_html" | "not_found"
             "reason":  str | None,        # not_found 時のみ失敗理由を格納、それ以外は None
             "accounting_standard": str,   # "J-GAAP" | "IFRS" | "US-GAAP"
             "components": [

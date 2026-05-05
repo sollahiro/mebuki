@@ -1,6 +1,7 @@
 import json
 import sys
 import logging
+from collections.abc import Mapping
 import aiohttp
 from mebuki.infrastructure.helpers import validate_stock_code
 from mebuki.infrastructure.settings import settings_store
@@ -8,6 +9,24 @@ from mebuki.services.master_data import master_data_manager
 from mebuki.utils.converters import extract_year_month
 
 logger = logging.getLogger(__name__)
+
+
+def _gross_profit_labels(calculated_data: Mapping[str, object]) -> tuple[str, str, str]:
+    """売上総利益系の表示ラベルを返す。"""
+    base_label_value = calculated_data.get("GrossProfitLabel", "売上総利益")
+    base_label = base_label_value if isinstance(base_label_value, str) else "売上総利益"
+    gross_profit_label = f"{base_label} (百万)"
+    gross_profit_margin_label = (
+        f"{base_label}率 (%)"
+        if base_label != "売上総利益"
+        else "粗利率 (%)"
+    )
+    gross_margin_change_label = (
+        f"{base_label}率差影響"
+        if base_label != "売上総利益"
+        else "粗利率差影響"
+    )
+    return gross_profit_label, gross_profit_margin_label, gross_margin_change_label
 
 
 def cmd_search(args):
@@ -92,17 +111,8 @@ async def cmd_analyze(args):
             print(sep, file=sys.stderr)
 
             latest_period_data = periods[-1].get("data", {}) if periods else {}
-            gross_profit_base_label = latest_period_data.get("GrossProfitLabel", "売上総利益")
-            gross_profit_label = f"{gross_profit_base_label} (百万)"
-            gross_profit_margin_label = (
-                f"{gross_profit_base_label}率 (%)"
-                if gross_profit_base_label != "売上総利益"
-                else "粗利率 (%)"
-            )
-            gross_margin_change_label = (
-                f"{gross_profit_base_label}率差影響"
-                if gross_profit_base_label != "売上総利益"
-                else "粗利率差影響"
+            gross_profit_label, gross_profit_margin_label, gross_margin_change_label = (
+                _gross_profit_labels(latest_period_data)
             )
 
             half_metrics_to_show = [
@@ -210,17 +220,8 @@ async def cmd_analyze(args):
         # IFRS金融会社は純収益・事業利益ラベルを使う（最新年度のラベルで判定）
         latest_cd = periods[-1].get("CalculatedData", {}) if periods else {}
         sales_label = latest_cd.get("SalesLabel", "売上高") + " (百万)"
-        gross_profit_base_label = latest_cd.get("GrossProfitLabel", "売上総利益")
-        gross_profit_label = f"{gross_profit_base_label} (百万)"
-        gross_profit_margin_label = (
-            f"{gross_profit_base_label}率 (%)"
-            if gross_profit_base_label != "売上総利益"
-            else "粗利率 (%)"
-        )
-        gross_margin_change_label = (
-            f"{gross_profit_base_label}率差影響"
-            if gross_profit_base_label != "売上総利益"
-            else "粗利率差影響"
+        gross_profit_label, gross_profit_margin_label, gross_margin_change_label = (
+            _gross_profit_labels(latest_cd)
         )
         op_label = latest_cd.get("OPLabel", "営業利益") + " (百万)"
         op_margin_label = latest_cd.get("OPLabel", "営業利益") + "率 (%)"
