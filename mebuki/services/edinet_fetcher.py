@@ -616,6 +616,7 @@ class EdinetFetcher:
         Returns: { "YYYYMMDD": {"gp": gp_result_dict, "cf": cf_result_dict, "ibd": ibd_result_dict} }
         """
         from mebuki.analysis.gross_profit import extract_gross_profit
+        from mebuki.analysis.operating_profit import extract_operating_profit
         from mebuki.analysis.cash_flow import extract_cash_flow
         from mebuki.analysis.interest_bearing_debt import extract_interest_bearing_debt
 
@@ -635,15 +636,17 @@ class EdinetFetcher:
                 continue
             xbrl_path, pre_parsed = pre_parsed_map[fy_end_8]
             gp: GrossProfitResult = extract_gross_profit(xbrl_path, pre_parsed=pre_parsed)
+            op = extract_operating_profit(xbrl_path, pre_parsed=pre_parsed)
             cf = extract_cash_flow(xbrl_path, pre_parsed=pre_parsed)
             ibd = extract_interest_bearing_debt(xbrl_path, pre_parsed=pre_parsed)
             gp["docID"] = doc["docID"]
+            op["docID"] = doc["docID"]
             logger.info(
                 f"[HALF-EDINET] {code} {fy_end_8}: "
-                f"gp={gp.get('current')}, cfo={cf['cfo'].get('current')}, "
+                f"gp={gp.get('current')}, op={op.get('current')}, cfo={cf['cfo'].get('current')}, "
                 f"cfi={cf['cfi'].get('current')}, ibd={ibd.get('current')}, docID={doc['docID']}"
             )
-            out[fy_end_8] = {"gp": gp, "cf": cf, "ibd": ibd}
+            out[fy_end_8] = {"gp": gp, "op": op, "cf": cf, "ibd": ibd}
 
         logger.info(f"[HALF-EDINET] {code}: 半期EDINETデータ抽出完了 {len(out)}件")
         return out

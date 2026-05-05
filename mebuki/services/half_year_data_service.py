@@ -4,6 +4,7 @@
 
 import asyncio
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 from mebuki import __version__
@@ -11,7 +12,10 @@ from mebuki.constants.financial import MILLION_YEN
 from mebuki.utils.cache import CacheManager
 from mebuki.utils.converters import to_float
 from mebuki.utils.financial_data import build_half_year_periods
-from mebuki.utils.operating_profit_change import apply_operating_profit_change_to_periods
+from mebuki.utils.operating_profit_change import (
+    apply_operating_profit_change_to_periods,
+    apply_operating_profit_change_to_periods_from_xbrl,
+)
 from mebuki.utils.output_serializer import serialize_half_year_periods
 from mebuki.utils.xbrl_result_types import GrossProfitResult, HalfYearEdinetEntry
 
@@ -66,6 +70,10 @@ def _to_gross_profit_result(value: dict[str, Any] | None) -> GrossProfitResult |
         result["docID"] = value["docID"]
     if isinstance(value.get("reason"), str):
         result["reason"] = value["reason"]
+    for key in ("current_sales", "prior_sales"):
+        raw_value = value.get(key)
+        if raw_value is None or isinstance(raw_value, (int, float)):
+            result[key] = raw_value
     return result
 
 
@@ -243,10 +251,11 @@ class HalfYearDataService:
             cache_manager=self.cache_manager,
         )
         try:
-            half_edinet, fy_gp, ibd_by_year = await asyncio.gather(
+            half_edinet, fy_gp, ibd_by_year, fy_op = await asyncio.gather(
                 edinet_fetcher.extract_half_year_edinet_data(code, financial_data, max_years=unique_fy_ends),
                 edinet_fetcher.extract_gross_profit_by_year(code, financial_data, max_years=years),
                 edinet_fetcher.extract_ibd_by_year(code, financial_data, max_years=years),
+                edinet_fetcher.extract_operating_profit_by_year(code, financial_data, max_years=years),
             )
         except Exception as e:
             logger.warning(f"[HALF] {code}: EDINET補完スキップ - {e}")
@@ -259,6 +268,23 @@ class HalfYearDataService:
             gp_result = _to_gross_profit_result(result)
             if gp_result is not None:
                 fy_gp_by_end[fy_end] = gp_result
+
+        half_gp_by_end: dict[str, Mapping[str, Any]] = {}
+        half_op_by_end: dict[str, Mapping[str, Any]] = {}
+        for fy_end, entry in half_edinet.items():
+            if not isinstance(entry, dict):
+                continue
+            gp = entry.get("gp")
+            op = entry.get("op")
+            if isinstance(gp, dict):
+                half_gp_by_end[fy_end] = gp
+            if isinstance(op, dict):
+                half_op_by_end[fy_end] = op
+
+        fy_op_by_end: dict[str, Mapping[str, Any]] = {}
+        for fy_end, result in fy_op.items():
+            if isinstance(result, dict):
+                fy_op_by_end[fy_end] = result
 
         # FY J-Quants レコードを fy_end → record で引けるようにしておく
         fy_by_end: dict[str, dict[str, Any]] = {}
@@ -300,6 +326,13 @@ class HalfYearDataService:
             else:
                 _apply_fy_only_edinet_data(data, fy_gp_by_end.get(fy_end_8), fy_by_end.get(fy_end_8, {}), ibd_by_year, fy_end_8)
 
+        apply_operating_profit_change_to_periods_from_xbrl(
+            base_periods,
+            half_gp_by_end,
+            half_op_by_end,
+            fy_gp_by_end,
+            fy_op_by_end,
+        )
         apply_operating_profit_change_to_periods(base_periods)
         self.cache_manager.set(cache_key, {
             "_cache_version": _CACHE_VERSION,

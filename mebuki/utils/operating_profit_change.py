@@ -5,6 +5,7 @@
 売上差・粗利率差・販管費増の3要素へ分解する。
 """
 
+from collections.abc import Mapping
 from typing import Any, cast
 
 from mebuki.constants.financial import MILLION_YEN
@@ -53,8 +54,8 @@ def _profit_base(data: dict[str, Any]) -> tuple[float | None, str | None]:
 
 
 def _profit_base_from_xbrl(
-    gp: dict[str, Any],
-    op: dict[str, Any],
+    gp: Mapping[str, Any],
+    op: Mapping[str, Any],
     *,
     period: str,
 ) -> tuple[float | None, str | None]:
@@ -184,6 +185,118 @@ def apply_operating_profit_change_to_periods(periods: list[dict[str, Any]]) -> N
         if prior is not None:
             _apply_change(data, prior.get("data") or {})
         latest_by_half[comparison_key] = period
+
+
+def _xbrl_sales(gp: Mapping[str, Any], op: Mapping[str, Any], *, period: str) -> float | None:
+    sales = gp.get(f"{period}_sales")
+    if sales is None:
+        sales = op.get(f"{period}_sales")
+    return sales if isinstance(sales, (int, float)) and not isinstance(sales, bool) else None
+
+
+def _xbrl_op(op: Mapping[str, Any], *, period: str) -> float | None:
+    value = op.get(period)
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def _synthetic_prior_period_from_xbrl(gp: Mapping[str, Any], op: Mapping[str, Any]) -> dict[str, Any] | None:
+    prior_sales_raw = _xbrl_sales(gp, op, period="prior")
+    prior_base_raw, _ = _profit_base_from_xbrl(gp, op, period="prior")
+    prior_op_raw = _xbrl_op(op, period="prior")
+    if prior_sales_raw is None or prior_base_raw is None or prior_op_raw is None:
+        return None
+
+    prior: dict[str, Any] = {
+        "Sales": prior_sales_raw / MILLION_YEN,
+        "GrossProfit": prior_base_raw / MILLION_YEN,
+        "OP": prior_op_raw / MILLION_YEN,
+    }
+    if op.get("label") in _FINANCIAL_OP_LABELS:
+        prior["OPLabel"] = op.get("label")
+        if gp.get("prior") is None:
+            prior.pop("GrossProfit", None)
+    if gp.get("method") == "business_gross_profit":
+        prior["GrossProfitLabel"] = _BUSINESS_GROSS_PROFIT_LABEL
+    _apply_sga(prior)
+    return prior
+
+
+def _sub_raw(current: float | None, subtract: float | None) -> float | None:
+    if current is None or subtract is None:
+        return None
+    return current - subtract
+
+
+def _synthetic_prior_h2_from_xbrl(
+    fy_gp: Mapping[str, Any],
+    fy_op: Mapping[str, Any],
+    h1_gp: Mapping[str, Any],
+    h1_op: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    prior_sales_raw = _sub_raw(
+        _xbrl_sales(fy_gp, fy_op, period="prior"),
+        _xbrl_sales(h1_gp, h1_op, period="prior"),
+    )
+    fy_base_raw, _ = _profit_base_from_xbrl(fy_gp, fy_op, period="prior")
+    h1_base_raw, _ = _profit_base_from_xbrl(h1_gp, h1_op, period="prior")
+    prior_base_raw = _sub_raw(fy_base_raw, h1_base_raw)
+    prior_op_raw = _sub_raw(
+        _xbrl_op(fy_op, period="prior"),
+        _xbrl_op(h1_op, period="prior"),
+    )
+    if prior_sales_raw is None or prior_base_raw is None or prior_op_raw is None:
+        return None
+
+    prior: dict[str, Any] = {
+        "Sales": prior_sales_raw / MILLION_YEN,
+        "GrossProfit": prior_base_raw / MILLION_YEN,
+        "OP": prior_op_raw / MILLION_YEN,
+    }
+    if fy_op.get("label") in _FINANCIAL_OP_LABELS:
+        prior["OPLabel"] = fy_op.get("label")
+        if fy_gp.get("prior") is None:
+            prior.pop("GrossProfit", None)
+    if fy_gp.get("method") == "business_gross_profit":
+        prior["GrossProfitLabel"] = _BUSINESS_GROSS_PROFIT_LABEL
+    _apply_sga(prior)
+    return prior
+
+
+def apply_operating_profit_change_to_periods_from_xbrl(
+    periods: list[dict[str, Any]],
+    half_gp_by_year: Mapping[str, Mapping[str, Any]],
+    half_op_by_year: Mapping[str, Mapping[str, Any]],
+    fy_gp_by_year: Mapping[str, Mapping[str, Any]],
+    fy_op_by_year: Mapping[str, Mapping[str, Any]],
+) -> None:
+    """XBRLの前期値から、各半期を表示範囲外の前年なしで前年差分解する。"""
+    for period in periods:
+        fy_end = str(period.get("fy_end") or "").replace("-", "")
+        data = period.get("data") or {}
+        _apply_sga(data)
+
+        half = period.get("half")
+        prior: dict[str, Any] | None
+        if half == "H1":
+            prior = _synthetic_prior_period_from_xbrl(
+                half_gp_by_year.get(fy_end, {}),
+                half_op_by_year.get(fy_end, {}),
+            )
+        elif half == "H2":
+            prior = _synthetic_prior_h2_from_xbrl(
+                fy_gp_by_year.get(fy_end, {}),
+                fy_op_by_year.get(fy_end, {}),
+                half_gp_by_year.get(fy_end, {}),
+                half_op_by_year.get(fy_end, {}),
+            )
+        else:
+            prior = _synthetic_prior_period_from_xbrl(
+                fy_gp_by_year.get(fy_end, {}),
+                fy_op_by_year.get(fy_end, {}),
+            )
+
+        if prior is not None:
+            _apply_change(data, prior)
 
 
 def apply_operating_profit_change_from_xbrl(

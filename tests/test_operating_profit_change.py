@@ -5,6 +5,7 @@ import pytest
 from mebuki.utils.operating_profit_change import (
     apply_operating_profit_change_from_xbrl,
     apply_operating_profit_change_to_periods,
+    apply_operating_profit_change_to_periods_from_xbrl,
     apply_operating_profit_change_to_years,
 )
 from mebuki.utils.metrics_types import YearEntry
@@ -151,6 +152,64 @@ def test_apply_operating_profit_change_to_periods_compares_same_half() -> None:
     assert h1["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0)
     assert h2["OperatingProfitChange"] == pytest.approx(20.0)
     assert h2["SalesChangeImpact"] == pytest.approx(35.0)
+
+
+def test_apply_operating_profit_change_to_periods_from_xbrl_completes_single_year() -> None:
+    periods = [
+        _period("24H1", "H1", "2024-03-31", 500.0, 200.0, 70.0),
+        _period("24H2", "H2", "2024-03-31", 700.0, 280.0, 80.0),
+    ]
+    half_gp_by_year = {
+        "20240331": {
+            "current": 200.0 * _M,
+            "prior": 140.0 * _M,
+            "current_sales": 500.0 * _M,
+            "prior_sales": 400.0 * _M,
+            "method": "computed",
+        }
+    }
+    half_op_by_year = {
+        "20240331": {
+            "current": 70.0 * _M,
+            "prior": 40.0 * _M,
+            "label": "営業利益",
+        }
+    }
+    fy_gp_by_year = {
+        "20240331": {
+            "current": 480.0 * _M,
+            "prior": 350.0 * _M,
+            "current_sales": 1_200.0 * _M,
+            "prior_sales": 1_000.0 * _M,
+            "method": "computed",
+        }
+    }
+    fy_op_by_year = {
+        "20240331": {
+            "current": 150.0 * _M,
+            "prior": 100.0 * _M,
+            "label": "営業利益",
+        }
+    }
+
+    apply_operating_profit_change_to_periods_from_xbrl(
+        periods,
+        half_gp_by_year,
+        half_op_by_year,
+        fy_gp_by_year,
+        fy_op_by_year,
+    )
+
+    h1 = periods[0]["data"]
+    h2 = periods[1]["data"]
+    assert h1["OperatingProfitChange"] == pytest.approx(30.0)
+    assert h1["SalesChangeImpact"] == pytest.approx(35.0)
+    assert h1["GrossMarginChangeImpact"] == pytest.approx(25.0)
+    assert h1["SGAChangeImpact"] == pytest.approx(-30.0)
+    assert h2["OperatingProfitChange"] == pytest.approx(20.0)
+    assert h2["SalesChangeImpact"] == pytest.approx(35.0)
+    assert h2["GrossMarginChangeImpact"] == pytest.approx(35.0)
+    assert h2["SGAChangeImpact"] == pytest.approx(-50.0)
 
 
 _M = 1_000_000  # MILLION_YEN

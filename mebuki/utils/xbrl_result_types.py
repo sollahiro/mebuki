@@ -32,6 +32,7 @@ class OperatingProfitResult(TypedDict):
     method: str
     label: str
     accounting_standard: str
+    docID: NotRequired[str]
     reason: NotRequired[str]
     current_sales: NotRequired[float | None]
     prior_sales: NotRequired[float | None]
@@ -124,5 +125,6 @@ class OrderBookResult(TypedDict):
 
 class HalfYearEdinetEntry(TypedDict):
     gp: GrossProfitResult
+    op: OperatingProfitResult
     cf: CashFlowResult
     ibd: InterestBearingDebtResult
