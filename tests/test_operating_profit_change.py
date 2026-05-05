@@ -98,6 +98,30 @@ def test_apply_operating_profit_change_to_years_uses_financial_revenue_as_profit
     assert current["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0)
 
 
+def test_apply_operating_profit_change_to_years_uses_business_gross_profit_margin() -> None:
+    years = [
+        _year("2024-03-31", 1_200.0, 600.0, 150.0),
+        _year("2023-03-31", 1_000.0, 350.0, 100.0),
+    ]
+    _cd(years[0])["GrossProfitLabel"] = "業務粗利益"
+    _cd(years[1])["GrossProfitLabel"] = "業務粗利益"
+
+    apply_operating_profit_change_to_years(years)
+
+    current = _cd(years[0])
+    assert current["SellingGeneralAdministrativeExpenses"] == pytest.approx(450.0)
+    assert current["OperatingProfitChange"] == pytest.approx(50.0)
+    assert current["SalesChangeImpact"] == pytest.approx(70.0)
+    assert current["GrossMarginChangeImpact"] == pytest.approx(180.0)
+    assert current["SGAChangeImpact"] == pytest.approx(-200.0)
+    assert current["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0)
+    assert current["MetricSources"]["SellingGeneralAdministrativeExpenses"]["method"] == "業務粗利益 - OP"
+    assert (
+        current["MetricSources"]["GrossMarginChangeImpact"]["method"]
+        == "current Sales * (current BusinessGrossProfitMargin - prior BusinessGrossProfitMargin)"
+    )
+
+
 def test_apply_operating_profit_change_to_years_skips_change_without_prior() -> None:
     years = [_year("2024-03-31", 1_200.0, 480.0, 150.0)]
 
@@ -216,7 +240,41 @@ def test_apply_operating_profit_change_from_xbrl_uses_financial_filing_prior_val
     assert cd["SalesChangeImpact"] == pytest.approx(1_815_681.0)
     assert cd["GrossMarginChangeImpact"] == pytest.approx(0.0)
     assert cd["SGAChangeImpact"] == pytest.approx(-1_585_922.0)
-    assert cd["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0)
+    assert cd["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0, abs=1e-6)
+
+
+def test_apply_operating_profit_change_from_xbrl_uses_business_gross_profit_margin() -> None:
+    """金融機関はXBRLの業務粗利益で粗利率差影響を計算する。"""
+    years = [_blank_year("2025-03-31")]
+    gp_by_year = {
+        "20250331": {
+            **_gp_entry(current=691_665.0, prior=627_469.0, current_sales=1_117_491.0, prior_sales=941_663.0),
+            "method": "business_gross_profit",
+        }
+    }
+    op_by_year = {
+        "20250331": _financial_op_entry(
+            current=292_160.0,
+            prior=222_962.0,
+            current_sales=1_117_491.0,
+            prior_sales=941_663.0,
+        )
+    }
+
+    apply_operating_profit_change_from_xbrl(years, gp_by_year, op_by_year)
+
+    cd = _cd(years[0])
+    assert cd["SellingGeneralAdministrativeExpenses"] == pytest.approx(399_505.0)
+    assert cd["OperatingProfitChange"] == pytest.approx(69_198.0)
+    assert cd["SalesChangeImpact"] == pytest.approx(117_161.46788394575)
+    assert cd["GrossMarginChangeImpact"] == pytest.approx(-52_965.46788394579)
+    assert cd["SGAChangeImpact"] == pytest.approx(5_002.0)
+    assert cd["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0, abs=1e-6)
+    assert cd["MetricSources"]["SellingGeneralAdministrativeExpenses"]["method"] == "業務粗利益(XBRL) - OP(XBRL)"
+    assert (
+        cd["MetricSources"]["GrossMarginChangeImpact"]["method"]
+        == "current Sales * (current BusinessGrossProfitMargin - prior BusinessGrossProfitMargin) (XBRL)"
+    )
 
 
 def test_apply_operating_profit_change_from_xbrl_skips_when_xbrl_missing() -> None:

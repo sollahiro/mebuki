@@ -18,6 +18,7 @@ _GM_IMPACT_KEY = "GrossMarginChangeImpact"
 _SGA_IMPACT_KEY = "SGAChangeImpact"
 _RECONCILIATION_DIFF_KEY = "OperatingProfitChangeReconciliationDiff"
 _FINANCIAL_OP_LABELS = frozenset(("経常利益", "事業利益"))
+_BUSINESS_GROSS_PROFIT_LABEL = "業務粗利益"
 
 
 def _gross_margin(gross_profit: float | None, sales: float | None) -> float | None:
@@ -40,7 +41,8 @@ def _set_source(
 def _profit_base(data: dict[str, Any]) -> tuple[float | None, str | None]:
     gross_profit = data.get("GrossProfit")
     if gross_profit is not None:
-        return gross_profit, "GrossProfit"
+        label = data.get("GrossProfitLabel")
+        return gross_profit, _BUSINESS_GROSS_PROFIT_LABEL if label == _BUSINESS_GROSS_PROFIT_LABEL else "GrossProfit"
 
     op_label = data.get("OPLabel")
     sales = data.get("Sales")
@@ -58,7 +60,8 @@ def _profit_base_from_xbrl(
 ) -> tuple[float | None, str | None]:
     gp_raw = gp.get(period)
     if gp_raw is not None:
-        return gp_raw, "GrossProfit(XBRL)"
+        label = _BUSINESS_GROSS_PROFIT_LABEL if gp.get("method") == "business_gross_profit" else "GrossProfit"
+        return gp_raw, f"{label}(XBRL)"
 
     op_label = op.get("label")
     sales_key = f"{period}_sales"
@@ -67,6 +70,18 @@ def _profit_base_from_xbrl(
         return sales_raw, "Sales(XBRL)"
 
     return None, None
+
+
+def _margin_source_label(data: dict[str, Any]) -> str:
+    if data.get("GrossProfitLabel") == _BUSINESS_GROSS_PROFIT_LABEL:
+        return "BusinessGrossProfitMargin"
+    return "GrossProfitMargin"
+
+
+def _margin_source_label_from_xbrl(gp: dict[str, Any]) -> str:
+    if gp.get("method") == "business_gross_profit":
+        return "BusinessGrossProfitMargin"
+    return "GrossProfitMargin"
 
 
 def _apply_sga(data: dict[str, Any]) -> None:
@@ -94,6 +109,7 @@ def _apply_change(current: dict[str, Any], prior: dict[str, Any]) -> None:
 
     current_margin = _gross_margin(current_profit_base, current_sales)
     prior_margin = _gross_margin(prior_profit_base, prior_sales)
+    margin_label = _margin_source_label(current)
 
     if (
         current_sales is None
@@ -123,12 +139,12 @@ def _apply_change(current: dict[str, Any], prior: dict[str, Any]) -> None:
     _set_source(
         current,
         _SALES_IMPACT_KEY,
-        method="(current Sales - prior Sales) * prior GrossProfitMargin",
+        method=f"(current Sales - prior Sales) * prior {margin_label}",
     )
     _set_source(
         current,
         _GM_IMPACT_KEY,
-        method="current Sales * (current GrossProfitMargin - prior GrossProfitMargin)",
+        method=f"current Sales * (current {margin_label} - prior {margin_label})",
     )
     _set_source(current, _SGA_IMPACT_KEY, method="-(current SGA - prior SGA)")
     _set_source(
@@ -234,6 +250,7 @@ def apply_operating_profit_change_from_xbrl(
         prior_sga = prior_base - prior_op
         current_margin = current_base_m / current_sales
         prior_margin = prior_base / prior_sales
+        margin_label = _margin_source_label_from_xbrl(gp)
 
         op_change = current_op_m - prior_op
         sales_impact = (current_sales - prior_sales) * prior_margin
@@ -251,12 +268,12 @@ def apply_operating_profit_change_from_xbrl(
         _set_source(
             cd,
             _SALES_IMPACT_KEY,
-            method="(current Sales - prior Sales) * prior GrossProfitMargin (XBRL)",
+            method=f"(current Sales - prior Sales) * prior {margin_label} (XBRL)",
         )
         _set_source(
             cd,
             _GM_IMPACT_KEY,
-            method="current Sales * (current GrossProfitMargin - prior GrossProfitMargin) (XBRL)",
+            method=f"current Sales * (current {margin_label} - prior {margin_label}) (XBRL)",
         )
         _set_source(cd, _SGA_IMPACT_KEY, method="-(current SGA - prior SGA) (XBRL)")
         _set_source(

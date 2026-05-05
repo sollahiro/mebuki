@@ -11,6 +11,12 @@ class _ComponentDef(TypedDict):
     tags: list[str]
 
 
+class _SignedComponentDef(TypedDict):
+    label: str
+    tags: list[str]
+    sign: int
+
+
 class _AggregateIFRSDef(TypedDict):
     tag: str
     covers: list[str]
@@ -303,6 +309,54 @@ GROSS_PROFIT_COMPONENT_DEFINITIONS: list[_ComponentDef] = [
     },
 ]
 
+BUSINESS_GROSS_PROFIT_COMPONENT_DEFINITIONS: list[_SignedComponentDef] = [
+    {
+        "label": "資金運用収益",
+        "tags": ["InterestIncomeOIBNK"],
+        "sign": 1,
+    },
+    {
+        "label": "資金調達費用",
+        "tags": ["InterestExpensesOEBNK"],
+        "sign": -1,
+    },
+    {
+        "label": "信託報酬",
+        "tags": ["TrustFeesBNK"],
+        "sign": 1,
+    },
+    {
+        "label": "役務取引等収益",
+        "tags": ["FeesAndCommissionsOIBNK"],
+        "sign": 1,
+    },
+    {
+        "label": "役務取引等費用",
+        "tags": ["FeesAndCommissionsPaymentsOEBNK"],
+        "sign": -1,
+    },
+    {
+        "label": "特定取引収益",
+        "tags": ["TradingIncomeOIBNK"],
+        "sign": 1,
+    },
+    {
+        "label": "特定取引費用",
+        "tags": ["TradingExpensesOEBNK"],
+        "sign": -1,
+    },
+    {
+        "label": "その他業務収益",
+        "tags": ["OtherOrdinaryIncomeOIBNK"],
+        "sign": 1,
+    },
+    {
+        "label": "その他業務費用",
+        "tags": ["OtherOrdinaryExpensesOEBNK"],
+        "sign": -1,
+    },
+]
+
 # 複数の構成要素を集約したIFRSタグ。
 # 粒度別タグが存在しない場合に、カバーする個別コンポーネントを置き換える。
 # キャッシュフロー（CF）タグ定義
@@ -367,6 +421,7 @@ ORDINARY_INCOME_TAGS: list[str] = [
 ]
 
 ORDINARY_REVENUE_TAGS: list[str] = [
+    "OrdinaryIncomeBNK",  # 銀行等の経常収益
     "OrdinaryIncomeSummaryOfBusinessResults",  # 銀行等の経常収益（要約情報）
 ]
 

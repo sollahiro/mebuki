@@ -192,6 +192,8 @@ def _apply_gross_profit(
         if not gp or gp.get("current") is None:
             continue
         gp_m = gp["current"] / MILLION_YEN
+        gp_method = gp.get("method", "unknown")
+        gp_label = "業務粗利益" if gp_method == "business_gross_profit" else None
         # Sales の直後に挿入するため dict を再構築
         old_cd = year["CalculatedData"]
         new_cd: dict[str, Any] = {}
@@ -199,11 +201,15 @@ def _apply_gross_profit(
             new_cd[k] = v
             if k == "Sales":
                 new_cd["GrossProfit"] = gp_m
-                new_cd["GrossProfitMethod"] = gp.get("method", "unknown")
+                new_cd["GrossProfitMethod"] = gp_method
+                if gp_label is not None:
+                    new_cd["GrossProfitLabel"] = gp_label
                 new_cd["GrossProfitMargin"] = gp_m / v * PERCENT if v else None
         if "GrossProfit" not in new_cd:
             new_cd["GrossProfit"] = gp_m
-            new_cd["GrossProfitMethod"] = gp.get("method", "unknown")
+            new_cd["GrossProfitMethod"] = gp_method
+            if gp_label is not None:
+                new_cd["GrossProfitLabel"] = gp_label
             sales = new_cd.get("Sales")
             new_cd["GrossProfitMargin"] = gp_m / sales * PERCENT if sales else None
         cast_cd = cast(CalculatedData, new_cd)
@@ -212,8 +218,9 @@ def _apply_gross_profit(
             "GrossProfit",
             source="edinet",
             unit="million_yen",
-            method=gp.get("method", "unknown"),
+            method=gp_method,
             doc_id=gp.get("docID"),
+            label=gp_label,
         )
         _set_metric_source(cast_cd, "GrossProfitMargin", source="derived", unit="percent", method="GrossProfit / Sales")
         year["CalculatedData"] = cast_cd

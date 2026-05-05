@@ -91,16 +91,30 @@ async def cmd_analyze(args):
             print(row_format.format(*headers), file=sys.stderr)
             print(sep, file=sys.stderr)
 
+            latest_period_data = periods[-1].get("data", {}) if periods else {}
+            gross_profit_base_label = latest_period_data.get("GrossProfitLabel", "売上総利益")
+            gross_profit_label = f"{gross_profit_base_label} (百万)"
+            gross_profit_margin_label = (
+                f"{gross_profit_base_label}率 (%)"
+                if gross_profit_base_label != "売上総利益"
+                else "粗利率 (%)"
+            )
+            gross_margin_change_label = (
+                f"{gross_profit_base_label}率差影響"
+                if gross_profit_base_label != "売上総利益"
+                else "粗利率差影響"
+            )
+
             half_metrics_to_show = [
                 ("売上高 (百万)",      lambda d: d.get("Sales")),
-                ("売上総利益 (百万)",  lambda d: d.get("GrossProfit")),
-                ("粗利率 (%)",         lambda d: d.get("GrossProfitMargin")),
+                (gross_profit_label,   lambda d: d.get("GrossProfit")),
+                (gross_profit_margin_label, lambda d: d.get("GrossProfitMargin")),
                 ("営業利益 (百万)",    lambda d: d.get("OP")),
                 ("営業利益率 (%)",     lambda d: d.get("OperatingMargin")),
                 ("販管費 (百万)",      lambda d: d.get("SellingGeneralAdministrativeExpenses")),
                 ("営業利益前年差",      lambda d: d.get("OperatingProfitChange")),
                 ("売上差影響",         lambda d: d.get("SalesChangeImpact")),
-                ("粗利率差影響",       lambda d: d.get("GrossMarginChangeImpact")),
+                (gross_margin_change_label, lambda d: d.get("GrossMarginChangeImpact")),
                 ("販管費増影響",       lambda d: d.get("SGAChangeImpact")),
                 ("純利益 (百万)",      lambda d: d.get("NP")),
                 ("ROIC (%)",           lambda d: d.get("ROIC")),
@@ -196,6 +210,18 @@ async def cmd_analyze(args):
         # IFRS金融会社は純収益・事業利益ラベルを使う（最新年度のラベルで判定）
         latest_cd = periods[-1].get("CalculatedData", {}) if periods else {}
         sales_label = latest_cd.get("SalesLabel", "売上高") + " (百万)"
+        gross_profit_base_label = latest_cd.get("GrossProfitLabel", "売上総利益")
+        gross_profit_label = f"{gross_profit_base_label} (百万)"
+        gross_profit_margin_label = (
+            f"{gross_profit_base_label}率 (%)"
+            if gross_profit_base_label != "売上総利益"
+            else "粗利率 (%)"
+        )
+        gross_margin_change_label = (
+            f"{gross_profit_base_label}率差影響"
+            if gross_profit_base_label != "売上総利益"
+            else "粗利率差影響"
+        )
         op_label = latest_cd.get("OPLabel", "営業利益") + " (百万)"
         op_margin_label = latest_cd.get("OPLabel", "営業利益") + "率 (%)"
 
@@ -203,14 +229,14 @@ async def cmd_analyze(args):
             (sales_label,             lambda c: c.get("Sales")),
             ("受注高 (百万)",          lambda c: c.get("OrderIntake")),
             ("受注残高 (百万)",        lambda c: c.get("OrderBacklog")),
-            ("売上総利益 (百万)",      lambda c: c.get("GrossProfit")),
-            ("粗利率 (%)",            lambda c: c.get("GrossProfitMargin")),
+            (gross_profit_label,       lambda c: c.get("GrossProfit")),
+            (gross_profit_margin_label, lambda c: c.get("GrossProfitMargin")),
             (op_label,                lambda c: c.get("OP")),
             (op_margin_label,         get_op_margin),
             ("販管費 (百万)",          lambda c: c.get("SellingGeneralAdministrativeExpenses")),
             ("営業利益前年差",          lambda c: c.get("OperatingProfitChange")),
             ("売上差影響",             lambda c: c.get("SalesChangeImpact")),
-            ("粗利率差影響",           lambda c: c.get("GrossMarginChangeImpact")),
+            (gross_margin_change_label, lambda c: c.get("GrossMarginChangeImpact")),
             ("販管費増影響",           lambda c: c.get("SGAChangeImpact")),
             ("ROE (%)",               lambda c: c.get("ROE")),
             ("ROIC (%)",              lambda c: c.get("ROIC")),

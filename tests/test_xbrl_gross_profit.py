@@ -185,6 +185,64 @@ class TestGrossProfitComputedMethod(unittest.TestCase):
         self.assertAlmostEqual(result["current"], 100_000_000_000)
 
 
+class TestBusinessGrossProfitMethod(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.xbrl_dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_computed_bank_business_gross_profit(self):
+        """銀行: 連結業務粗利益を構成要素から算出する（三菱UFJ 2025年3月期相当）"""
+        xml = _make_xbrl_duration("""
+            <jppfs_cor:OrdinaryIncomeBNK contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">13629997000000</jppfs_cor:OrdinaryIncomeBNK>
+            <jppfs_cor:OrdinaryIncomeBNK contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">11890350000000</jppfs_cor:OrdinaryIncomeBNK>
+            <jppfs_cor:InterestIncomeOIBNK contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">8467719000000</jppfs_cor:InterestIncomeOIBNK>
+            <jppfs_cor:InterestIncomeOIBNK contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">7468679000000</jppfs_cor:InterestIncomeOIBNK>
+            <jppfs_cor:InterestExpensesOEBNK contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">5591266000000</jppfs_cor:InterestExpensesOEBNK>
+            <jppfs_cor:InterestExpensesOEBNK contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">5011105000000</jppfs_cor:InterestExpensesOEBNK>
+            <jppfs_cor:TrustFeesBNK contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">144395000000</jppfs_cor:TrustFeesBNK>
+            <jppfs_cor:TrustFeesBNK contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">139363000000</jppfs_cor:TrustFeesBNK>
+            <jppfs_cor:FeesAndCommissionsOIBNK contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">2360111000000</jppfs_cor:FeesAndCommissionsOIBNK>
+            <jppfs_cor:FeesAndCommissionsOIBNK contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">2047232000000</jppfs_cor:FeesAndCommissionsOIBNK>
+            <jppfs_cor:FeesAndCommissionsPaymentsOEBNK contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">414289000000</jppfs_cor:FeesAndCommissionsPaymentsOEBNK>
+            <jppfs_cor:FeesAndCommissionsPaymentsOEBNK contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">365940000000</jppfs_cor:FeesAndCommissionsPaymentsOEBNK>
+            <jppfs_cor:TradingIncomeOIBNK contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">454258000000</jppfs_cor:TradingIncomeOIBNK>
+            <jppfs_cor:TradingIncomeOIBNK contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">368172000000</jppfs_cor:TradingIncomeOIBNK>
+            <jppfs_cor:OtherOrdinaryIncomeOIBNK contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">505980000000</jppfs_cor:OtherOrdinaryIncomeOIBNK>
+            <jppfs_cor:OtherOrdinaryIncomeOIBNK contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">679329000000</jppfs_cor:OtherOrdinaryIncomeOIBNK>
+            <jppfs_cor:OtherOrdinaryExpensesOEBNK contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">1107697000000</jppfs_cor:OtherOrdinaryExpensesOEBNK>
+            <jppfs_cor:OtherOrdinaryExpensesOEBNK contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">593515000000</jppfs_cor:OtherOrdinaryExpensesOEBNK>
+        """)
+        (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
+        result = extract_gross_profit(self.xbrl_dir)
+        self.assertEqual(result["method"], "business_gross_profit")
+        self.assertAlmostEqual(result["current"], 4_819_211_000_000)
+        self.assertAlmostEqual(result["prior"], 4_732_215_000_000)
+        self.assertAlmostEqual(result.get("current_sales"), 13_629_997_000_000)
+        self.assertAlmostEqual(result.get("prior_sales"), 11_890_350_000_000)
+
+
 class TestGrossProfitConsolidatedPriority(unittest.TestCase):
 
     def setUp(self):

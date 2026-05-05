@@ -75,6 +75,7 @@ class CalculatedData(TypedDict, total=False):
     GrossProfit: float | None
     GrossProfitMargin: float | None
     GrossProfitMethod: str
+    GrossProfitLabel: str
     # ── analyzer.py: _apply_ibd ──
     InterestBearingDebt: float | None
     IBDComponents: list[IBDComponent]

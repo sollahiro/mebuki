@@ -46,10 +46,12 @@ from mebuki.analysis.xbrl_utils import (
 )
 from mebuki.constants.financial import MILLION_YEN
 from mebuki.constants.xbrl import (
+    BUSINESS_GROSS_PROFIT_COMPONENT_DEFINITIONS,
     DURATION_CONTEXT_PATTERNS,
     GROSS_PROFIT_COMPONENT_DEFINITIONS,
     GROSS_PROFIT_DIRECT_TAGS,
     IFRS_PL_MARKER_TAGS,
+    ORDINARY_REVENUE_TAGS,
     PRIOR_DURATION_CONTEXT_PATTERNS,
     USGAAP_MARKER_TAGS,
 )
@@ -59,6 +61,8 @@ from mebuki.utils.xbrl_result_types import GrossProfitResult, MetricComponent, X
 _GP_RELEVANT_TAGS: frozenset[str] = frozenset(
     GROSS_PROFIT_DIRECT_TAGS
     + [tag for comp in GROSS_PROFIT_COMPONENT_DEFINITIONS for tag in comp["tags"]]
+    + [tag for comp in BUSINESS_GROSS_PROFIT_COMPONENT_DEFINITIONS for tag in comp["tags"]]
+    + ORDINARY_REVENUE_TAGS
     + USGAAP_MARKER_TAGS
     + IFRS_PL_MARKER_TAGS
 )
@@ -125,7 +129,7 @@ def _extract_sales_for_yoy(tag_elements: XbrlTagElements) -> tuple[float | None,
     sales_tags = next(
         (comp["tags"] for comp in GROSS_PROFIT_COMPONENT_DEFINITIONS if comp["label"] == "売上高"),
         [],
-    )
+    ) + ORDINARY_REVENUE_TAGS
     for consolidated in (True, False):
         partial_c: float | None = None
         partial_p: float | None = None
@@ -141,6 +145,53 @@ def _extract_sales_for_yoy(tag_elements: XbrlTagElements) -> tuple[float | None,
         if partial_c is not None or partial_p is not None:
             return partial_c, partial_p
     return None, None
+
+
+def _extract_business_gross_profit(tag_elements: XbrlTagElements) -> GrossProfitResult | None:
+    """銀行等の連結業務粗利益を構成要素から算出する。"""
+    comp_results: list[MetricComponent] = []
+    current_total = prior_total = 0.0
+    has_current = has_prior = False
+
+    for comp_def in BUSINESS_GROSS_PROFIT_COMPONENT_DEFINITIONS:
+        found_tag = None
+        current = prior = None
+        for tag in comp_def["tags"]:
+            current, prior = _find_consolidated_duration_value(tag_elements, tag)
+            if current is not None or prior is not None:
+                found_tag = tag
+                break
+
+        sign = comp_def["sign"]
+        if current is not None:
+            current_total += sign * current
+            has_current = True
+        if prior is not None:
+            prior_total += sign * prior
+            has_prior = True
+
+        comp_results.append({
+            "label": comp_def["label"],
+            "tag": found_tag,
+            "current": sign * current if current is not None else None,
+            "prior": sign * prior if prior is not None else None,
+        })
+
+    if not has_current and not has_prior:
+        return None
+
+    sales_c, sales_p = _extract_sales_for_yoy(tag_elements)
+    result: GrossProfitResult = {
+        "current": current_total if has_current else None,
+        "prior": prior_total if has_prior else None,
+        "method": "business_gross_profit",
+        "accounting_standard": "J-GAAP",
+        "components": comp_results,
+    }
+    if sales_c is not None or sales_p is not None:
+        result["current_sales"] = sales_c
+        result["prior_sales"] = sales_p
+    return result
 
 
 
@@ -331,6 +382,10 @@ def extract_gross_profit(
                 result["current_sales"] = sales_c
                 result["prior_sales"] = sales_p
             return result
+
+    business_gross_profit = _extract_business_gross_profit(tag_elements)
+    if business_gross_profit is not None:
+        return business_gross_profit
 
     # 計算法: 売上高タグ・売上原価タグをそれぞれ取得して差し引く
     comp_results: list[MetricComponent] = []
