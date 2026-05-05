@@ -37,6 +37,31 @@ def _apply_debug_filter(result: dict[str, Any], include_debug_fields: bool) -> d
     return {**result, "metrics": serialize_metrics_result(result["metrics"])}
 
 
+def _analysis_year_count(cached: dict[str, Any]) -> int:
+    metrics = cached.get("metrics")
+    if not isinstance(metrics, dict):
+        return 0
+    years = metrics.get("years")
+    return len(years) if isinstance(years, list) else 0
+
+
+def _trim_analysis_years(result: dict[str, Any], analysis_years: int | None) -> dict[str, Any]:
+    if analysis_years is None:
+        return result
+    metrics = result.get("metrics")
+    if not isinstance(metrics, dict):
+        return result
+    years = metrics.get("years")
+    if not isinstance(years, list) or len(years) <= analysis_years:
+        return result
+
+    trimmed_metrics = dict(metrics)
+    trimmed_metrics["years"] = years[:analysis_years]
+    trimmed_metrics["analysis_years"] = analysis_years
+    trimmed_metrics["available_years"] = analysis_years
+    return {**result, "metrics": trimmed_metrics}
+
+
 def _has_incomplete_edinet_metrics(cached: dict[str, Any]) -> bool:
     """EDINET 書類が紐づいているのに新しいEDINET指標が欠けた古い分析キャッシュを検出する。"""
     metrics = cached.get("metrics")
@@ -166,22 +191,12 @@ class DataService:
     async def get_financial_data(
         self,
         code: str,
-        scope: str | None = None,
         use_cache: bool = True,
         include_2q: bool = False,
         analysis_years: int | None = None,
         include_debug_fields: bool = False,
-    ) -> dict[str, Any] | list[dict[str, Any]]:
-        """財務データ取得の統一公開API。scope=None で財務サマリー、scope="raw" で生データ。"""
-        if scope == "raw":
-            analyzer = self.get_analyzer()
-            max_years = analysis_years or settings_store.analysis_years or 5
-            raw_data = await analyzer._edinet_fetcher.build_xbrl_annual_records(code, max_years)
-            return [
-                {k: v for k, v in record.items() if v is not None and v != ""}
-                for record in raw_data
-            ]
-
+    ) -> dict[str, Any]:
+        """財務データ取得の統一公開API。財務サマリーを返す。"""
         result = await self.get_raw_analysis_data(code, use_cache=use_cache, include_2q=include_2q, analysis_years=analysis_years, include_debug_fields=include_debug_fields)
         return result
 
@@ -251,8 +266,10 @@ class DataService:
                 and cached.get("_cache_version") == _CACHE_VERSION
                 and not _has_incomplete_edinet_metrics(cached)
                 and not _has_fallback_mof_metrics(cached)
+                and (analysis_years is None or _analysis_year_count(cached) >= analysis_years)
             ):
                 result = {k: v for k, v in cached.items() if k != "_cache_version" and k != "llm_financial_analysis"}
+                result = _trim_analysis_years(result, analysis_years)
                 return _apply_debug_filter(result, include_debug_fields)
 
         stock_info = {"Code": code, **self.fetch_stock_basic_info(code)}
@@ -279,6 +296,7 @@ class DataService:
         }
         self.cache_manager.set(cache_key, formatted)
         output = {k: v for k, v in formatted.items() if k != "_cache_version"}
+        output = _trim_analysis_years(output, analysis_years)
         return _apply_debug_filter(output, include_debug_fields)
 
 

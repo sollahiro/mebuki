@@ -5,7 +5,7 @@ EdinetAPIClient / IndividualAnalyzer をモック化し、
 キャッシュロジック・データ変換などのビジネスロジックを検証する。
 """
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 
 # ──────────────────────────────────────────────────────────────
@@ -90,34 +90,6 @@ class TestFetchStockBasicInfo:
 
 
 # ──────────────────────────────────────────────────────────────
-# get_financial_data (scope="raw")
-# ──────────────────────────────────────────────────────────────
-
-class TestGetFinancialDataRaw:
-    @pytest.mark.asyncio
-    async def test_raw_scope_returns_cleaned_records(self, svc):
-        analyzer = MagicMock()
-        analyzer._edinet_fetcher.build_xbrl_annual_records = AsyncMock(return_value=[
-            {"Code": "72030", "NP": 1000000.0, "EmptyField": "", "NullField": None},
-        ])
-        with patch.object(svc, "get_analyzer", return_value=analyzer):
-            result = await svc.get_financial_data("72030", scope="raw")
-        assert isinstance(result, list)
-        assert result[0]["Code"] == "72030"
-        assert "EmptyField" not in result[0]
-        assert "NullField" not in result[0]
-
-    @pytest.mark.asyncio
-    async def test_raw_scope_bypasses_cache(self, svc):
-        analyzer = MagicMock()
-        analyzer._edinet_fetcher.build_xbrl_annual_records = AsyncMock(return_value=[])
-        with patch.object(svc, "get_analyzer", return_value=analyzer):
-            await svc.get_financial_data("72030", scope="raw")
-            await svc.get_financial_data("72030", scope="raw")
-        assert analyzer._edinet_fetcher.build_xbrl_annual_records.await_count == 2
-
-
-# ──────────────────────────────────────────────────────────────
 # get_raw_analysis_data (キャッシュ ヒット / ミス)
 # ──────────────────────────────────────────────────────────────
 
@@ -134,6 +106,21 @@ class TestGetRawAnalysisData:
             "analyzed_at": "2024-01-01T00:00:00",
         }
 
+    def _make_cached_with_years(self, code: str, count: int) -> dict:
+        cached = self._make_cached(code)
+        cached["metrics"] = {
+            "analysis_years": count,
+            "available_years": count,
+            "years": [
+                {
+                    "fy_end": f"{2024 - idx}-03-31",
+                    "CalculatedData": {"Sales": float(100 - idx)},
+                }
+                for idx in range(count)
+            ],
+        }
+        return cached
+
     @pytest.mark.asyncio
     async def test_cache_hit_skips_fetch(self, svc):
         cached = self._make_cached("72030")
@@ -146,6 +133,46 @@ class TestGetRawAnalysisData:
         mock_analyzer.fetch_analysis_data.assert_not_called()
         assert result["code"] == "72030"
         assert "_cache_version" not in result
+
+    @pytest.mark.asyncio
+    async def test_cache_hit_trims_to_requested_years(self, svc):
+        cached = self._make_cached_with_years("72030", 5)
+        svc.cache_manager.set("individual_analysis_72030", cached)
+
+        mock_analyzer = AsyncMock()
+        with patch.object(svc, "get_analyzer", return_value=mock_analyzer):
+            result = await svc.get_raw_analysis_data("72030", use_cache=True, analysis_years=3)
+
+        mock_analyzer.fetch_analysis_data.assert_not_called()
+        assert len(result["metrics"]["years"]) == 3
+        assert result["metrics"]["analysis_years"] == 3
+        assert result["metrics"]["years"][-1]["fy_end"] == "2022-03-31"
+
+    @pytest.mark.asyncio
+    async def test_cache_with_too_few_years_calls_analyzer(self, svc):
+        cached = self._make_cached_with_years("72030", 3)
+        svc.cache_manager.set("individual_analysis_72030", cached)
+
+        mock_analyzer = AsyncMock()
+        mock_analyzer.fetch_analysis_data.return_value = {
+            "metrics": {
+                "analysis_years": 5,
+                "available_years": 5,
+                "years": [
+                    {"fy_end": f"{2024 - idx}-03-31", "CalculatedData": {"Sales": float(100 - idx)}}
+                    for idx in range(5)
+                ],
+            },
+            "edinet_data": {},
+        }
+        with (
+            patch.object(svc, "get_analyzer", return_value=mock_analyzer),
+            patch.object(svc, "fetch_stock_basic_info", return_value={"name": "トヨタ"}),
+        ):
+            result = await svc.get_raw_analysis_data("72030", use_cache=True, analysis_years=5)
+
+        mock_analyzer.fetch_analysis_data.assert_called_once()
+        assert len(result["metrics"]["years"]) == 5
 
     @pytest.mark.asyncio
     async def test_cache_miss_calls_analyzer(self, svc):

@@ -35,4 +35,3 @@
 |---|---|---|
 | `years` | `--years N` | デフォルト 5（`half=true` 時は 3） |
 | `half: true` | `--half` | H1/H2 半期推移 |
-| `scope: "raw"` | `--scope raw` | 生データ取得時のみ指定 |

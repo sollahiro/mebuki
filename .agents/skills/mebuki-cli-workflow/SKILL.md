@@ -54,12 +54,11 @@ mebuki search 7203 --format json
 銘柄の財務データを分析する。
 
 ```bash
-mebuki analyze <code> [--years N] [--format table|json] [--half] [--no-cache] [--scope raw]
+mebuki analyze <code> [--years N] [--format table|json] [--half] [--no-cache]
 ```
 
 - `--years N`: 取得年数（デフォルト: 5、`--half` 時は 3）。**FY（通期）の件数**でカウントする
 - `--half`: 上半期(H1)・下半期(H2)の半期推移を表示する（seasonalityの確認に有用）
-- `--scope raw`: 生データをJSON取得したい場合のみ指定
 - `--no-cache`: キャッシュを使用せず最新データを取得する
 
 デフォルト出力に含まれる主要財務指標（横並び年次推移）:
@@ -275,14 +274,14 @@ ROE (%) = 当期純利益 ÷ 自己資本 × 100
 
 ### 出力フィールド
 
-`mebuki analyze <code> --scope raw` で確認できる生データの構造:
+`mebuki analyze <code> --include-debug-fields --format json` で確認できる詳細データの構造:
 
 | フィールド | 内容 |
 |---|---|
 | `InterestBearingDebt` | 有利子負債合計（百万円） |
 | `IBDComponents` | 各コンポーネントの当期・前期値（百万円） |
 | `IBDAccountingStandard` | 会計基準: `J-GAAP` / `IFRS` / `US-GAAP` |
-| `IBDDocID` | IBD抽出元のEDINET書類ID（表示ラベル: `DocID`） |
+| `DocID` | 指標抽出元のEDINET書類ID |
 
 ---
 

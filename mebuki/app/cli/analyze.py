@@ -65,20 +65,6 @@ async def cmd_analyze(args):
 
     include_debug = getattr(args, "include_debug_fields", False)
 
-    # --scope が指定された場合はスコープ別取得
-    if getattr(args, "scope", None):
-        try:
-            result = await data_service.get_financial_data(code, scope=args.scope, use_cache=not args.no_cache, include_debug_fields=include_debug)
-            print(json.dumps(result, indent=2, ensure_ascii=False))
-        except ValueError as e:
-            print(f"エラー: {e}", file=sys.stderr)
-        except aiohttp.ClientError as e:
-            print(f"エラー: {e}", file=sys.stderr)
-            logger.exception(e)
-        finally:
-            await data_service.close()
-        return
-
     # --half が指定された場合は半期推移表示
     if getattr(args, "half", False):
         try:

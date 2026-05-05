@@ -106,8 +106,6 @@ flowchart TD
 
 `mebuki analyze --include-debug-fields` または MCP `include_debug_fields: true` を指定した場合だけ、上記を含む。`SalesLabel` / `OPLabel` は「売上高ではなく純収益」「営業利益ではなく事業利益/経常利益」といった意味情報なので、標準JSONにも残す。
 
-`scope=raw` は EDINET XBRL から構築した財務レコードを返し、`include_debug_fields` の対象外。
-
 ### `MetricSources` の形
 
 `CalculatedData.MetricSources` は指標名をキーにしたメタデータ辞書。

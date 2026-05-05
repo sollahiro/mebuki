@@ -52,11 +52,6 @@ async def list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "Four-digit or five-digit Japanese stock code.",
                     },
-                    "scope": {
-                        "type": "string",
-                        "enum": ["raw"],
-                        "description": "Omit for standard financial summary. 'raw': return EDINET XBRL-derived records.",
-                    },
                     "years": {
                         "type": "number",
                         "description": "Number of fiscal years to include (default: 5).",
@@ -246,7 +241,6 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
         if name == "get_japan_stock_financial_data":
             code = validate_stock_code(str(arguments["code"]))
-            scope = arguments.get("scope")
             use_cache = arguments.get("use_cache", True)
             half = arguments.get("half", False)
             years = int(arguments["years"]) if "years" in arguments else None
@@ -259,7 +253,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                     )
                 else:
                     result = await asyncio.wait_for(
-                        data_service.get_financial_data(code, scope=scope, use_cache=use_cache, analysis_years=years, include_debug_fields=include_debug_fields),
+                        data_service.get_financial_data(code, use_cache=use_cache, analysis_years=years, include_debug_fields=include_debug_fields),
                         timeout=180.0,
                     )
             except asyncio.TimeoutError:
