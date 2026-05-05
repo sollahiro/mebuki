@@ -202,15 +202,18 @@ class EdinetAPIClient:
         period_end_date = parse_date_string(target_period_end_str)
         disc_date_formatted = normalize_date_format(disc_date_str)
 
-        if not period_end_date or not disc_date_formatted:
+        if not period_end_date:
             return None
 
         try:
-            disc_date_obj = datetime.strptime(disc_date_formatted, "%Y-%m-%d")
-            if disc_date_obj > now:
-                return None
+            if disc_date_formatted:
+                disc_date_obj = datetime.strptime(disc_date_formatted, "%Y-%m-%d")
+                if disc_date_obj > now:
+                    return None
+                search_start = max(disc_date_obj, period_end_date)
+            else:
+                search_start = period_end_date
 
-            search_start = max(disc_date_obj, period_end_date)
             search_end = min(period_end_date + timedelta(days=97), now)
 
             target_doc_types = [doc_type_code] if doc_type_code else (

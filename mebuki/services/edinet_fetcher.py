@@ -27,6 +27,7 @@ from mebuki.analysis.order_book import extract_order_book
 from mebuki.analysis.tax_expense import extract_tax_expense
 from mebuki.utils.cache import CacheManager
 from mebuki.utils.jquants_utils import prepare_edinet_search_data
+from mebuki.utils.edinet_discovery import scan_for_fiscal_year_end, build_fiscal_year_periods
 from mebuki.utils.xbrl_result_types import GrossProfitResult, HalfYearEdinetEntry, XbrlTagElements
 
 logger = logging.getLogger(__name__)
@@ -147,13 +148,16 @@ class EdinetFetcher:
                     if record.get("CurPerType") == "FY"
                 ]
 
-                docs = await self.search_recent_reports(
-                    code=code,
-                    jquants_data=annual_financial_data,
-                    max_years=max_years,
-                    doc_types=["120"],
-                    max_documents=max_years,
-                )
+                if annual_financial_data:
+                    docs = await self.search_recent_reports(
+                        code=code,
+                        jquants_data=annual_financial_data,
+                        max_years=max_years,
+                        doc_types=["120"],
+                        max_documents=max_years,
+                    )
+                else:
+                    docs = await self._search_without_jquants(code, max_years)
                 self._doc_cache[key] = docs
                 if self.cache_manager is not None:
                     self.cache_manager.set(
@@ -161,6 +165,30 @@ class EdinetFetcher:
                         {"_cache_version": _EDINET_DOCS_CACHE_VERSION, "docs": docs},
                     )
             return self._doc_cache[key]
+
+    async def _search_without_jquants(
+        self,
+        code: str,
+        max_years: int,
+    ) -> list[dict[str, Any]]:
+        """J-Quants なしで EDINET の有価証券報告書を発見する。
+
+        EDINET をスキャンして会計期末パターンを特定し、過去 max_years 年分の
+        有価証券報告書を検索する。financial_data が空のときのフォールバック。
+        """
+        if not self.edinet_client:
+            return []
+        fy_pattern = await scan_for_fiscal_year_end(code, self.edinet_client)
+        if not fy_pattern:
+            logger.warning(f"[EdinetFetcher] {code}: 会計期末パターンを発見できませんでした")
+            return []
+        fy_end_month, fy_end_day = fy_pattern
+        periods = build_fiscal_year_periods(fy_end_month, fy_end_day, max_years)
+        return await self.edinet_client.search_documents(
+            code=code,
+            jquants_data=periods,
+            max_documents=max_years,
+        )
 
     def _prepare_q2_records(
         self,
