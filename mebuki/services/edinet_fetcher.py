@@ -33,7 +33,7 @@ from mebuki.utils.edinet_discovery import (
     build_document_index_for_code,
     build_half_year_document_index_for_code,
 )
-from mebuki.utils.fiscal_year import normalize_date_format, parse_date_string
+from mebuki.utils.fiscal_year import format_document_date, parse_date_string
 from mebuki.utils.xbrl_result_types import GrossProfitResult, HalfYearEdinetEntry, XbrlTagElements
 
 logger = logging.getLogger(__name__)
@@ -63,6 +63,8 @@ def _infer_fy_end_from_period_start(period_start: str) -> str:
         return end_dt.strftime("%Y-%m-%d")
     except (ValueError, OverflowError):
         return ""
+
+
 _XBRL_PARSE_CACHE_VERSION = ".".join(__version__.split(".")[:2]) + ":xbrl-parse"
 
 _PreParsedMap: TypeAlias = dict[str, tuple[Path, XbrlTagElements]]
@@ -73,12 +75,6 @@ _DocCacheKey: TypeAlias = tuple[str, int] | tuple[str, int, str]
 
 def _fy_end_key(value: object) -> str:
     return value.replace("-", "") if isinstance(value, str) else ""
-
-
-def _document_date(value: object) -> str:
-    if not isinstance(value, str):
-        return ""
-    return normalize_date_format(value) or ""
 
 
 def _docs_from_xbrl_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -185,10 +181,12 @@ class EdinetFetcher:
         financial_data: list[dict[str, Any]],
         max_years: int,
     ) -> list:
-        """search_recent_reports の結果をインスタンス内でキャッシュ。
+        """検索済みEDINET書類をインスタンス内でキャッシュ。
 
         同一 code+max_years を asyncio.gather で並列呼び出しした場合に
         ネットワーク呼び出しを1回に集約する。
+        financial_data に _docID 付きXBRL由来レコードが含まれる場合は、
+        再検索せずにその docID から書類リストを復元する。
         """
         key = (code, max_years)
         persistent_key = f"edinet_docs_{code}_{max_years}"
@@ -524,7 +522,7 @@ class EdinetFetcher:
 
                 report_info = {
                     "docID": doc_id,
-                    "submitDate": _document_date(doc.get("submitDateTime")),
+                    "submitDate": format_document_date(doc.get("submitDateTime")),
                     "docType": label,
                     "docTypeCode": dt,
                     "fiscal_year": year,
@@ -833,7 +831,7 @@ class EdinetFetcher:
             )
 
             fy_st = _infer_fy_start(fy_end)
-            submit_date = _document_date(doc.get("submitDateTime"))
+            submit_date = format_document_date(doc.get("submitDateTime"))
 
             record: dict[str, Any] = {
                 "Code": code,
@@ -936,7 +934,7 @@ class EdinetFetcher:
                 net_profit=is_result.get("net_profit"),
             )
 
-            submit_date = _document_date(doc.get("submitDateTime"))
+            submit_date = format_document_date(doc.get("submitDateTime"))
             record: dict[str, Any] = {
                 "Code": code,
                 "CurFYEn": fy_end,

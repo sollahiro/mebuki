@@ -41,6 +41,13 @@ def normalize_date_format(date_str: str | None) -> str | None:
     return None
 
 
+def format_document_date(value: object) -> str:
+    """EDINET書類日付をYYYY-MM-DD形式に正規化し、失敗時は空文字を返す。"""
+    if not isinstance(value, str):
+        return ""
+    return normalize_date_format(value) or ""
+
+
 def calculate_fiscal_year(fy_end: str | None, fy_start: str | None = None) -> int | None:
     """
     年度を計算。ユーザー指定により、CurFYSt（年度開始日）の年を年度とする。
