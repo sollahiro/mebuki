@@ -12,7 +12,6 @@ dependencies = ["aiohttp (>=3.9.0,<4.0.0)", "beautifulsoup4 (>=4.14.3,<5.0.0)", 
 [project.scripts]
 ticker = "mebuki.app.cli:main"
 blt = "mebuki.app.cli:main"
-mebuki = "mebuki.app.cli:main"
 
 [tool.poetry]
 packages = [

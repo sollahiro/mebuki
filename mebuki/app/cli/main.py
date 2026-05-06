@@ -1,26 +1,14 @@
 import sys
 import logging
-from pathlib import Path
 from .parser import build_parser
 
 logger = logging.getLogger(__name__)
-
-
-def _print_legacy_command_notice() -> None:
-    invoked_name = Path(sys.argv[0]).name
-    if invoked_name == "mebuki":
-        print(
-            "注意: `mebuki` コマンドは非推奨です。今後は `ticker` または `blt` を使ってください。",
-            file=sys.stderr,
-        )
 
 
 def main() -> int:
     parser = build_parser()
 
     try:
-        _print_legacy_command_notice()
-
         if len(sys.argv) == 1:
             parser.print_help()
             return 0

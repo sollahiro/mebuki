@@ -151,7 +151,7 @@ def _get_mcp_command():
     """PyInstaller実行時とPython直接実行時で異なるMCPコマンドを返す"""
     if getattr(sys, 'frozen', False):
         import shutil
-        symlink = shutil.which("ticker") or shutil.which("blt") or shutil.which("mebuki")
+        symlink = shutil.which("ticker") or shutil.which("blt")
         executable = symlink if symlink else sys.executable
         return executable, ["mcp", "start"]
     return sys.executable, ["-m", "mebuki", "mcp", "start"]

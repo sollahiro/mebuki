@@ -58,7 +58,7 @@ ticker mcp install-lm-studio
 
 ## 📂 使い方 (CLI)
 
-代表的なコマンドは以下です。短縮 alias として `blt` も利用できます。旧 `mebuki` コマンドは移行期間中の deprecated alias として残しています。
+代表的なコマンドは以下です。短縮 alias として `blt` も利用できます。
 
 ```bash
 # 銘柄検索

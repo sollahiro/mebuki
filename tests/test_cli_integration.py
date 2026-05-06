@@ -25,18 +25,6 @@ def test_main_keyboard_interrupt_exits_cleanly(monkeypatch, capsys) -> None:
     assert captured.err == "\n中断しました。\n"
 
 
-def test_main_mebuki_command_warns_deprecated(monkeypatch, capsys, tmp_path) -> None:
-    monkeypatch.setattr(sys, "argv", ["mebuki", "cache", "status", "--format", "json"])
-
-    with patch("mebuki.app.cli.cache.settings_store") as settings:
-        settings.cache_dir = str(tmp_path)
-        main()
-
-    captured = capsys.readouterr()
-    assert json.loads(captured.out)["edinet_index_status"] == "missing"
-    assert "`mebuki` コマンドは非推奨です" in captured.err
-
-
 def test_main_cache_status_reports_missing_prepare_cache(monkeypatch, capsys, tmp_path) -> None:
     with patch("mebuki.app.cli.cache.settings_store") as settings:
         settings.cache_dir = str(tmp_path)

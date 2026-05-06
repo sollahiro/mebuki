@@ -8,12 +8,10 @@ class BlueTicker < Formula
   def install
     bin.install "ticker"
     bin.install_symlink "ticker" => "blt"
-    bin.install_symlink "ticker" => "mebuki"
   end
 
   test do
     system "#{bin}/ticker", "--version"
     system "#{bin}/blt", "--version"
-    system "#{bin}/mebuki", "--version"
   end
 end
