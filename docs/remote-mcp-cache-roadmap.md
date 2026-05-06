@@ -27,7 +27,7 @@ flowchart TD
     Agent["AI Agent"] --> LocalFlow["local: CLI + Skills"]
     Agent --> RemoteMcp["remote: Remote MCP"]
 
-    LocalFlow --> CLI["mebuki CLI"]
+    LocalFlow --> CLI["BLUE TICKER CLI"]
     CLI --> BackendChoice["config: edinet backend"]
     BackendChoice --> LocalBackend["local backend"]
     BackendChoice --> RemoteBackend["remote backend"]
@@ -35,7 +35,7 @@ flowchart TD
     LocalBackend --> LocalCache["local analysis_cache/external/edinet"]
     LocalBackend --> EdinetAPI["EDINET API"]
 
-    RemoteBackend --> RemoteServer["mebuki remote server"]
+    RemoteBackend --> RemoteServer["BLUE TICKER remote server"]
     RemoteMcp --> RemoteServer
     RemoteServer --> RemoteCache["remote EDINET cache"]
     RemoteServer --> EdinetAPI
@@ -161,7 +161,7 @@ EDINET external cache の抽象境界は追加済み。
 
 残すもの:
 
-- `mebuki` CLI本体
+- BLUE TICKER CLI本体
 - ローカル `EdinetCacheStore`
 - `analysis_cache/derived` と `analysis_cache/external/edinet` のローカル運用
 - SkillsからCLIを操作する運用
@@ -174,7 +174,7 @@ EDINET external cache の抽象境界は追加済み。
 
 ### EDINET external cache と derived cache は分ける
 
-EDINET external cacheは外部取得物、derived cacheはmebuki生成物であり、TTL、バージョン、削除ポリシーが異なる。したがって、現時点では `EdinetCacheBackend` と `CacheManager` を統合しない。
+EDINET external cacheは外部取得物、derived cacheはBLUE TICKER生成物であり、TTL、バージョン、削除ポリシーが異なる。したがって、現時点では `EdinetCacheBackend` と `CacheManager` を統合しない。
 
 ### XBRLはローカルPathへmaterializeする
 

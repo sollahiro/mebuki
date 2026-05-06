@@ -1,4 +1,4 @@
-# Mebuki — Claude Code ガイド
+# BLUE TICKER — Claude Code ガイド
 
 日本株の財務データCLIツール（Python / Poetry）。
 

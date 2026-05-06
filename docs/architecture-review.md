@@ -3,7 +3,7 @@
 作成日: 2026-05-02
 最終更新: 2026-05-06
 
-mebuki は EDINET、財務省CSV、ローカル銘柄マスタを組み合わせて財務指標を作る。機能追加のたびに取得項目と補完ロジックが積み上がってきたため、ここでは現状の流れ、指標の出所、キャッシュ構造、見直し候補を整理する。
+BLUE TICKER は EDINET、財務省CSV、ローカル銘柄マスタを組み合わせて財務指標を作る。機能追加のたびに取得項目と補完ロジックが積み上がってきたため、ここでは現状の流れ、指標の出所、キャッシュ構造、見直し候補を整理する。
 
 課題ごとの対応状況は `docs/architecture-status.md` を参照。
 
@@ -61,7 +61,7 @@ flowchart TD
 
 ### キャッシュ上の課題
 
-- `external/` は外部取得物、`derived/` は mebuki 生成物として責務を分ける。EDINETの日別検索、年次インデックス、XBRL展開は `EdinetCacheStore` が管理する。
+- `external/` は外部取得物、`derived/` は BLUE TICKER 生成物として責務を分ける。EDINETの日別検索、年次インデックス、XBRL展開は `EdinetCacheStore` が管理する。
 - EDINET検索キャッシュはTTLを持ち、XBRL展開ディレクトリは容量上限とmtime LRU削除を持つ。
 - EDINET書類リストとXBRL parse結果は `CacheManager` 経由でも独立キャッシュする。最終分析キャッシュのバージョンを上げても、再取得・再parseを抑えやすい。
 - `individual_analysis_*` は最終成果物を保持するため、WACCなど取得時点の外部値を含む。最新値が必要な場合は `use_cache=False` / `--no-cache` で再計算する。
@@ -87,7 +87,7 @@ flowchart TD
 | `CostOfDebt` | EDINET IE/IBD | % | `InterestExpense / InterestBearingDebt` |
 | `WACC` | 上記統合 | % | Eq、IBD、IE、実効税率、Rfから計算 |
 | `DocID` | EDINET | 文字列 | 指標の根拠書類 |
-| `MetricSources` | mebuki内部メタデータ | object | 指標ごとの `source`, `method`, `docID`, `unit`, `label` を保持。標準JSONでは除外 |
+| `MetricSources` | BLUE TICKER 内部メタデータ | object | 指標ごとの `source`, `method`, `docID`, `unit`, `label` を保持。標準JSONでは除外 |
 
 ### 指標上の課題
 
@@ -134,7 +134,7 @@ flowchart TD
 | `edinet` | EDINET XBRL/HTML由来 |
 | `external` | 外部由来の既存レコード |
 | `mof` | 財務省CSV由来 |
-| `derived` | mebuki内部計算 |
+| `derived` | BLUE TICKER 内部計算 |
 
 主な `unit`:
 

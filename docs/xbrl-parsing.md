@@ -1,6 +1,6 @@
 # XBRL解析 技術リファレンス
 
-mebukiにおけるEDINET XBRL解析の設計・実装方針をまとめます。
+BLUE TICKERにおけるEDINET XBRL解析の設計・実装方針をまとめます。
 
 ---
 

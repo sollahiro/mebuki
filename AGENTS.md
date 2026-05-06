@@ -1,4 +1,4 @@
-# mebuki — Agent ガイド
+# BLUE TICKER — Agent ガイド
 
 日本株の財務データCLIツール（Python / Poetry）。
 
