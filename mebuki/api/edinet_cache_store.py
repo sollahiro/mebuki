@@ -114,7 +114,8 @@ class EdinetCacheStore:
                 payload = f"pid={os.getpid()} created_at={datetime.now().isoformat()}\n"
                 os.write(fd, payload.encode("utf-8"))
             except FileExistsError:
-                self._unlink_stale_lock(lock_path)
+                if self._unlink_stale_lock(lock_path):
+                    continue
                 elapsed = time.monotonic() - start
                 if not notice_printed and elapsed >= EDINET_CACHE_LOCK_NOTICE_SECONDS:
                     print(
@@ -137,17 +138,19 @@ class EdinetCacheStore:
             except FileNotFoundError:
                 pass
 
-    def _unlink_stale_lock(self, lock_path: Path) -> None:
+    def _unlink_stale_lock(self, lock_path: Path) -> bool:
         try:
             age_seconds = time.time() - lock_path.stat().st_mtime
         except FileNotFoundError:
-            return
+            return False
         if age_seconds >= EDINET_CACHE_LOCK_STALE_SECONDS:
             try:
                 lock_path.unlink()
                 logger.warning(f"[EDINET] stale cache lock removed: {lock_path}")
+                return True
             except FileNotFoundError:
-                pass
+                return False
+        return False
 
     def load_document_index(
         self,
@@ -202,7 +205,7 @@ class EdinetCacheStore:
         if not isinstance(documents, list):
             logger.warning(f"Document index load failed: expected documents list in {cache_path}")
             return None
-        return payload
+        return {k: v for k, v in payload.items() if k != "_cache_version"}
 
     def save_document_index(
         self,
