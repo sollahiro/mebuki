@@ -57,7 +57,7 @@ flowchart TD
 | EDINET日別検索 | EDINET `/documents.json?date=...` | `analysis_cache/edinet/search_YYYY-MM-DD.json` | `EdinetCacheStore` が管理。空結果1日、直近ヒット30日、過去日3650日のTTL |
 | EDINET書類インデックス | EDINET `/documents.json?date=...` | `analysis_cache/edinet/doc_index_YYYY.json` | 年次レンジ検索用。`_cache_version` と `built_through` で有効性を確認 |
 | EDINET XBRL | EDINET `/documents/{docID}?type=1` | `analysis_cache/edinet/{docID}_xbrl/` | `EdinetCacheStore` が管理。2GB上限を超えるとmtime LRUで古い展開ディレクトリを削除 |
-| 財務省金利 | MOF `jgbcm_all.csv`, `jgbcm.csv` | `mof_rf_rates` 1日TTL | 方針は明確。個別分析キャッシュ内WACCは更新されない点に注意 |
+| 財務省金利 | MOF `jgbcm_all.csv`, `jgbcm.csv` | `mof_rf_rates` 1日TTL | 個別分析キャッシュ内WACCは更新されない。最新金利を反映する場合は `--no-cache` / `use_cache=False` |
 
 ### キャッシュ上の課題
 
@@ -189,14 +189,14 @@ MCPとCLIは大枠では対応している。
 
 | コマンド/ツール | 目的 | 削除有無 |
 |---|---|---|
-| `mebuki cache stats` | 全体容量、ファイル数、EDINET検索/XBRL件数、不明JSON件数を確認 | なし |
-| `mebuki cache audit` | 既知命名に合わないroot JSONや整理対象キャッシュを検出 | なし |
+| `mebuki cache stats` | 全体容量、ファイル数、EDINET検索/年次インデックス/XBRL展開/parseキャッシュ/分析キャッシュの件数と容量を確認 | なし |
+| `mebuki cache audit` | EDINET検索、年次インデックス、XBRL展開、parseキャッシュ、分析キャッシュ、不明root JSONをカテゴリ別に一覧表示 | なし |
 | `mebuki cache prune` | 指定日数以上古いEDINET検索/XBRL展開などを削除 | dry-runがデフォルト。`--execute` 時のみ削除 |
 | MCP `get_japan_stock_cache_stats` | MCP利用中にキャッシュ状態を確認 | なし |
 
 削除方針:
 
-- 財務省金利キャッシュ `mof_rf_rates` は現行機能なので削除対象にしない。
+- 財務省金利キャッシュ `mof_rf_rates` は現行機能なので削除対象にしない。WACCを最新金利で再計算したい場合は、分析結果キャッシュを避けるため `--no-cache` を使う。
 - EDINET検索キャッシュとXBRL展開ディレクトリは、ユーザーが日数を指定したときだけ削除する。
 - EDINET XBRL展開ディレクトリは保存時にも容量上限を確認し、上限を超えた場合は古いものから自動削除する。
 - MCPからの削除操作は当面提供しない。削除が必要な場合はCLIでdry-runを確認してから `--execute` する。
@@ -205,14 +205,8 @@ MCPとCLIは大枠では対応している。
 
 ### すぐやる価値が高い
 
-1. キャッシュstats/auditの表示をEDINET中心に整える
-   現在のstatsは全体容量と主要件数を返す。EDINET検索、年次インデックス、XBRL展開、parse結果キャッシュを利用者が判断しやすい単位で表示できると運用しやすい。
-
-2. 実企業サンプルの回帰テストを増やす
+1. 実企業サンプルの回帰テストを増やす
    XBRL抽出器の単体テストは厚い。次はJ-GAAP、IFRS、US-GAAPの代表銘柄で、年次・半期・公開JSONの一連の形を固定するとよい。
-
-3. WACC外部値のキャッシュ境界を明確にする
-   財務省金利は1日TTLだが、最終分析キャッシュ内のWACCは分析キャッシュの寿命に従う。最新WACCを重視するユースケースでは再計算導線を分かりやすくする。
 
 ### 設計してから進める
 

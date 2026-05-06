@@ -13,13 +13,15 @@
 | 型安全性 | A- | 主要metricsとXBRL抽出結果はTypedDict化済み。pyrightをCIで実行 |
 | CLI/MCP パリティ | A | 主要機能はCLI/MCPで対応済み。削除系はCLI限定 |
 | DRY | A- | 年次抽出器レジストリ、XBRL共通parse、年次/半期の書類検索共有が効いている |
-| 総合 | A- | 次の伸びしろは実企業回帰テストとキャッシュ可視化 |
+| 総合 | A- | 次の伸びしろは実企業回帰テスト |
 
 ## 現状の強み
 
 - 依存方向が明確。`app -> services -> api/analysis/infrastructure/utils` を基本とし、`tests/test_dependency_rules.py` で逆流を検出する。
 - EDINET関連の責務が分かれている。通信は `api/edinet_client.py`、ファイルキャッシュは `api/edinet_cache_store.py`、書類選定と抽出 orchestration は `services/edinet_fetcher.py` が担当する。
 - EDINETキャッシュは日別検索TTL、年次インデックスバージョン、XBRL展開ディレクトリの2GB上限とmtime LRU削除を持つ。
+- `cache stats/audit` でEDINET検索、年次インデックス、XBRL展開、parse結果、分析結果をカテゴリ別に確認できる。
+- EDINET-onlyスモークテストは、実企業の有報検索キャッシュとXBRL展開キャッシュから実行できる。
 - XBRL parse結果とEDINET書類リストは `CacheManager` 経由で独立キャッシュされ、最終分析キャッシュ更新時の再取得・再parseを抑えられる。
 - 標準JSONとデバッグフィールドの境界は `utils/output_serializer.py` に集約され、公開キー集合は `tests/test_output_serializer.py` で固定している。
 - XBRL抽出器の戻り値は `utils/xbrl_result_types.py` に集約され、pyrightをCIで実行している。
@@ -50,18 +52,10 @@
 
 ## 優先改善候補
 
-1. キャッシュstats/auditの表示粒度をEDINET中心に整える
-
-   現在のstatsは全体容量と主要件数を返す。EDINET検索、年次インデックス、XBRL展開、parse結果キャッシュを利用者が判断しやすい単位で表示できると運用しやすい。
-
-2. 実企業サンプルの回帰テストを増やす
+1. 実企業サンプルの回帰テストを増やす
 
    J-GAAP、IFRS、US-GAAPの代表銘柄で、年次・半期・公開JSONの形を固定する。XBRLタグ候補の大規模整理は、この土台を作ってから触る。
 
-3. WACC外部値と最終分析キャッシュの関係を明確にする
-
-   財務省金利は1日TTLだが、最終分析キャッシュ内のWACCは分析キャッシュの寿命に従う。最新WACCを重視する利用者には `--no-cache` / `use_cache=False` の導線を分かりやすくする。
-
-4. `CalculatedData` の公開キー削除やrenameは慎重に進める
+2. `CalculatedData` の公開キー削除やrenameは慎重に進める
 
    MCP/CLI利用者への互換性影響が大きい。alias期間、利用者向けの変更案内、契約テストを用意してから判断する。

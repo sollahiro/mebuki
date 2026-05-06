@@ -69,6 +69,18 @@ mebuki search トヨタ
 mebuki analyze 7203 --years 5
 ```
 
+最新の財務省金利を反映したWACCを確認したい場合は、分析結果キャッシュを使わず再計算します。
+
+```bash
+mebuki analyze 7203 --years 5 --no-cache
+```
+
+### キャッシュを確認する
+```bash
+mebuki cache stats
+mebuki cache audit
+```
+
 ### ウォッチリストを管理する
 ```bash
 mebuki watch add 7203

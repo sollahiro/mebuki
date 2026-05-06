@@ -128,6 +128,7 @@ EDINETの日別検索キャッシュとXBRL zip展開処理が `EdinetAPIClient`
 - `mebuki cache stats` を追加
 - `mebuki cache audit` を追加
 - `mebuki cache prune` をdry-runデフォルトで追加
+- EDINET-onlyスモークテスト用の検索/XBRLキャッシュ準備処理を追加
 - MCP `get_japan_stock_cache_stats` は読み取り専用にした
 
 **主なファイル**
@@ -138,7 +139,7 @@ EDINETの日別検索キャッシュとXBRL zip展開処理が `EdinetAPIClient`
 
 **現在の扱い**
 
-EDINET検索キャッシュ、年次インデックス、XBRL展開ディレクトリはstats/pruneの対象。XBRL展開ディレクトリは保存時にも容量上限を確認し、自動整理する。
+EDINET検索キャッシュ、年次インデックス、XBRL展開ディレクトリ、EDINET書類リスト、XBRL parse結果、分析結果キャッシュはstats/auditでカテゴリ別に確認できる。XBRL展開ディレクトリは保存時にも容量上限を確認し、自動整理する。
 
 ### 6. XBRL抽出器追加時の変更箇所が多かった
 
@@ -327,7 +328,5 @@ alias期間、利用者向けの変更案内、契約テストを用意する。
 
 ## 次のおすすめ順
 
-1. キャッシュstats/auditの表示粒度をEDINET中心に整える
-2. J-GAAP、IFRS、US-GAAPの実企業サンプルで回帰テストを増やす
-3. WACC外部値と最終分析キャッシュの関係をCLIヘルプやdocsで明確にする
-4. `CalculatedData` の公開キー削除やrenameは、alias期間と契約テストを用意してから判断する
+1. J-GAAP、IFRS、US-GAAPの実企業サンプルで回帰テストを増やす
+2. `CalculatedData` の公開キー削除やrenameは、alias期間と契約テストを用意してから判断する

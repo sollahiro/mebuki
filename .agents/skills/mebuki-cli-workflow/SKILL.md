@@ -61,6 +61,8 @@ mebuki analyze <code> [--years N] [--format table|json] [--half] [--no-cache]
 - `--half`: 上半期(H1)・下半期(H2)の半期推移を表示する（seasonalityの確認に有用）
 - `--no-cache`: キャッシュを使用せず最新データを取得する
 
+> **WACCとキャッシュ**: WACCのリスクフリーレートには財務省10年国債利回りCSVを使う。金利データ自体は1日TTLでキャッシュされるが、分析結果キャッシュに保存済みのWACCは再計算されない。最新の財務省金利を反映したWACCを確認する場合は、`mebuki analyze <code> --no-cache` を使う。
+
 デフォルト出力に含まれる主要財務指標（横並び年次推移）:
 
 | 項目 | 用途・ポイント |

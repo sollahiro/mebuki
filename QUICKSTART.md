@@ -65,6 +65,21 @@ mebuki config init
 
 EDINET APIキーは、財務データ分析と有価証券報告書の検索・抽出に使用します。
 
+### WACCとキャッシュ
+
+WACCのリスクフリーレートには、財務省の10年国債利回りCSVを使用します。金利データ自体は1日TTLでキャッシュされますが、分析結果キャッシュに保存済みのWACCは再計算されません。最新の金利を反映したWACCを確認する場合は、分析時に `--no-cache` を指定してください。
+
+```bash
+mebuki analyze 7203 --years 5 --no-cache
+```
+
+### キャッシュ確認
+
+```bash
+mebuki cache stats
+mebuki cache audit
+```
+
 ---
 
 ## AIアシスタント連携 (MCP)
