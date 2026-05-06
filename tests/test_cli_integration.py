@@ -156,7 +156,6 @@ def test_main_cache_prune_outputs_json(monkeypatch, capsys) -> None:
     pruner_cls.assert_called_once_with("/tmp/mebuki-cache")
     pruner.prune.assert_called_once_with(
         dry_run=False,
-        include_boj=True,
         edinet_search_days=30,
         edinet_xbrl_days=60,
         edinet_doc_index_years=6,
@@ -173,10 +172,21 @@ def test_main_cache_stats_outputs_json(monkeypatch, capsys) -> None:
         "metadata_entries": 2,
         "root_json_files": 2,
         "edinet_search_files": 1,
+        "edinet_search_bytes": 10,
         "edinet_doc_index_files": 0,
+        "edinet_doc_index_bytes": 0,
         "edinet_xbrl_dirs": 0,
-        "boj_files": 1,
-        "boj_metadata_entries": 1,
+        "edinet_xbrl_bytes": 0,
+        "edinet_docs_cache_files": 0,
+        "edinet_docs_cache_bytes": 0,
+        "xbrl_parse_cache_files": 0,
+        "xbrl_parse_cache_bytes": 0,
+        "individual_analysis_files": 0,
+        "individual_analysis_bytes": 0,
+        "half_year_analysis_files": 0,
+        "half_year_analysis_bytes": 0,
+        "mof_cache_files": 1,
+        "mof_cache_bytes": 20,
         "unknown_root_json_files": 0,
     }
     pruner = Mock()
@@ -193,6 +203,69 @@ def test_main_cache_stats_outputs_json(monkeypatch, capsys) -> None:
     assert json.loads(captured.out)["total_bytes"] == 1024
     pruner_cls.assert_called_once_with("/tmp/mebuki-cache")
     pruner.stats.assert_called_once_with()
+
+
+def test_main_cache_audit_outputs_json(monkeypatch, capsys) -> None:
+    audit = Mock()
+    audit.to_dict.return_value = {
+        "cache_dir": "/tmp/mebuki-cache",
+        "unknown_root_json_files": ["manual_dump.json"],
+        "orphan_metadata_keys": [],
+        "edinet_search_files": ["search_2024-01-01.json"],
+        "edinet_doc_index_files": [],
+        "edinet_xbrl_dirs": [],
+        "edinet_docs_cache_files": [],
+        "xbrl_parse_cache_files": [],
+        "individual_analysis_files": [],
+        "half_year_analysis_files": [],
+        "mof_cache_files": [],
+    }
+    pruner = Mock()
+    pruner.audit.return_value = audit
+
+    with (
+        patch("mebuki.app.cli.cache.settings_store") as settings,
+        patch("mebuki.app.cli.cache.CachePruner", return_value=pruner) as pruner_cls,
+    ):
+        settings.cache_dir = "/tmp/mebuki-cache"
+        _run_cli(monkeypatch, ["cache", "audit", "--format", "json"])
+
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)["unknown_root_json_files"] == ["manual_dump.json"]
+    pruner_cls.assert_called_once_with("/tmp/mebuki-cache")
+    pruner.audit.assert_called_once_with()
+
+
+def test_main_cache_prepare_smoke_outputs_json(monkeypatch, capsys) -> None:
+    summary = Mock()
+    summary.to_dict.return_value = {
+        "requested": 1,
+        "prepared": 1,
+        "skipped": 0,
+        "failed": 0,
+        "entries": [{
+            "code": "7203",
+            "name": "7203",
+            "category": "custom",
+            "status": "prepared",
+            "doc_id": "S100TEST",
+            "fy_end": "2025-03-31",
+            "xbrl_dir": "/tmp/mebuki-cache/edinet/S100TEST_xbrl",
+            "message": None,
+        }],
+    }
+
+    with (
+        patch("mebuki.app.cli.cache.settings_store") as settings,
+        patch("mebuki.app.cli.cache._prepare_smoke_cache_async", AsyncMock(return_value=summary)) as prepare,
+    ):
+        settings.cache_dir = "/tmp/mebuki-cache"
+        settings.edinet_api_key = "dummy"
+        _run_cli(monkeypatch, ["cache", "prepare-smoke", "--codes", "7203", "--format", "json"])
+
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)["prepared"] == 1
+    prepare.assert_awaited_once_with("dummy", "/tmp/mebuki-cache", ["7203"], 365)
 
 
 

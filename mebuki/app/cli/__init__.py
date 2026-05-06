@@ -1,7 +1,8 @@
 from typing import TYPE_CHECKING
 
+from .main import main
+
 if TYPE_CHECKING:
-    from .main import main
     from .parser import build_parser
     from .analyze import cmd_analyze, cmd_search, cmd_filings, cmd_filing
     from .config import cmd_config

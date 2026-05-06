@@ -5,6 +5,7 @@
 """
 
 import shutil
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -35,13 +36,42 @@ class CacheStats:
     metadata_entries: int = 0
     root_json_files: int = 0
     edinet_search_files: int = 0
+    edinet_search_bytes: int = 0
     edinet_doc_index_files: int = 0
+    edinet_doc_index_bytes: int = 0
     edinet_xbrl_dirs: int = 0
-    boj_files: int = 0
-    boj_metadata_entries: int = 0
+    edinet_xbrl_bytes: int = 0
+    edinet_docs_cache_files: int = 0
+    edinet_docs_cache_bytes: int = 0
+    xbrl_parse_cache_files: int = 0
+    xbrl_parse_cache_bytes: int = 0
+    individual_analysis_files: int = 0
+    individual_analysis_bytes: int = 0
+    half_year_analysis_files: int = 0
+    half_year_analysis_bytes: int = 0
+    mof_cache_files: int = 0
+    mof_cache_bytes: int = 0
     unknown_root_json_files: int = 0
 
     def to_dict(self) -> dict[str, int | str]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class CacheAudit:
+    cache_dir: str
+    unknown_root_json_files: list[str]
+    orphan_metadata_keys: list[str]
+    edinet_search_files: list[str]
+    edinet_doc_index_files: list[str]
+    edinet_xbrl_dirs: list[str]
+    edinet_docs_cache_files: list[str]
+    xbrl_parse_cache_files: list[str]
+    individual_analysis_files: list[str]
+    half_year_analysis_files: list[str]
+    mof_cache_files: list[str]
+
+    def to_dict(self) -> dict[str, str | list[str]]:
         return asdict(self)
 
 
@@ -58,14 +88,11 @@ class CachePruner:
         self,
         *,
         dry_run: bool = True,
-        include_boj: bool = True,
         edinet_search_days: int | None = None,
         edinet_xbrl_days: int | None = None,
         edinet_doc_index_years: int | None = EDINET_DOCUMENT_INDEX_KEEP_YEARS,
     ) -> PruneSummary:
         summary = PruneSummary(dry_run=dry_run)
-        if include_boj:
-            summary = self._merge(summary, self._prune_boj(dry_run=dry_run))
         if edinet_search_days is not None:
             summary = self._merge(
                 summary,
@@ -96,13 +123,21 @@ class CachePruner:
             for path in self.cache_dir.glob("*.json")
             if path.name != "metadata.json"
         ]
-        boj_files = sorted(self.cache_dir.glob("boj_*.json"))
         known_root_prefixes = (
             "individual_analysis_",
             "half_year_periods_",
+            "edinet_docs_",
+            "xbrl_parsed_",
             "mof_",
-            "boj_",
         )
+        edinet_search_files = list(self.edinet_dir.glob("search_*.json"))
+        edinet_doc_index_files = list(self.edinet_dir.glob("doc_index_*.json"))
+        edinet_xbrl_dirs = [path for path in self.edinet_dir.glob("*_xbrl") if path.is_dir()]
+        edinet_docs_cache_files = [path for path in root_json_files if path.stem.startswith("edinet_docs_")]
+        xbrl_parse_cache_files = [path for path in root_json_files if path.stem.startswith("xbrl_parsed_")]
+        individual_analysis_files = [path for path in root_json_files if path.stem.startswith("individual_analysis_")]
+        half_year_analysis_files = [path for path in root_json_files if path.stem.startswith("half_year_periods_")]
+        mof_cache_files = [path for path in root_json_files if path.stem.startswith("mof_")]
         unknown_root_json_files = [
             path
             for path in root_json_files
@@ -116,27 +151,56 @@ class CachePruner:
             total_bytes=sum(path.stat().st_size for path in files),
             metadata_entries=len(metadata_keys),
             root_json_files=len(root_json_files),
-            edinet_search_files=len(list(self.edinet_dir.glob("search_*.json"))),
-            edinet_doc_index_files=len(list(self.edinet_dir.glob("doc_index_*.json"))),
-            edinet_xbrl_dirs=len([path for path in self.edinet_dir.glob("*_xbrl") if path.is_dir()]),
-            boj_files=len(boj_files),
-            boj_metadata_entries=len([key for key in metadata_keys if key.startswith("boj_")]),
+            edinet_search_files=len(edinet_search_files),
+            edinet_search_bytes=sum(path.stat().st_size for path in edinet_search_files),
+            edinet_doc_index_files=len(edinet_doc_index_files),
+            edinet_doc_index_bytes=sum(path.stat().st_size for path in edinet_doc_index_files),
+            edinet_xbrl_dirs=len(edinet_xbrl_dirs),
+            edinet_xbrl_bytes=sum(self._path_size(path) for path in edinet_xbrl_dirs),
+            edinet_docs_cache_files=len(edinet_docs_cache_files),
+            edinet_docs_cache_bytes=sum(path.stat().st_size for path in edinet_docs_cache_files),
+            xbrl_parse_cache_files=len(xbrl_parse_cache_files),
+            xbrl_parse_cache_bytes=sum(path.stat().st_size for path in xbrl_parse_cache_files),
+            individual_analysis_files=len(individual_analysis_files),
+            individual_analysis_bytes=sum(path.stat().st_size for path in individual_analysis_files),
+            half_year_analysis_files=len(half_year_analysis_files),
+            half_year_analysis_bytes=sum(path.stat().st_size for path in half_year_analysis_files),
+            mof_cache_files=len(mof_cache_files),
+            mof_cache_bytes=sum(path.stat().st_size for path in mof_cache_files),
             unknown_root_json_files=len(unknown_root_json_files),
         )
 
-    def _prune_boj(self, *, dry_run: bool) -> PruneSummary:
-        files = sorted(self.cache_dir.glob("boj_*.json"))
-        freed = sum(path.stat().st_size for path in files if path.exists())
-        if not dry_run:
-            self.cache_manager.clear_prefix("boj_")
-            for path in files:
-                if path.exists():
-                    path.unlink()
-        return PruneSummary(
-            removed_files=len(files),
-            freed_bytes=freed,
-            scanned_files=len(files),
-            dry_run=dry_run,
+    def audit(self) -> CacheAudit:
+        """キャッシュカテゴリ別のファイル一覧を返す。削除は行わない。"""
+        metadata_keys = self.cache_manager.keys()
+        root_json_files = [
+            path
+            for path in self.cache_dir.glob("*.json")
+            if path.name != "metadata.json"
+        ]
+        known_root_prefixes = (
+            "individual_analysis_",
+            "half_year_periods_",
+            "edinet_docs_",
+            "xbrl_parsed_",
+            "mof_",
+        )
+        existing_cache_stems = {path.stem for path in root_json_files}
+        return CacheAudit(
+            cache_dir=str(self.cache_dir),
+            unknown_root_json_files=_names([
+                path for path in root_json_files
+                if not path.stem.startswith(known_root_prefixes)
+            ]),
+            orphan_metadata_keys=sorted(key for key in metadata_keys if key not in existing_cache_stems),
+            edinet_search_files=_names(self.edinet_dir.glob("search_*.json")),
+            edinet_doc_index_files=_names(self.edinet_dir.glob("doc_index_*.json")),
+            edinet_xbrl_dirs=_names(path for path in self.edinet_dir.glob("*_xbrl") if path.is_dir()),
+            edinet_docs_cache_files=_names(path for path in root_json_files if path.stem.startswith("edinet_docs_")),
+            xbrl_parse_cache_files=_names(path for path in root_json_files if path.stem.startswith("xbrl_parsed_")),
+            individual_analysis_files=_names(path for path in root_json_files if path.stem.startswith("individual_analysis_")),
+            half_year_analysis_files=_names(path for path in root_json_files if path.stem.startswith("half_year_periods_")),
+            mof_cache_files=_names(path for path in root_json_files if path.stem.startswith("mof_")),
         )
 
     def _prune_edinet_search(self, *, days: int, dry_run: bool) -> PruneSummary:
@@ -226,3 +290,7 @@ def _doc_index_year(path: Path) -> int | None:
         return int(year_text)
     except ValueError:
         return None
+
+
+def _names(paths: Iterable[Path]) -> list[str]:
+    return sorted(path.name for path in paths)

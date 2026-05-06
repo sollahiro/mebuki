@@ -18,7 +18,11 @@ def build_parser() -> argparse.ArgumentParser:
     analyze_parser.add_argument("code", help="銘柄コード")
     analyze_parser.add_argument("--years", type=int, help="分析年数")
     analyze_parser.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
-    analyze_parser.add_argument("--no-cache", action="store_true", help="キャッシュを使用しない")
+    analyze_parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="分析結果キャッシュを使用せず再計算する。最新の財務省金利を反映したWACCを確認したい場合も指定",
+    )
     analyze_parser.add_argument(
         "--half", action="store_true",
         help="上半期(H1)・下半期(H2)の半期推移を表示する"
@@ -55,9 +59,10 @@ def build_parser() -> argparse.ArgumentParser:
     cache_sub = cache_parser.add_subparsers(dest="cache_subcommand", help="キャッシュサブコマンド")
     stats_parser = cache_sub.add_parser("stats", help="キャッシュ使用量を表示")
     stats_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+    audit_parser = cache_sub.add_parser("audit", help="キャッシュ内訳をカテゴリ別に表示（削除なし）")
+    audit_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
     prune_parser = cache_sub.add_parser("prune", help="不要なキャッシュを削除")
     prune_parser.add_argument("--execute", action="store_true", help="実際に削除する（未指定時は dry-run）")
-    prune_parser.add_argument("--keep-boj", action="store_true", help="廃止済みBOJキャッシュを削除対象から外す")
     prune_parser.add_argument(
         "--edinet-search-days",
         type=int,
@@ -77,6 +82,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="保持する EDINET 年次インデックス年数（デフォルト: 6、0で全削除）",
     )
     prune_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+    smoke_parser = cache_sub.add_parser("prepare-smoke", help=argparse.SUPPRESS)
+    smoke_parser.add_argument(
+        "--codes",
+        nargs="+",
+        help="準備する銘柄コード。省略時は標準スモーク対象企業を使用",
+    )
+    smoke_parser.add_argument(
+        "--initial-scan-days",
+        type=int,
+        default=365,
+        help="最新有報を探す直近スキャン日数（デフォルト: 365）",
+    )
+    smoke_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
 
     # mcp
     mcp_parser = subparsers.add_parser("mcp", help="MCP連携管理")

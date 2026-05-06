@@ -64,7 +64,7 @@ async def list_tools() -> list[Tool]:
                     "use_cache": {
                         "type": "boolean",
                         "default": True,
-                        "description": "If false, bypass cache and re-fetch the latest data from EDINET. Use when you want up-to-date figures or when ROIC/IBD/BS fields are missing.",
+                        "description": "If false, bypass analysis cache and re-fetch/recalculate data from EDINET. Use when you want up-to-date figures, latest MOF-rate WACC, or when ROIC/IBD/BS fields are missing.",
                     },
                     "include_debug_fields": {
                         "type": "boolean",
@@ -284,6 +284,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             pruner = CachePruner(settings_store.cache_dir)
             result = {
                 "stats": pruner.stats().to_dict(),
+                "audit": pruner.audit().to_dict(),
                 "prune_available_in_mcp": False,
                 "message": "削除系の cache prune は安全のためCLIのみ対応です。",
             }

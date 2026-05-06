@@ -1,4 +1,3 @@
-import json
 import os
 from datetime import datetime, timedelta
 
@@ -8,36 +7,6 @@ from mebuki.services.cache_pruner import CachePruner
 def _touch_old(path, days: int) -> None:
     ts = (datetime.now() - timedelta(days=days)).timestamp()
     os.utime(path, (ts, ts))
-
-
-def test_prune_boj_removes_files_and_metadata(tmp_path) -> None:
-    from mebuki.utils.cache import CacheManager
-
-    cache = CacheManager(cache_dir=str(tmp_path))
-    cache.set("boj_legacy", [{"value": 1}])
-    cache.set("mof_rf_rates", {"rates": {}})
-
-    summary = CachePruner(tmp_path).prune(dry_run=False, include_boj=True)
-
-    assert summary.removed_files == 1
-    assert not (tmp_path / "boj_legacy.json").exists()
-    assert (tmp_path / "mof_rf_rates.json").exists()
-    metadata = json.loads((tmp_path / "metadata.json").read_text(encoding="utf-8"))
-    assert "boj_legacy" not in metadata
-    assert "mof_rf_rates" in metadata
-
-
-def test_prune_dry_run_does_not_delete(tmp_path) -> None:
-    from mebuki.utils.cache import CacheManager
-
-    cache = CacheManager(cache_dir=str(tmp_path))
-    cache.set("boj_legacy", [{"value": 1}])
-
-    summary = CachePruner(tmp_path).prune(dry_run=True, include_boj=True)
-
-    assert summary.removed_files == 1
-    assert (tmp_path / "boj_legacy.json").exists()
-    assert "boj_legacy" in json.loads((tmp_path / "metadata.json").read_text(encoding="utf-8"))
 
 
 def test_prune_edinet_by_age(tmp_path) -> None:
@@ -62,7 +31,6 @@ def test_prune_edinet_by_age(tmp_path) -> None:
 
     summary = CachePruner(tmp_path).prune(
         dry_run=False,
-        include_boj=False,
         edinet_search_days=30,
         edinet_xbrl_days=30,
     )
@@ -84,7 +52,7 @@ def test_prune_edinet_doc_indexes_keeps_recent_years_by_default(tmp_path) -> Non
     old_index.write_text("{}", encoding="utf-8")
     kept_index.write_text("{}", encoding="utf-8")
 
-    summary = CachePruner(tmp_path).prune(dry_run=False, include_boj=False)
+    summary = CachePruner(tmp_path).prune(dry_run=False)
 
     assert summary.removed_files == 1
     assert not old_index.exists()
@@ -102,7 +70,6 @@ def test_prune_edinet_doc_indexes_can_keep_custom_years(tmp_path) -> None:
 
     summary = CachePruner(tmp_path).prune(
         dry_run=False,
-        include_boj=False,
         edinet_doc_index_years=3,
     )
 
@@ -115,8 +82,11 @@ def test_stats_counts_cache_categories(tmp_path) -> None:
     from mebuki.utils.cache import CacheManager
 
     cache = CacheManager(cache_dir=str(tmp_path))
-    cache.set("boj_legacy", [{"value": 1}])
     cache.set("mof_rf_rates", {"rates": {}})
+    cache.set("edinet_docs_72030_1", {"docs": []})
+    cache.set("xbrl_parsed_S100TEST", {"data": {}})
+    cache.set("individual_analysis_72030", {"metrics": {}})
+    cache.set("half_year_periods_72030_3", [])
     (tmp_path / "manual_dump.json").write_text("{}", encoding="utf-8")
 
     edinet_dir = tmp_path / "edinet"
@@ -130,10 +100,45 @@ def test_stats_counts_cache_categories(tmp_path) -> None:
     pruner = CachePruner(tmp_path)
     stats = pruner.stats()
 
-    assert stats.total_files == 7
+    assert stats.total_files == 10
     assert stats.edinet_search_files == 1
+    assert stats.edinet_search_bytes > 0
     assert stats.edinet_doc_index_files == 1
     assert stats.edinet_xbrl_dirs == 1
-    assert stats.boj_files == 1
-    assert stats.boj_metadata_entries == 1
+    assert stats.edinet_xbrl_bytes > 0
+    assert stats.edinet_docs_cache_files == 1
+    assert stats.xbrl_parse_cache_files == 1
+    assert stats.individual_analysis_files == 1
+    assert stats.half_year_analysis_files == 1
+    assert stats.mof_cache_files == 1
     assert stats.unknown_root_json_files == 1
+
+
+def test_audit_lists_cache_categories(tmp_path) -> None:
+    from mebuki.utils.cache import CacheManager
+
+    cache = CacheManager(cache_dir=str(tmp_path))
+    cache.set("edinet_docs_72030_1", {"docs": []})
+    cache.set("xbrl_parsed_S100TEST", {"data": {}})
+    cache.set("individual_analysis_72030", {"metrics": {}})
+    cache.set("half_year_periods_72030_3", [])
+    cache.set("mof_rf_rates", {"rates": {}})
+    cache.clear("mof_rf_rates")
+    (tmp_path / "manual_dump.json").write_text("{}", encoding="utf-8")
+
+    edinet_dir = tmp_path / "edinet"
+    edinet_dir.mkdir()
+    (edinet_dir / "search_2024-01-01.json").write_text("[]", encoding="utf-8")
+    (edinet_dir / "doc_index_2024.json").write_text("{}", encoding="utf-8")
+    (edinet_dir / "S100TEST_xbrl").mkdir()
+
+    audit = CachePruner(tmp_path).audit()
+
+    assert audit.unknown_root_json_files == ["manual_dump.json"]
+    assert audit.edinet_search_files == ["search_2024-01-01.json"]
+    assert audit.edinet_doc_index_files == ["doc_index_2024.json"]
+    assert audit.edinet_xbrl_dirs == ["S100TEST_xbrl"]
+    assert audit.edinet_docs_cache_files == ["edinet_docs_72030_1.json"]
+    assert audit.xbrl_parse_cache_files == ["xbrl_parsed_S100TEST.json"]
+    assert audit.individual_analysis_files == ["individual_analysis_72030.json"]
+    assert audit.half_year_analysis_files == ["half_year_periods_72030_3.json"]
