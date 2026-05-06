@@ -25,7 +25,7 @@ def _financial_record(
 async def test_get_annual_docs_falls_back_to_edinet_discovery_without_doc_ids() -> None:
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    fetcher = EdinetFetcher(edinet_client=edinet_client)
     fetcher._search_edinet_annual_docs = AsyncMock(return_value=[{"docID": "S100TEST"}])  # type: ignore[method-assign]
 
     docs = await fetcher._get_annual_docs(
@@ -50,7 +50,7 @@ async def test_fetch_latest_annual_report_selects_latest_120_doc() -> None:
         {"docID": "Q2", "docTypeCode": "140", "submitDateTime": "2024-02-01T10:00:00"},
         {"docID": "NEW", "docTypeCode": "120", "submitDateTime": "2024-06-01T10:00:00"},
     ]
-    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    fetcher = EdinetFetcher(edinet_client=edinet_client)
     fetcher._search_edinet_annual_docs = AsyncMock(return_value=docs)  # type: ignore[method-assign]
 
     doc = await fetcher.fetch_latest_annual_report("72030")
@@ -63,7 +63,7 @@ async def test_fetch_latest_annual_report_selects_latest_120_doc() -> None:
 async def test_get_half_year_docs_calls_discovery_once_on_repeated_calls() -> None:
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    fetcher = EdinetFetcher(edinet_client=edinet_client)
     fetcher._search_edinet_half_docs = AsyncMock(return_value=[{"docID": "S100HALF"}])  # type: ignore[method-assign]
     financial_data = [
         _financial_record("2023-04-01", "2024-03-31", "2023-11-10", period_type="2Q"),
@@ -91,7 +91,7 @@ async def test_get_annual_docs_reads_from_persistent_cache(tmp_path) -> None:
     )
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client, cache_manager=cache_manager)
+    fetcher = EdinetFetcher(edinet_client=edinet_client, cache_manager=cache_manager)
 
     docs = await fetcher._get_annual_docs(
         code,
@@ -108,7 +108,7 @@ async def test_get_annual_docs_saves_to_persistent_cache_after_api_call(tmp_path
     cache_manager = CacheManager(cache_dir=str(tmp_path))
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client, cache_manager=cache_manager)
+    fetcher = EdinetFetcher(edinet_client=edinet_client, cache_manager=cache_manager)
     fetcher._search_edinet_annual_docs = AsyncMock(return_value=[{"docID": "S100TEST"}])  # type: ignore[method-assign]
 
     docs = await fetcher._get_annual_docs(
@@ -127,7 +127,7 @@ async def test_get_annual_docs_saves_to_persistent_cache_after_api_call(tmp_path
 async def test_get_annual_docs_ignores_q2_records_for_year_selection() -> None:
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    fetcher = EdinetFetcher(edinet_client=edinet_client)
     fetcher._search_edinet_annual_docs = AsyncMock(return_value=[{"docID": "S100ANNUAL"}])  # type: ignore[method-assign]
 
     docs = await fetcher._get_annual_docs(
@@ -151,7 +151,7 @@ async def test_get_annual_docs_ignores_q2_records_for_year_selection() -> None:
 async def test_get_annual_docs_reuses_xbrl_record_doc_ids() -> None:
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    fetcher = EdinetFetcher(edinet_client=edinet_client)
 
     docs = await fetcher._get_annual_docs(
         "72030",
@@ -186,7 +186,7 @@ async def test_get_half_year_docs_reads_from_persistent_cache(tmp_path) -> None:
     )
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client, cache_manager=cache_manager)
+    fetcher = EdinetFetcher(edinet_client=edinet_client, cache_manager=cache_manager)
     financial_data = [
         _financial_record("2023-04-01", "2024-03-31", "2023-11-10", period_type="2Q"),
     ]
@@ -200,7 +200,7 @@ async def test_get_half_year_docs_reads_from_persistent_cache(tmp_path) -> None:
 async def test_get_half_year_docs_reuses_xbrl_record_doc_ids() -> None:
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    fetcher = EdinetFetcher(edinet_client=edinet_client)
 
     docs = await fetcher._get_half_year_docs(
         "72030",
@@ -231,7 +231,7 @@ async def test_get_half_year_docs_reuses_xbrl_record_doc_ids() -> None:
 async def test_get_half_year_docs_returns_empty_when_no_q2_records() -> None:
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    fetcher = EdinetFetcher(edinet_client=edinet_client)
     fetcher._search_edinet_half_docs = AsyncMock(return_value=[])  # type: ignore[method-assign]
 
     docs = await fetcher._get_half_year_docs(
@@ -251,7 +251,7 @@ async def test_get_half_year_docs_returns_empty_when_no_q2_records() -> None:
 async def test_build_xbrl_half_year_records_builds_2q_record(monkeypatch) -> None:
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    fetcher = EdinetFetcher(edinet_client=edinet_client)
     fetcher._download_and_parse_docs = AsyncMock(return_value={"20250331": (Path("."), {})})  # type: ignore[method-assign]
 
     monkeypatch.setattr(
@@ -335,7 +335,7 @@ async def test_build_xbrl_half_year_records_builds_2q_record(monkeypatch) -> Non
 async def test_build_xbrl_annual_records_falls_back_to_ordinary_revenue_for_sales(monkeypatch) -> None:
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    fetcher = EdinetFetcher(edinet_client=edinet_client)
     fetcher._download_and_parse_docs = AsyncMock(return_value={"20250331": (Path("."), {})})  # type: ignore[method-assign]
 
     monkeypatch.setattr(
@@ -388,7 +388,7 @@ async def test_build_xbrl_annual_records_falls_back_to_ordinary_revenue_for_sale
 async def test_build_xbrl_annual_records_uses_operating_profit_fallback(monkeypatch) -> None:
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    fetcher = EdinetFetcher(edinet_client=edinet_client)
     fetcher._download_and_parse_docs = AsyncMock(return_value={"20250331": (Path("."), {})})  # type: ignore[method-assign]
 
     monkeypatch.setattr(
@@ -440,7 +440,7 @@ async def test_build_xbrl_annual_records_uses_operating_profit_fallback(monkeypa
 async def test_build_xbrl_annual_records_defers_ordinary_income_to_edinet_applier(monkeypatch) -> None:
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
-    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=edinet_client)
+    fetcher = EdinetFetcher(edinet_client=edinet_client)
     fetcher._download_and_parse_docs = AsyncMock(return_value={"20250331": (Path("."), {})})  # type: ignore[method-assign]
 
     monkeypatch.setattr(
@@ -488,7 +488,7 @@ async def test_build_xbrl_annual_records_defers_ordinary_income_to_edinet_applie
 
 
 def test_prepare_q2_records_deduplicates_by_fy_end_keeping_latest_disc_date() -> None:
-    fetcher = EdinetFetcher(api_client=Mock(), edinet_client=Mock())
+    fetcher = EdinetFetcher(edinet_client=Mock())
 
     records = fetcher._prepare_q2_records(
         [

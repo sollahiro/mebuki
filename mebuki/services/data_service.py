@@ -124,8 +124,7 @@ def _has_fallback_mof_metrics(cached: dict[str, Any]) -> bool:
 class DataService:
     """財務データおよび有報データの取得を行うクラス"""
 
-    def __init__(self):
-        self.api_client: Any = None
+    def __init__(self) -> None:
         edinet_cache = Path(settings_store.cache_dir) / "edinet"
         self.edinet_client = EdinetAPIClient(
             api_key=settings_store.edinet_api_key,
@@ -136,25 +135,20 @@ class DataService:
             enabled=settings_store.cache_enabled,
         )
         self.company_info_service = CompanyInfoService()
-        self.filing_service = FilingService(self.api_client, self.edinet_client)
+        self.filing_service = FilingService(self.edinet_client)
         self.half_year_data_service = HalfYearDataService(
-            self.api_client,
             self.edinet_client,
             self.cache_manager,
         )
 
     def _sync_child_services(self) -> None:
         """テストや再初期化で差し替えられた共有依存を委譲先にも反映する。"""
-        self.filing_service.api_client = self.api_client
         self.filing_service.edinet_client = self.edinet_client
-        self.half_year_data_service.api_client = self.api_client
         self.half_year_data_service.edinet_client = self.edinet_client
         self.half_year_data_service.cache_manager = self.cache_manager
 
     async def close(self) -> None:
         """全APIクライアントのセッションをクローズする"""
-        if self.api_client is not None and hasattr(self.api_client, "close"):
-            await self.api_client.close()
         await self.edinet_client.close()
 
     def reinitialize(self) -> None:
@@ -165,9 +159,8 @@ class DataService:
         self.cache_manager.cache_dir = Path(settings_store.cache_dir)
         self.cache_manager.enabled = settings_store.cache_enabled
         self.cache_manager.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.filing_service = FilingService(self.api_client, self.edinet_client)
+        self.filing_service = FilingService(self.edinet_client)
         self.half_year_data_service = HalfYearDataService(
-            self.api_client,
             self.edinet_client,
             self.cache_manager,
         )
@@ -175,7 +168,6 @@ class DataService:
     def get_analyzer(self) -> IndividualAnalyzer:
         """IndividualAnalyzerのインスタンスを取得"""
         return IndividualAnalyzer(
-            api_client=self.api_client,
             edinet_client=self.edinet_client,
             cache_manager=self.cache_manager,
         )

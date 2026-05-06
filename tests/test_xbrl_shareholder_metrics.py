@@ -16,6 +16,9 @@ def test_extract_shareholder_metrics_from_ifrs_summary() -> None:
                 "CurrentYearDuration": 163.44,
             },
             "EquityToAssetRatioIFRSSummaryOfBusinessResults": {
+                "CurrentYearInstant": 0.42,
+            },
+            "EquityAttributableToOwnersOfParentPerShareIFRSSummaryOfBusinessResults": {
                 "CurrentYearInstant": 2306.8,
             },
             "NumberOfIssuedSharesAsOfFiscalYearEndIssuedSharesTotalNumberOfSharesEtc": {

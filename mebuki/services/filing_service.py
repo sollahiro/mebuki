@@ -4,6 +4,7 @@ EDINET 書類検索・本文抽出サービス
 
 from typing import Any
 
+from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.analysis.xbrl_parser import XBRLParser
 
 from .edinet_fetcher import EdinetFetcher
@@ -12,8 +13,7 @@ from .edinet_fetcher import EdinetFetcher
 class FilingService:
     """EDINET filing の検索と XBRL セクション抽出を担当するサービス"""
 
-    def __init__(self, api_client, edinet_client):
-        self.api_client = api_client
+    def __init__(self, edinet_client: EdinetAPIClient) -> None:
         self.edinet_client = edinet_client
 
     async def search_filings(
@@ -24,7 +24,7 @@ class FilingService:
         max_documents: int = 10,
     ) -> list[dict[str, Any]]:
         """EDINET書類を検索"""
-        edinet_fetcher = EdinetFetcher(self.api_client, self.edinet_client)
+        edinet_fetcher = EdinetFetcher(self.edinet_client)
         requested = set(doc_types or [])
         docs: list[dict[str, Any]] = []
 
@@ -58,7 +58,8 @@ class FilingService:
         requested_sections = sections or ["all"]
 
         meta: dict[str, Any] = {}
-        if not doc_id:
+        selected_doc_id = doc_id
+        if not selected_doc_id:
             docs = await self.search_filings(
                 code=code,
                 max_years=5,
@@ -68,21 +69,21 @@ class FilingService:
             if not docs:
                 raise ValueError(f"No Securities Report found for {code}")
             doc = docs[0]
-            doc_id = doc["docID"]
+            selected_doc_id = doc["docID"]
             meta = {
                 "fiscal_year": doc.get("fiscal_year"),
                 "period_type": doc.get("period_type"),
                 "edinet_fy_end": doc.get("edinet_fy_end"),
             }
 
-        xbrl_dir = await self.edinet_client.download_document(doc_id, 1)
+        xbrl_dir = await self.edinet_client.download_document(selected_doc_id, 1)
         if not xbrl_dir:
             raise ValueError("Document not found or download failed")
 
         parser = XBRLParser()
         all_sections = parser.extract_sections_by_type(xbrl_dir)
 
-        base = {"doc_id": doc_id, **meta}
+        base = {"doc_id": selected_doc_id, **meta}
         if "all" in requested_sections:
             return {**base, "sections": all_sections}
 

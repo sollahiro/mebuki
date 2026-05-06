@@ -31,7 +31,6 @@ def svc(tmp_path):
 
         from mebuki.services.data_service import DataService
         ds = DataService()
-        ds.api_client = AsyncMock()
         ds.edinet_client = AsyncMock()
         yield ds
 
@@ -146,6 +145,7 @@ class TestGetRawAnalysisData:
         mock_analyzer.fetch_analysis_data.assert_not_called()
         assert len(result["metrics"]["years"]) == 3
         assert result["metrics"]["analysis_years"] == 3
+        assert result["metrics"]["available_years"] == 3
         assert result["metrics"]["years"][-1]["fy_end"] == "2022-03-31"
 
     @pytest.mark.asyncio
@@ -445,10 +445,9 @@ class TestHalfYearDataService:
         from mebuki.services.half_year_data_service import HalfYearDataService
         from mebuki.utils.cache import CacheManager
 
-        api_client = AsyncMock()
         edinet_client = AsyncMock()
         cache_manager = CacheManager(cache_dir=str(tmp_path), enabled=True)
-        return HalfYearDataService(api_client, edinet_client, cache_manager)
+        return HalfYearDataService(edinet_client, cache_manager)
 
     def _fy_record(self) -> dict:
         return {

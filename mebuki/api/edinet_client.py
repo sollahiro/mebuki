@@ -14,7 +14,7 @@ from ..constants.api import (
     EDINET_DOCUMENT_INDEX_BATCH_SIZE,
     EDINET_DOCUMENT_INDEX_MIN_RANGE_DAYS,
 )
-from mebuki.utils.fiscal_year import parse_date_string
+from mebuki.utils.fiscal_year import normalize_date_format, parse_date_string
 from .edinet_cache_store import EdinetCacheStore
 
 logger = logging.getLogger(__name__)
@@ -358,12 +358,12 @@ def _retry_after_seconds(error: BaseException) -> float | None:
 
 
 def _document_list_date(doc: dict[str, Any]) -> date | None:
-    list_date = str(doc.get("_edinet_list_date") or "")[:10]
+    list_date = normalize_date_format(str(doc.get("_edinet_list_date") or ""))
     if list_date:
         parsed = parse_date_string(list_date)
         if parsed is not None:
             return parsed.date()
-    submit_date = str(doc.get("submitDateTime") or "")[:10]
+    submit_date = normalize_date_format(str(doc.get("submitDateTime") or ""))
     if not submit_date:
         return None
     parsed = parse_date_string(submit_date)

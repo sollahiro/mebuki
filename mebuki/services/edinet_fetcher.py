@@ -9,6 +9,7 @@ import logging
 import time
 from collections.abc import AsyncGenerator, Callable
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 from typing import Any, TypeAlias
 
@@ -32,6 +33,7 @@ from mebuki.utils.edinet_discovery import (
     build_document_index_for_code,
     build_half_year_document_index_for_code,
 )
+from mebuki.utils.fiscal_year import normalize_date_format, parse_date_string
 from mebuki.utils.xbrl_result_types import GrossProfitResult, HalfYearEdinetEntry, XbrlTagElements
 
 logger = logging.getLogger(__name__)
@@ -41,9 +43,10 @@ _EDINET_DOCS_CACHE_VERSION = "edinet-docs-v2"
 
 def _infer_fy_start(fy_end: str) -> str:
     """会計期末日から期首日を推測する（前年同日の翌日）。"""
-    from datetime import datetime, timedelta
     try:
-        end_dt = datetime.strptime(fy_end[:10], "%Y-%m-%d")
+        end_dt = parse_date_string(fy_end)
+        if end_dt is None:
+            return ""
         start_dt = end_dt.replace(year=end_dt.year - 1) + timedelta(days=1)
         return start_dt.strftime("%Y-%m-%d")
     except (ValueError, OverflowError):
@@ -52,9 +55,10 @@ def _infer_fy_start(fy_end: str) -> str:
 
 def _infer_fy_end_from_period_start(period_start: str) -> str:
     """期首日から会計期末日を推測する（翌年同日の前日）。"""
-    from datetime import datetime, timedelta
     try:
-        start_dt = datetime.strptime(period_start[:10], "%Y-%m-%d")
+        start_dt = parse_date_string(period_start)
+        if start_dt is None:
+            return ""
         end_dt = start_dt.replace(year=start_dt.year + 1) - timedelta(days=1)
         return end_dt.strftime("%Y-%m-%d")
     except (ValueError, OverflowError):
@@ -69,6 +73,12 @@ _DocCacheKey: TypeAlias = tuple[str, int] | tuple[str, int, str]
 
 def _fy_end_key(value: object) -> str:
     return value.replace("-", "") if isinstance(value, str) else ""
+
+
+def _document_date(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    return normalize_date_format(value) or ""
 
 
 def _docs_from_xbrl_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -159,12 +169,10 @@ class EdinetFetcher:
 
     def __init__(
         self,
-        api_client: object | None,
         edinet_client: EdinetAPIClient | None,
         *,
         cache_manager: CacheManager | None = None,
-    ):
-        self.api_client = api_client
+    ) -> None:
         self.edinet_client = edinet_client
         self.cache_manager = cache_manager
         self._doc_cache: dict[_DocCacheKey, list[dict[str, Any]]] = {}
@@ -515,7 +523,7 @@ class EdinetFetcher:
 
                 report_info = {
                     "docID": doc_id,
-                    "submitDate": doc.get("submitDateTime", "")[:10],
+                    "submitDate": _document_date(doc.get("submitDateTime")),
                     "docType": label,
                     "docTypeCode": dt,
                     "fiscal_year": year,
@@ -824,7 +832,7 @@ class EdinetFetcher:
             )
 
             fy_st = _infer_fy_start(fy_end)
-            submit_date = (doc.get("submitDateTime") or "")[:10]
+            submit_date = _document_date(doc.get("submitDateTime"))
 
             record: dict[str, Any] = {
                 "Code": code,
@@ -927,7 +935,7 @@ class EdinetFetcher:
                 net_profit=is_result.get("net_profit"),
             )
 
-            submit_date = (doc.get("submitDateTime") or "")[:10]
+            submit_date = _document_date(doc.get("submitDateTime"))
             record: dict[str, Any] = {
                 "Code": code,
                 "CurFYEn": fy_end,

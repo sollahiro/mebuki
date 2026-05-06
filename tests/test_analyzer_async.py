@@ -117,7 +117,7 @@ class _EdinetOnlyFetcher:
 
 
 def _make_analyzer(financial_data: list[dict], edinet_fetcher: object) -> IndividualAnalyzer:
-    analyzer = IndividualAnalyzer(api_client=object(), edinet_client=None)
+    analyzer = IndividualAnalyzer(edinet_client=None)
     analyzer._edinet_fetcher = edinet_fetcher  # type: ignore[assignment]
     return analyzer
 
@@ -140,7 +140,7 @@ async def test_fetch_analysis_data_fetches_edinet_metadata_in_parallel_with_pred
 @pytest.mark.asyncio
 async def test_fetch_analysis_data_uses_edinet_annual_records_without_prefetched_data() -> None:
     edinet_fetcher = _EdinetOnlyFetcher()
-    analyzer = IndividualAnalyzer(api_client=object(), edinet_client=None)
+    analyzer = IndividualAnalyzer(edinet_client=None)
     analyzer._edinet_fetcher = edinet_fetcher  # type: ignore[assignment]
 
     with patch("mebuki.services.analyzer._apply_wacc"):

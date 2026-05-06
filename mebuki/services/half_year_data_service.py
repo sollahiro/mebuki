@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from mebuki import __version__
+from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.constants.financial import MILLION_YEN
 from mebuki.utils.cache import CacheManager
 from mebuki.utils.converters import to_float
@@ -212,8 +213,7 @@ def _apply_fy_only_edinet_data(
 class HalfYearDataService:
     """H1/H2 の半期財務データ構築と EDINET 補完を担当するサービス"""
 
-    def __init__(self, api_client, edinet_client, cache_manager: CacheManager):
-        self.api_client = api_client
+    def __init__(self, edinet_client: EdinetAPIClient, cache_manager: CacheManager) -> None:
         self.edinet_client = edinet_client
         self.cache_manager = cache_manager
 
@@ -232,7 +232,6 @@ class HalfYearDataService:
                 return serialize_half_year_periods(cached["periods"], include_debug_fields=include_debug_fields)
 
         edinet_fetcher = EdinetFetcher(
-            self.api_client,
             self.edinet_client,
             cache_manager=self.cache_manager,
         )

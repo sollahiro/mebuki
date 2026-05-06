@@ -23,7 +23,6 @@ _EPS_TAGS: list[str] = [
 ]
 
 _BPS_TAGS: list[str] = [
-    "EquityToAssetRatioIFRSSummaryOfBusinessResults",
     "EquityAttributableToOwnersOfParentPerShareIFRSSummaryOfBusinessResults",
     "EquityAttributableToOwnersOfParentPerShareUSGAAPSummaryOfBusinessResults",
     "NetAssetsPerShareSummaryOfBusinessResults",

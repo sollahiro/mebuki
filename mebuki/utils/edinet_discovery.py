@@ -25,7 +25,7 @@ import logging
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from .fiscal_year import parse_date_string
+from .fiscal_year import normalize_date_format, parse_date_string
 
 if TYPE_CHECKING:
     from ..api.edinet_client import EdinetAPIClient
@@ -40,6 +40,12 @@ _TIER1_WINDOW_DAYS = 14
 _TIER2_OFFSET_DAYS = 60   # 期末からの期待提出オフセット
 _TIER2_MARGIN_DAYS = 30   # 期待提出日前後の余裕
 _TIER3_MAX_DAYS = 97      # 法定上限
+
+
+def _document_date(value: object) -> str:
+    if not isinstance(value, str):
+        return ""
+    return normalize_date_format(value) or ""
 
 
 def _safe_fy_end_date(month: int, day: int, year: int) -> date:
@@ -124,7 +130,7 @@ async def _find_most_recent_annual_report(
             logger.info(
                 f"[EDINET Discovery] {code}: 直近有報発見 "
                 f"periodEnd={doc.get('periodEnd')} "
-                f"submit={str(doc.get('submitDateTime', ''))[:10]}"
+                f"submit={_document_date(doc.get('submitDateTime'))}"
             )
             return doc
 
@@ -373,7 +379,7 @@ async def build_document_index_for_code(
 
     # 前年提出日（Tier1 の基点）
     prev_submit_date: date | None = None
-    submit_str = str(recent.get("submitDateTime") or "")[:10]
+    submit_str = _document_date(recent.get("submitDateTime"))
     if submit_str:
         dt = parse_date_string(submit_str)
         if dt:
@@ -402,7 +408,7 @@ async def build_document_index_for_code(
             fy_i = ps_dt.year if ps_dt else fy_end.year - 1
             _attach_fy_metadata(found, fy_end_str_i, fy_i)
             docs.append(found)
-            s = str(found.get("submitDateTime") or "")[:10]
+            s = _document_date(found.get("submitDateTime"))
             dt2 = parse_date_string(s)
             prev_submit_date = dt2.date() if dt2 else expected_prev
         else:

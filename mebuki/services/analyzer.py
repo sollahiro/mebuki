@@ -403,12 +403,9 @@ class IndividualAnalyzer:
 
     def __init__(
         self,
-        api_client: object | None = None,
         edinet_client: EdinetAPIClient | None = None,
         cache_manager: CacheManager | None = None,
-    ):
-        self.api_client = api_client
-
+    ) -> None:
         if edinet_client is not None:
             self.edinet_client = edinet_client
         else:
@@ -430,7 +427,6 @@ class IndividualAnalyzer:
         self._cache_manager = cache_manager
 
         self._edinet_fetcher = EdinetFetcher(
-            self.api_client,
             self.edinet_client,
             cache_manager=self._cache_manager,
         )
