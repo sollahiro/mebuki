@@ -68,6 +68,28 @@ def test_apply_operating_profit_change_to_years_decomposes_op_change() -> None:
     assert current["MetricSources"]["SalesChangeImpact"]["source"] == "derived"
 
 
+def test_apply_operating_profit_change_to_years_preserves_direct_sga() -> None:
+    years = [
+        _year("2024-03-31", 1_200.0, 480.0, 150.0),
+        _year("2023-03-31", 1_000.0, 350.0, 100.0),
+    ]
+    _cd(years[0])["SellingGeneralAdministrativeExpenses"] = 320.0
+    _cd(years[0])["MetricSources"] = {
+        "SellingGeneralAdministrativeExpenses": {
+            "source": "edinet",
+            "method": "direct",
+            "unit": "million_yen",
+        }
+    }
+
+    apply_operating_profit_change_to_years(years)
+
+    current = _cd(years[0])
+    assert current["SellingGeneralAdministrativeExpenses"] == pytest.approx(320.0)
+    assert current["MetricSources"]["SellingGeneralAdministrativeExpenses"]["source"] == "edinet"
+    assert current["SGAChangeImpact"] == pytest.approx(-70.0)
+
+
 def test_apply_operating_profit_change_to_years_preserves_xbrl_change() -> None:
     years = [
         _year("2024-03-31", 1_200.0, 480.0, 150.0),
@@ -277,6 +299,27 @@ def test_apply_operating_profit_change_from_xbrl_uses_filing_prior_values() -> N
 
     cd_2023 = _cd(years[1])
     assert cd_2023["OperatingProfitChange"] == pytest.approx(50.0)
+
+
+def test_apply_operating_profit_change_from_xbrl_uses_direct_sga_values() -> None:
+    years = [_blank_year("2022-03-31")]
+    gp_by_year = {
+        "20220331": _gp_entry(current=480.0, prior=350.0, current_sales=1_200.0, prior_sales=1_000.0),
+    }
+    op_by_year = {
+        "20220331": {
+            **_op_entry(current=150.0, prior=100.0),
+            "current_sga": 320.0 * _M,
+            "prior_sga": 240.0 * _M,
+        },
+    }
+
+    apply_operating_profit_change_from_xbrl(years, gp_by_year, op_by_year)
+
+    cd = _cd(years[0])
+    assert cd["SellingGeneralAdministrativeExpenses"] == pytest.approx(320.0)
+    assert cd["MetricSources"]["SellingGeneralAdministrativeExpenses"]["method"] == "SGA(XBRL)"
+    assert cd["SGAChangeImpact"] == pytest.approx(-80.0)
 
 
 def test_apply_operating_profit_change_from_xbrl_uses_financial_filing_prior_values() -> None:

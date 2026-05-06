@@ -144,6 +144,8 @@ class RawXbrlExtraction(TypedDict, total=False):
     operating_profit: float | None
     operating_profit_method: str
     operating_profit_label: str
+    selling_general_administrative_expenses: float | None
+    selling_general_administrative_expenses_method: str
     sales: float | None
     sales_label: str | None
     net_revenue: float | None

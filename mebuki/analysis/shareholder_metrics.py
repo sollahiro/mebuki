@@ -47,6 +47,10 @@ _DIVIDEND_TOTAL_TAGS: list[str] = [
     "DividendsFromSurplus",
 ]
 
+_PAYOUT_RATIO_TAGS: list[str] = [
+    "PayoutRatioSummaryOfBusinessResults",
+]
+
 _RELEVANT_TAGS: frozenset[str] = frozenset(
     _CASH_EQ_TAGS
     + _EPS_TAGS
@@ -55,6 +59,7 @@ _RELEVANT_TAGS: frozenset[str] = frozenset(
     + _DIVIDEND_PER_SHARE_TAGS
     + _INTERIM_DIVIDEND_PER_SHARE_TAGS
     + _DIVIDEND_TOTAL_TAGS
+    + _PAYOUT_RATIO_TAGS
 )
 
 _CURRENT_CONTEXTS: tuple[str, ...] = (
@@ -161,7 +166,9 @@ def extract_shareholder_metrics(
 
     eps = _first_current_value(tag_elements, _EPS_TAGS)
     div_ann = _first_current_value(tag_elements, _DIVIDEND_PER_SHARE_TAGS)
-    payout_ratio = round(div_ann / eps, 3) if div_ann is not None and eps else None
+    payout_ratio = _first_current_value(tag_elements, _PAYOUT_RATIO_TAGS)
+    if payout_ratio is None:
+        payout_ratio = round(div_ann / eps, 3) if div_ann is not None and eps else None
     avg_sh = _extract_average_shares_from_html(xbrl_dir)
 
     return {

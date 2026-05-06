@@ -102,7 +102,13 @@ IFRS_PL_MARKER_TAGS: list[str] = [
     "BorrowingsCLIFRS",
     "BondsPayableNCLIFRS",
     "BorrowingsNCLIFRS",
+    "NetSalesIFRS",
+    "RevenueIFRS",
+    "GrossProfitIFRS",
+    "SellingGeneralAndAdministrativeExpensesIFRS",
+    "OperatingProfitLossIFRS",
     "OperatingRevenuesIFRSKeyFinancialData",
+    "ProfitLossAttributableToOwnersOfParentIFRS",
     "ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults",
     "CashFlowsFromUsedInOperatingActivitiesIFRSSummaryOfBusinessResults",
     "CashFlowsFromUsedInInvestingActivitiesIFRSSummaryOfBusinessResults",
@@ -326,6 +332,7 @@ GROSS_PROFIT_COMPONENT_DEFINITIONS: list[_ComponentDef] = [
         "label": "売上高",
         "tags": [
             "NetSalesIFRS",     # IFRS連結
+            "RevenueIFRS",      # IFRS連結（日立等の売上収益）
             "NetSales",         # J-GAAP連結
             "Revenue",          # IFRS代替
             "Revenues",         # US-GAAP
@@ -524,6 +531,7 @@ AGGREGATE_IFRS_DEFINITIONS: list[_AggregateIFRSDef] = [
 # 売上高（Sales）タグ
 NET_SALES_TAGS: list[str] = [
     "NetSalesIFRS",                             # IFRS連結
+    "RevenueIFRS",                              # IFRS連結（日立等の売上収益）
     "Revenue",                                  # IFRS代替
     "OperatingRevenuesIFRSKeyFinancialData",    # IFRS 要約情報（スズキ等）
     "OperatingRevenuesIFRSSummaryOfBusinessResults", # IFRS 要約情報

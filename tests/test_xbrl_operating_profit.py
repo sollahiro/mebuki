@@ -156,6 +156,8 @@ class TestOperatingProfitComputedMethod(unittest.TestCase):
         self.assertEqual(result["accounting_standard"], "IFRS")
         self.assertAlmostEqual(result["current"], gp_current - sga_current)
         self.assertAlmostEqual(result["prior"], gp_prior - sga_prior)
+        self.assertAlmostEqual(result["current_sga"], sga_current)
+        self.assertAlmostEqual(result["prior_sga"], sga_prior)
 
     def test_computed_ifrs_prior_only(self):
         """GP・SGA の前期値しかない場合は prior のみ返す"""
@@ -189,6 +191,7 @@ class TestOperatingProfitComputedMethod(unittest.TestCase):
         result = extract_operating_profit(self.xbrl_dir)
         self.assertEqual(result["method"], "direct")
         self.assertAlmostEqual(result["current"], 800_000_000_000)
+        self.assertAlmostEqual(result["current_sga"], 1_500_000_000_000)
 
 
 class TestOperatingProfitFallbacks(unittest.TestCase):

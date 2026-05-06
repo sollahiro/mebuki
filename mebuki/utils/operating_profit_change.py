@@ -86,6 +86,9 @@ def _margin_source_label_from_xbrl(gp: dict[str, Any]) -> str:
 
 
 def _apply_sga(data: dict[str, Any]) -> None:
+    if data.get(_SGA_KEY) is not None:
+        return
+
     profit_base, base_label = _profit_base(data)
     op = data.get("OP")
     if profit_base is None or op is None or base_label is None:
@@ -199,6 +202,11 @@ def _xbrl_op(op: Mapping[str, Any], *, period: str) -> float | None:
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
+def _xbrl_sga(op: Mapping[str, Any], *, period: str) -> float | None:
+    value = op.get(f"{period}_sga")
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
 def _synthetic_prior_period_from_xbrl(gp: Mapping[str, Any], op: Mapping[str, Any]) -> dict[str, Any] | None:
     prior_sales_raw = _xbrl_sales(gp, op, period="prior")
     prior_base_raw, _ = _profit_base_from_xbrl(gp, op, period="prior")
@@ -217,6 +225,10 @@ def _synthetic_prior_period_from_xbrl(gp: Mapping[str, Any], op: Mapping[str, An
             prior.pop("GrossProfit", None)
     if gp.get("method") == "business_gross_profit":
         prior["GrossProfitLabel"] = _BUSINESS_GROSS_PROFIT_LABEL
+    prior_sga_raw = _xbrl_sga(op, period="prior")
+    if prior_sga_raw is not None:
+        prior[_SGA_KEY] = prior_sga_raw / MILLION_YEN
+        _set_source(prior, _SGA_KEY, method="SGA(XBRL)")
     _apply_sga(prior)
     return prior
 
@@ -258,6 +270,12 @@ def _synthetic_prior_h2_from_xbrl(
             prior.pop("GrossProfit", None)
     if fy_gp.get("method") == "business_gross_profit":
         prior["GrossProfitLabel"] = _BUSINESS_GROSS_PROFIT_LABEL
+    fy_sga_raw = _xbrl_sga(fy_op, period="prior")
+    h1_sga_raw = _xbrl_sga(h1_op, period="prior")
+    prior_sga_raw = _sub_raw(fy_sga_raw, h1_sga_raw)
+    if prior_sga_raw is not None:
+        prior[_SGA_KEY] = prior_sga_raw / MILLION_YEN
+        _set_source(prior, _SGA_KEY, method="FY SGA(XBRL) - H1 SGA(XBRL)")
     _apply_sga(prior)
     return prior
 
@@ -329,6 +347,8 @@ def apply_operating_profit_change_from_xbrl(
 
         current_base_raw, current_base_label = _profit_base_from_xbrl(gp, op, period="current")
         prior_base_raw, _ = _profit_base_from_xbrl(gp, op, period="prior")
+        current_sga_raw = _xbrl_sga(op, period="current")
+        prior_sga_raw = _xbrl_sga(op, period="prior")
 
         cd = cast(dict[str, Any], year["CalculatedData"])
 
@@ -336,8 +356,12 @@ def apply_operating_profit_change_from_xbrl(
             current_base_m = current_base_raw / MILLION_YEN
             current_op_m = current_op_raw / MILLION_YEN
             if cd.get(_SGA_KEY) is None:
-                cd[_SGA_KEY] = current_base_m - current_op_m
-                _set_source(cd, _SGA_KEY, method=f"{current_base_label} - OP(XBRL)")
+                if current_sga_raw is not None:
+                    cd[_SGA_KEY] = current_sga_raw / MILLION_YEN
+                    _set_source(cd, _SGA_KEY, method="SGA(XBRL)")
+                else:
+                    cd[_SGA_KEY] = current_base_m - current_op_m
+                    _set_source(cd, _SGA_KEY, method=f"{current_base_label} - OP(XBRL)")
         else:
             current_base_m = current_op_m = None
 
@@ -359,8 +383,8 @@ def apply_operating_profit_change_from_xbrl(
         if prior_sales == 0 or current_sales == 0:
             continue
 
-        current_sga = current_base_m - current_op_m
-        prior_sga = prior_base - prior_op
+        current_sga = current_sga_raw / MILLION_YEN if current_sga_raw is not None else current_base_m - current_op_m
+        prior_sga = prior_sga_raw / MILLION_YEN if prior_sga_raw is not None else prior_base - prior_op
         current_margin = current_base_m / current_sales
         prior_margin = prior_base / prior_sales
         margin_label = _margin_source_label_from_xbrl(gp)

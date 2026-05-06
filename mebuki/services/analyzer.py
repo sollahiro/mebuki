@@ -101,6 +101,8 @@ def _raw_by_year(all_metrics: dict[str, dict[str, Any]]) -> dict[str, RawXbrlExt
         raw["operating_profit"] = op.get("current")
         raw["operating_profit_method"] = str(op.get("method", "unknown"))
         raw["operating_profit_label"] = str(op.get("label", "営業利益"))
+        raw["selling_general_administrative_expenses"] = op.get("current_sga")
+        raw["selling_general_administrative_expenses_method"] = "direct" if op.get("current_sga") is not None else "derived"
         if op.get("current_sales") is not None:
             raw["sales"] = op.get("current_sales")
             raw["sales_label"] = "経常収益"
@@ -412,10 +414,9 @@ def _apply_operating_profit(
         if operating_profit is None:
             continue
         cd = year["CalculatedData"]
-        op_m = cd.get("OP")
-        if op_m is None:
-            op_m = operating_profit / MILLION_YEN
-            cd["OP"] = op_m
+        op_m = operating_profit / MILLION_YEN
+        cd["OP"] = op_m
+        year["RawData"]["OP"] = operating_profit
         if raw.get("operating_profit_label") == "経常利益":
             cd["OPLabel"] = "経常利益"
         _set_metric_source(
@@ -427,6 +428,17 @@ def _apply_operating_profit(
             doc_id=raw.get("doc_id"),
             label=raw.get("operating_profit_label"),
         )
+        sga = raw.get("selling_general_administrative_expenses")
+        if sga is not None:
+            cd["SellingGeneralAdministrativeExpenses"] = sga / MILLION_YEN
+            _set_metric_source(
+                cd,
+                "SellingGeneralAdministrativeExpenses",
+                source="edinet",
+                unit="million_yen",
+                method=raw.get("selling_general_administrative_expenses_method"),
+                doc_id=raw.get("doc_id"),
+            )
         sales = cd.get("Sales")
         if sales:
             cd["OperatingMargin"] = op_m / sales * PERCENT

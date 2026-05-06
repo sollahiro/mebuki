@@ -28,6 +28,27 @@ def test_income_statement_prefers_ifrs_summary_over_jgaap_summary() -> None:
     assert result["net_profit"] == 416_050_000_000.0
 
 
+def test_income_statement_prefers_consolidated_revenue_ifrs_over_nonconsolidated_revenue() -> None:
+    result = extract_income_statement(
+        Path("."),
+        pre_parsed={
+            "RevenueIFRS": {
+                "CurrentYearDuration": 9_783_370_000_000.0,
+                "Prior1YearDuration": 9_728_716_000_000.0,
+            },
+            "Revenue": {
+                "CurrentYearDuration_NonConsolidatedMember": 1_774_233_000_000.0,
+                "Prior1YearDuration_NonConsolidatedMember": 1_756_937_000_000.0,
+            },
+        },
+    )
+
+    assert result["accounting_standard"] == "IFRS"
+    assert result["sales"] == 9_783_370_000_000.0
+    assert result["sales_prior"] == 9_728_716_000_000.0
+    assert result["sales_label"] == "売上収益"
+
+
 def test_cash_flow_prefers_ifrs_summary_over_jgaap_summary() -> None:
     result = extract_cash_flow(
         Path("."),

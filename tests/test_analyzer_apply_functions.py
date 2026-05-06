@@ -338,21 +338,36 @@ class TestApplyOperatingProfit:
         assert cd["OP"] == pytest.approx(op_m)
         assert cd["OperatingMargin"] == pytest.approx(op_m / 1000.0 * PERCENT)
 
-    def test_skips_if_op_already_set(self):
+    def test_sets_direct_sga_when_extracted(self):
+        years = [_make_year("2024-03-31", Sales=1000.0)]
+        op_by_year = {
+            "20240331": {
+                "current": 100_000_000,
+                "label": "営業利益",
+                "current_sga": 250_000_000,
+            }
+        }
+        _apply_operating_profit(years, op_by_year)
+        cd = years[0]["CalculatedData"]
+        assert cd["SellingGeneralAdministrativeExpenses"] == pytest.approx(250.0)
+        assert cd["MetricSources"]["SellingGeneralAdministrativeExpenses"]["source"] == "edinet"
+
+    def test_overwrites_existing_op_with_xbrl_extracted_value(self):
         years = [_make_year("2024-03-31", OP=50.0, Sales=1000.0)]
         op_by_year = {"20240331": {"current": 999_999_999, "label": "営業利益"}}
         _apply_operating_profit(years, op_by_year)
-        assert years[0]["CalculatedData"]["OP"] == 50.0
-        assert years[0]["CalculatedData"]["OperatingMargin"] == pytest.approx(5.0)
+        op_m = 999_999_999 / MILLION_YEN
+        assert years[0]["CalculatedData"]["OP"] == pytest.approx(op_m)
+        assert years[0]["CalculatedData"]["OperatingMargin"] == pytest.approx(op_m / 1000.0 * PERCENT)
 
     def test_sets_label_and_margin_when_op_already_set(self):
         years = [_make_year("2024-03-31", OP=50.0, Sales=1000.0)]
-        op_by_year = {"20240331": {"current": 50_000_000, "label": "経常利益"}}
+        op_by_year = {"20240331": {"current": 60_000_000, "label": "経常利益"}}
         _apply_operating_profit(years, op_by_year)
         cd = years[0]["CalculatedData"]
-        assert cd["OP"] == 50.0
+        assert cd["OP"] == pytest.approx(60.0)
         assert cd["OPLabel"] == "経常利益"
-        assert cd["OperatingMargin"] == pytest.approx(5.0)
+        assert cd["OperatingMargin"] == pytest.approx(6.0)
 
     def test_sets_op_label_keijou(self):
         years = [_make_year("2024-03-31")]

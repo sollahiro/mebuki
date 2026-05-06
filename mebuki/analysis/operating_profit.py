@@ -105,9 +105,20 @@ def _extract_ordinary_revenue(tag_elements: XbrlTagElements) -> tuple[float | No
     return None, None
 
 
-def _try_computed_op(
+def _try_sga(
     tag_elements: XbrlTagElements, consolidated: bool
 ) -> tuple[float | None, float | None]:
+    """販管費の当期・前期を取得する。"""
+    for tag in SGA_DIRECT_TAGS:
+        c, p = _find_duration_value(tag_elements, tag, consolidated)
+        if c is not None or p is not None:
+            return c, p
+    return None, None
+
+
+def _try_computed_op(
+    tag_elements: XbrlTagElements, consolidated: bool
+) -> tuple[float | None, float | None, float | None, float | None]:
     """GrossProfit - SGA で営業利益の当期・前期を計算する。
 
     OperatingProfitLossIFRS が存在しない IFRS 企業（日立等）向けフォールバック。
@@ -119,16 +130,11 @@ def _try_computed_op(
             gp_c, gp_p = c, p
             break
 
-    sga_c = sga_p = None
-    for tag in SGA_DIRECT_TAGS:
-        c, p = _find_duration_value(tag_elements, tag, consolidated)
-        if c is not None or p is not None:
-            sga_c, sga_p = c, p
-            break
+    sga_c, sga_p = _try_sga(tag_elements, consolidated)
 
     current = (gp_c - sga_c) if gp_c is not None and sga_c is not None else None
     prior = (gp_p - sga_p) if gp_p is not None and sga_p is not None else None
-    return current, prior
+    return current, prior, sga_c, sga_p
 
 
 def _detect_accounting_standard(tag_elements: XbrlTagElements) -> str:
@@ -275,9 +281,9 @@ def extract_operating_profit(
     accounting_standard = _detect_accounting_standard(tag_elements)
 
     if accounting_standard == "US-GAAP":
-        result = _extract_usgaap_op_from_html(xbrl_dir)
-        if result is not None:
-            return result
+        usgaap_result = _extract_usgaap_op_from_html(xbrl_dir)
+        if usgaap_result is not None:
+            return usgaap_result
         return {
             "current": None, "prior": None,
             "method": "not_found", "label": "営業利益",
@@ -290,19 +296,28 @@ def extract_operating_profit(
     for consolidated in (True, False):
         _, current, prior = _try_tags(tag_elements, OPERATING_PROFIT_DIRECT_TAGS, consolidated)
         if current is not None or prior is not None:
-            return {
+            sga_c, sga_p = _try_sga(tag_elements, consolidated)
+            result: OperatingProfitResult = {
                 "current": current, "prior": prior,
                 "method": "direct", "label": "営業利益",
                 "accounting_standard": accounting_standard,
             }
+            if sga_c is not None or sga_p is not None:
+                result["current_sga"] = sga_c
+                result["prior_sga"] = sga_p
+            return result
 
-        current, prior = _try_computed_op(tag_elements, consolidated)
+        current, prior, sga_c, sga_p = _try_computed_op(tag_elements, consolidated)
         if current is not None or prior is not None:
-            return {
+            result = {
                 "current": current, "prior": prior,
                 "method": "computed", "label": "営業利益",
                 "accounting_standard": accounting_standard,
             }
+            if sga_c is not None or sga_p is not None:
+                result["current_sga"] = sga_c
+                result["prior_sga"] = sga_p
+            return result
 
         _, current, prior = _try_tags(tag_elements, ORDINARY_INCOME_TAGS, consolidated)
         if current is not None or prior is not None:

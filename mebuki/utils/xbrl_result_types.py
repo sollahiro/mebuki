@@ -36,6 +36,8 @@ class OperatingProfitResult(TypedDict):
     reason: NotRequired[str]
     current_sales: NotRequired[float | None]
     prior_sales: NotRequired[float | None]
+    current_sga: NotRequired[float | None]
+    prior_sga: NotRequired[float | None]
 
 
 class InterestBearingDebtResult(TypedDict):

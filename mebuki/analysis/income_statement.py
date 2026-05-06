@@ -83,6 +83,8 @@ def _find_first_duration_value(
 def _sales_label_for_tag(tag: str | None) -> str:
     if tag in OPERATING_REVENUE_TAGS:
         return "営業収益"
+    if tag in ("NetSalesIFRS", "RevenueIFRS", "Revenue"):
+        return "売上収益"
     return "売上高"
 
 

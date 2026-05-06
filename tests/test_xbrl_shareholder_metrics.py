@@ -27,6 +27,9 @@ def test_extract_shareholder_metrics_from_ifrs_summary() -> None:
             "DividendPaidPerShareSummaryOfBusinessResults": {
                 "CurrentYearDuration_NonConsolidatedMember": 50.0,
             },
+            "PayoutRatioSummaryOfBusinessResults": {
+                "CurrentYearDuration_NonConsolidatedMember": 0.507,
+            },
             "InterimDividendPaidPerShareSummaryOfBusinessResults": {
                 "CurrentYearDuration_NonConsolidatedMember": 25.0,
             },
@@ -45,8 +48,24 @@ def test_extract_shareholder_metrics_from_ifrs_summary() -> None:
     assert result["DivAnn"] == 50.0
     assert result["Div2Q"] == 25.0
     assert result["DivTotalAnn"] == 56_920_000_000.0
-    assert result["PayoutRatioAnn"] == 0.306
+    assert result["PayoutRatioAnn"] == 0.507
     assert result["AvgSh"] == pytest.approx(186_687_000_000.0 / 163.44)
+
+
+def test_extract_shareholder_metrics_derives_payout_ratio_when_direct_tag_missing() -> None:
+    result = extract_shareholder_metrics(
+        Path("."),
+        pre_parsed={
+            "BasicEarningsLossPerShareIFRS": {
+                "CurrentYearDuration": 163.44,
+            },
+            "DividendPaidPerShareSummaryOfBusinessResults": {
+                "CurrentYearDuration_NonConsolidatedMember": 50.0,
+            },
+        },
+    )
+
+    assert result["PayoutRatioAnn"] == 0.306
 
 
 def test_extract_shareholder_metrics_reads_average_shares_from_html(tmp_path: Path) -> None:
