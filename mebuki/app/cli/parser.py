@@ -5,8 +5,8 @@ from mebuki.constants.api import EDINET_FILINGS_DEFAULT_YEARS, EDINET_PREPARE_DE
 
 def build_parser() -> argparse.ArgumentParser:
     """CLIパーサーを構築します。"""
-    parser = argparse.ArgumentParser(description="mebuki: 投資分析ツール CLI")
-    parser.add_argument("--version", action="version", version=f"mebuki {__version__}")
+    parser = argparse.ArgumentParser(prog="ticker", description="BLUE TICKER: 日本株分析ツール CLI")
+    parser.add_argument("--version", action="version", version=f"BLUE TICKER {__version__}")
     subparsers = parser.add_subparsers(dest="command", help="サブコマンド")
 
     # search

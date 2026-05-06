@@ -9,12 +9,12 @@ from mebuki.utils.cache_paths import edinet_cache_dir
 
 
 def _run_cli(monkeypatch, argv: list[str]) -> None:
-    monkeypatch.setattr(sys, "argv", ["mebuki", *argv])
+    monkeypatch.setattr(sys, "argv", ["ticker", *argv])
     main()
 
 
 def test_main_keyboard_interrupt_exits_cleanly(monkeypatch, capsys) -> None:
-    monkeypatch.setattr(sys, "argv", ["mebuki", "search", "トヨタ", "--format", "json"])
+    monkeypatch.setattr(sys, "argv", ["ticker", "search", "トヨタ", "--format", "json"])
 
     with patch("mebuki.app.cli.analyze.master_data_manager.search", side_effect=KeyboardInterrupt):
         exit_code = main()
@@ -23,6 +23,18 @@ def test_main_keyboard_interrupt_exits_cleanly(monkeypatch, capsys) -> None:
     assert exit_code == 130
     assert captured.out == ""
     assert captured.err == "\n中断しました。\n"
+
+
+def test_main_mebuki_command_warns_deprecated(monkeypatch, capsys, tmp_path) -> None:
+    monkeypatch.setattr(sys, "argv", ["mebuki", "cache", "status", "--format", "json"])
+
+    with patch("mebuki.app.cli.cache.settings_store") as settings:
+        settings.cache_dir = str(tmp_path)
+        main()
+
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)["edinet_index_status"] == "missing"
+    assert "`mebuki` コマンドは非推奨です" in captured.err
 
 
 def test_main_cache_status_reports_missing_prepare_cache(monkeypatch, capsys, tmp_path) -> None:

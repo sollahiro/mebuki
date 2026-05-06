@@ -31,7 +31,7 @@ def cmd_config(args, parser):
 
     elif args.config_subcommand == "set":
         if not args.key or args.value is None:
-            print("キーと値を指定してください。例: mebuki config set edinet-key YOUR_KEY", file=sys.stderr)
+            print("キーと値を指定してください。例: ticker config set edinet-key YOUR_KEY", file=sys.stderr)
             return
 
         # マッピング（CLIからの入力をバックエンドのキー名に変換）
@@ -64,10 +64,10 @@ def cmd_config(args, parser):
         print(f"  EDINET APIキー:   {'✅ 設定済み' if e_key else '❌ 未設定'}", file=sys.stderr)
         if not e_key:
             print("\n未設定のキーは以下のコマンドで設定できます:", file=sys.stderr)
-            print("  mebuki config set edinet-key <KEY>", file=sys.stderr)
+            print("  ticker config set edinet-key <KEY>", file=sys.stderr)
 
     elif args.config_subcommand == "init":
-        print("\nmebuki 初期設定", file=sys.stderr)
+        print("\nBLUE TICKER 初期設定", file=sys.stderr)
         print("-" * 40, file=sys.stderr)
         e_key = input("EDINET APIキー (空でスキップ): ").strip()
 

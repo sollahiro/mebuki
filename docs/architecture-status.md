@@ -29,7 +29,7 @@
 
 **問題**
 
-`mebuki analyze --format json` と MCP `get_japan_stock_financial_data` が、内部計算用の `MetricSources` や `IBDComponents` まで返していた。MCP経由ではLLMが毎回そのメタデータを読むため、トークン消費が増える。利用者側から見ても、財務数値と検証用メタデータの境界が分かりにくかった。
+`ticker analyze --format json` と MCP `get_japan_stock_financial_data` が、内部計算用の `MetricSources` や `IBDComponents` まで返していた。MCP経由ではLLMが毎回そのメタデータを読むため、トークン消費が増える。利用者側から見ても、財務数値と検証用メタデータの境界が分かりにくかった。
 
 **対応**
 
@@ -127,9 +127,9 @@ EDINETの日別検索キャッシュとXBRL zip展開処理が `EdinetAPIClient`
 
 **対応**
 
-- `mebuki cache status` を追加
-- `mebuki cache prepare` / `mebuki cache catchup` / `mebuki cache refresh` を追加
-- `mebuki cache clean` をdry-runデフォルトで追加
+- `ticker cache status` を追加
+- `ticker cache prepare` / `ticker cache catchup` / `ticker cache refresh` を追加
+- `ticker cache clean` をdry-runデフォルトで追加
 - EDINET-onlyスモークテスト用の検索/XBRLキャッシュ準備処理を追加
 - MCP `get_japan_stock_cache_stats` は読み取り専用にした
 

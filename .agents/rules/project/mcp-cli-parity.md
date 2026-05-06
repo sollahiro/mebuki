@@ -1,6 +1,6 @@
 # MCP ツールと CLI の対応原則
 
-`mebuki/app/mcp_server.py` の MCP ツール群は、CLI（`mebuki analyze` 等）の機能・パラメーターに揃えること。
+`mebuki/app/mcp_server.py` の MCP ツール群は、CLI（`ticker analyze` 等）の機能・パラメーターに揃えること。
 
 - CLI で廃止した機能・オプションは MCP からも削除する
 - CLI で追加した機能は MCP にも追加する
@@ -10,15 +10,15 @@
 
 | MCP ツール | CLI コマンド |
 |---|---|
-| `find_japan_stock_code` | `mebuki search` |
-| `get_japan_stock_financial_data` | `mebuki analyze` |
-| `search_japan_stock_filings` | `mebuki filings` |
-| `extract_japan_stock_filing_content` | `mebuki filing` |
-| `get_japan_stock_watchlist` | `mebuki watch list` |
-| `manage_japan_stock_watchlist` | `mebuki watch add/remove` |
-| `get_japan_stock_portfolio` | `mebuki portfolio list` |
-| `manage_japan_stock_portfolio` | `mebuki portfolio add/sell/remove` |
-| `search_japan_stocks_by_sector` | `mebuki sector [業種名]` |
+| `find_japan_stock_code` | `ticker search` |
+| `get_japan_stock_financial_data` | `ticker analyze` |
+| `search_japan_stock_filings` | `ticker filings` |
+| `extract_japan_stock_filing_content` | `ticker filing` |
+| `get_japan_stock_watchlist` | `ticker watch list` |
+| `manage_japan_stock_watchlist` | `ticker watch add/remove` |
+| `get_japan_stock_portfolio` | `ticker portfolio list` |
+| `manage_japan_stock_portfolio` | `ticker portfolio add/sell/remove` |
+| `search_japan_stocks_by_sector` | `ticker sector [業種名]` |
 
 ## パラメーター追加時のデフォルト値ルール
 

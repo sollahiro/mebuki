@@ -1,14 +1,14 @@
 ---
 name: mebuki-cli-workflow
-description: mebuki CLIを使って日本株の検索・財務分析・有価証券報告書抽出・ウォッチリスト/ポートフォリオ管理を行う汎用ワークフロースキル
+description: BLUE TICKER CLIを使って日本株の検索・財務分析・有価証券報告書抽出・ウォッチリスト/ポートフォリオ管理を行う汎用ワークフロースキル
 ---
 
-# mebuki CLIワークフロー
+# BLUE TICKER CLIワークフロー
 
-このスキルは、mebuki CLIコマンドを直接操作して日本株の調査・分析・管理を行います。
+このスキルは、BLUE TICKER CLIコマンドを直接操作して日本株の調査・分析・管理を行います。
 
 ## 使用例
-- 「トヨタをmebukiで分析して」
+- 「トヨタをBLUE TICKERで分析して」
 - 「7203のポートフォリオに追加して」
 - 「ウォッチリストを見せて」
 - 「直近の株価を取得して」
@@ -16,39 +16,39 @@ description: mebuki CLIを使って日本株の検索・財務分析・有価証
 
 ## 厳格なルール
 - **売買推奨の禁止**: データは客観的に提示し、最終判断は必ずユーザーに委ねること。
-- **データの忠実な提示**: mebukiコマンドの出力をそのまま提示し、恣意的な解釈を加えないこと。
-- **API負荷軽減のためのキャッシュ優先**: `analyze` / `filings` / `filing` などEDINETデータを使う調査コマンドの前に、必ず `mebuki cache status` を実行すること。キャッシュが不足している場合は、調査コマンドへ進む前に `mebuki cache prepare` または `mebuki cache catchup` を実行する。
+- **データの忠実な提示**: BLUE TICKERコマンドの出力をそのまま提示し、恣意的な解釈を加えないこと。
+- **API負荷軽減のためのキャッシュ優先**: `analyze` / `filings` / `filing` などEDINETデータを使う調査コマンドの前に、必ず `ticker cache status` を実行すること。キャッシュが不足している場合は、調査コマンドへ進む前に `ticker cache prepare` または `ticker cache catchup` を実行する。
 
 ## 必須の事前チェック
 
 実行前に設定を確認する：
 
 ```bash
-mebuki config show
+ticker config show
 ```
 
 未設定の場合は以下で初期化を案内する：
 
 ```bash
-mebuki config init
+ticker config init
 ```
 
 日本株の調査・分析依頼では、銘柄検索だけで完了する場合を除き、最初にキャッシュ状態を確認する：
 
 ```bash
-mebuki cache status
+ticker cache status
 ```
 
-`cache status` の `next_action` が `mebuki cache prepare --years N` を示す場合は、調査コマンドの前に実行する。既に準備済みの場合はすぐ終わる：
+`cache status` の `next_action` が `ticker cache prepare --years N` を示す場合は、調査コマンドの前に実行する。既に準備済みの場合はすぐ終わる：
 
 ```bash
-mebuki cache prepare --years 3
+ticker cache prepare --years 3
 ```
 
-`cache status` の `next_action` が `mebuki cache catchup --years N` を示す場合は、不足分だけ追いつかせる：
+`cache status` の `next_action` が `ticker cache catchup --years N` を示す場合は、不足分だけ追いつかせる：
 
 ```bash
-mebuki cache catchup --years 3
+ticker cache catchup --years 3
 ```
 
 `--years` はユーザーが求める分析・ファイリング探索年数に合わせる。指定がなければ通常調査では `3`、長期の財務分析を行う場合は分析年数に合わせて `6` を使う。
@@ -60,14 +60,14 @@ mebuki cache catchup --years 3
 社名や証券コードで銘柄を検索する。
 
 ```bash
-mebuki search <社名またはコード> [--format table|json]
+ticker search <社名またはコード> [--format table|json]
 ```
 
 例：
 ```bash
-mebuki search トヨタ
-mebuki search 7203
-mebuki search 7203 --format json
+ticker search トヨタ
+ticker search 7203
+ticker search 7203 --format json
 ```
 
 ### ② 財務分析
@@ -75,14 +75,14 @@ mebuki search 7203 --format json
 銘柄の財務データを分析する。
 
 ```bash
-mebuki analyze <code> [--years N] [--format table|json] [--half] [--no-cache]
+ticker analyze <code> [--years N] [--format table|json] [--half] [--no-cache]
 ```
 
 - `--years N`: 取得年数（デフォルト: 6、`--half` 時は 3）。**FY（通期）の件数**でカウントする
 - `--half`: 上半期(H1)・下半期(H2)の半期推移を表示する（seasonalityの確認に有用）
 - `--no-cache`: キャッシュを使用せず最新データを取得する
 
-> **WACCとキャッシュ**: WACCのリスクフリーレートには財務省10年国債利回りCSVを使う。金利データ自体は1日TTLでキャッシュされるが、分析結果キャッシュに保存済みのWACCは再計算されない。最新の財務省金利を反映したWACCを確認する場合は、`mebuki analyze <code> --no-cache` を使う。
+> **WACCとキャッシュ**: WACCのリスクフリーレートには財務省10年国債利回りCSVを使う。金利データ自体は1日TTLでキャッシュされるが、分析結果キャッシュに保存済みのWACCは再計算されない。最新の財務省金利を反映したWACCを確認する場合は、`ticker analyze <code> --no-cache` を使う。
 
 デフォルト出力に含まれる主要財務指標（横並び年次推移）:
 
@@ -97,19 +97,19 @@ mebuki analyze <code> [--years N] [--format table|json] [--half] [--no-cache]
 | 営業CF / 投資CF / フリーCF | キャッシュフロー |
 | 配当性向 | 株主還元方針 |
 | 有利子負債合計 / 投下資本 | 財務健全性・ROIC計算基盤 |
-| DocID | IBD・GP抽出元のEDINET書類ID（`mebuki filing --doc-id` に渡せる） |
+| DocID | IBD・GP抽出元のEDINET書類ID（`ticker filing --doc-id` に渡せる） |
 
-> **金融機関の業務粗利益**: 銀行など金融機関では、通常の `売上総利益` ではなく `業務粗利益` を使う。計算式は `連結業務粗利益 = (資金運用収益 - 資金調達費用) + 信託報酬 + (役務取引等収益 - 役務取引等費用) + (特定取引収益 - 特定取引費用) + (その他業務収益 - その他業務費用)`。営業利益前年差分解でも、`GrossProfitLabel` が `業務粗利益` の場合は粗利率差影響を `業務粗利益 ÷ 経常収益` の率差で計算する。`mebuki analyze --format table` の表示名は、抽出された `CalculatedData` のラベルに合わせて変わるため、表では `売上総利益 (百万)` / `粗利率 (%)` / `粗利率差影響` ではなく `業務粗利益 (百万)` / `業務粗利益率 (%)` / `業務粗利益率差影響` と表示される。JSONでは `GrossProfit` に数値、`GrossProfitLabel` に表示名が入る。
+> **金融機関の業務粗利益**: 銀行など金融機関では、通常の `売上総利益` ではなく `業務粗利益` を使う。計算式は `連結業務粗利益 = (資金運用収益 - 資金調達費用) + 信託報酬 + (役務取引等収益 - 役務取引等費用) + (特定取引収益 - 特定取引費用) + (その他業務収益 - その他業務費用)`。営業利益前年差分解でも、`GrossProfitLabel` が `業務粗利益` の場合は粗利率差影響を `業務粗利益 ÷ 経常収益` の率差で計算する。`ticker analyze --format table` の表示名は、抽出された `CalculatedData` のラベルに合わせて変わるため、表では `売上総利益 (百万)` / `粗利率 (%)` / `粗利率差影響` ではなく `業務粗利益 (百万)` / `業務粗利益率 (%)` / `業務粗利益率差影響` と表示される。JSONでは `GrossProfit` に数値、`GrossProfitLabel` に表示名が入る。
 
 > **分析ヒント**: 粗利率と営業利益率の差が大きい場合は販管費（人件費・広告費等）が重い構造。両者の推移を比較することで、コスト管理の効率改善・悪化を把握できる。
 
 例：
 ```bash
-mebuki analyze 7203
-mebuki analyze 7203 --years 6
-mebuki analyze 7203 --half                           # 上半期・下半期の推移を表示（デフォルト3年）
-mebuki analyze 7203 --half --years 5                 # 5年分の半期推移
-mebuki analyze 7203 --no-cache                       # キャッシュ無効化
+ticker analyze 7203
+ticker analyze 7203 --years 6
+ticker analyze 7203 --half                           # 上半期・下半期の推移を表示（デフォルト3年）
+ticker analyze 7203 --half --years 5                 # 5年分の半期推移
+ticker analyze 7203 --no-cache                       # キャッシュ無効化
 ```
 
 ### ③ EDINETファイリング一覧
@@ -117,16 +117,16 @@ mebuki analyze 7203 --no-cache                       # キャッシュ無効化
 EDINETに提出された書類の一覧を取得する。
 
 ```bash
-mebuki filings <code> [--years N] [--format table|json]
+ticker filings <code> [--years N] [--format table|json]
 ```
 
 - `--years N`: EDINET書類探索年数（デフォルト: 3）
 
 例：
 ```bash
-mebuki filings 7203
-mebuki filings 7203 --years 6
-mebuki filings 7203 --format json
+ticker filings 7203
+ticker filings 7203 --years 6
+ticker filings 7203 --format json
 ```
 
 ### ④ 有価証券報告書セクション抽出
@@ -134,7 +134,7 @@ mebuki filings 7203 --format json
 有価証券報告書から特定セクションを抽出する。
 
 ```bash
-mebuki filing <code> [--doc-id DOC_ID] [--sections business_risks|mda|management_policy] [--format table|json]
+ticker filing <code> [--doc-id DOC_ID] [--sections business_risks|mda|management_policy] [--format table|json]
 ```
 
 - `--doc-id`: ④で取得したドキュメントID（省略時は最新）
@@ -145,10 +145,10 @@ mebuki filing <code> [--doc-id DOC_ID] [--sections business_risks|mda|management
 
 例：
 ```bash
-mebuki filing 7203
-mebuki filing 7203 --sections business_risks mda
-mebuki filing 7203 --doc-id S100XXXX --sections mda
-mebuki filing 7203 --format json
+ticker filing 7203
+ticker filing 7203 --sections business_risks mda
+ticker filing 7203 --doc-id S100XXXX --sections mda
+ticker filing 7203 --format json
 ```
 
 ### ⑤ ウォッチリスト管理
@@ -156,17 +156,17 @@ mebuki filing 7203 --format json
 注目銘柄のウォッチリストを管理する。
 
 ```bash
-mebuki watch add <code> [--name 備考] [--format table|json]
-mebuki watch remove <code> [--format table|json]
-mebuki watch list [--format table|json]
+ticker watch add <code> [--name 備考] [--format table|json]
+ticker watch remove <code> [--format table|json]
+ticker watch list [--format table|json]
 ```
 
 例：
 ```bash
-mebuki watch add 7203 --name "トヨタ自動車"
-mebuki watch list
-mebuki watch list --format json
-mebuki watch remove 7203
+ticker watch add 7203 --name "トヨタ自動車"
+ticker watch list
+ticker watch list --format json
+ticker watch remove 7203
 ```
 
 ### ⑥ ポートフォリオ管理
@@ -175,26 +175,26 @@ mebuki watch remove 7203
 
 ```bash
 # 買付
-mebuki portfolio add <code> <数量> <取得単価> [--broker 証券会社] [--account 特定|一般|NISA] [--date YYYY-MM-DD] [--name 銘柄名] [--format table|json]
+ticker portfolio add <code> <数量> <取得単価> [--broker 証券会社] [--account 特定|一般|NISA] [--date YYYY-MM-DD] [--name 銘柄名] [--format table|json]
 
 # 売却
-mebuki portfolio sell <code> <数量> [--broker 証券会社] [--account 特定|一般|NISA] [--format table|json]
+ticker portfolio sell <code> <数量> [--broker 証券会社] [--account 特定|一般|NISA] [--format table|json]
 
 # 銘柄削除
-mebuki portfolio remove <code> [--broker 証券会社] [--account 特定|一般|NISA] [--format table|json]
+ticker portfolio remove <code> [--broker 証券会社] [--account 特定|一般|NISA] [--format table|json]
 
 # 一覧表示
-mebuki portfolio list [--detail] [--format table|json]
+ticker portfolio list [--detail] [--format table|json]
 ```
 
 例：
 ```bash
-mebuki portfolio add 7203 100 2500 --broker SBI --account 特定
-mebuki portfolio add 7203 100 2500 --name "トヨタ自動車"   # 銘柄名を手動指定（省略時は自動取得）
-mebuki portfolio list --detail
-mebuki portfolio list --format json
-mebuki portfolio sell 7203 50
-mebuki portfolio remove 7203 --broker SBI --account 特定
+ticker portfolio add 7203 100 2500 --broker SBI --account 特定
+ticker portfolio add 7203 100 2500 --name "トヨタ自動車"   # 銘柄名を手動指定（省略時は自動取得）
+ticker portfolio list --detail
+ticker portfolio list --format json
+ticker portfolio sell 7203 50
+ticker portfolio remove 7203 --broker SBI --account 特定
 ```
 
 ## 典型ワークフロー
@@ -203,20 +203,20 @@ mebuki portfolio remove 7203 --broker SBI --account 特定
 
 新規銘柄を調査する際の標準フロー：
 
-1. **キャッシュ確認**: `mebuki cache status` を実行し、必要なら `mebuki cache prepare --years 3` または `mebuki cache catchup --years 3` を実行
-2. **銘柄特定**: `mebuki search <社名>` でコードを確認
-3. **財務分析**: `mebuki analyze <code> --years 6` で財務推移を確認（ROIC・有利子負債を含む）
+1. **キャッシュ確認**: `ticker cache status` を実行し、必要なら `ticker cache prepare --years 3` または `ticker cache catchup --years 3` を実行
+2. **銘柄特定**: `ticker search <社名>` でコードを確認
+3. **財務分析**: `ticker analyze <code> --years 6` で財務推移を確認（ROIC・有利子負債を含む）
    - 半期推移も確認したい場合: `--half` を追加
-4. **書類一覧**: `mebuki filings <code>` でEDINET提出書類を確認
-5. **報告書抽出**: `mebuki filing <code> --sections business_risks mda` でリスクと経営状況を確認
+4. **書類一覧**: `ticker filings <code>` でEDINET提出書類を確認
+5. **報告書抽出**: `ticker filing <code> --sections business_risks mda` でリスクと経営状況を確認
 
 ### 銘柄管理フロー
 
 銘柄を追加・管理する際のフロー：
 
-1. **ウォッチ登録**: `mebuki watch add <code> --name <備考>`
-2. **買付記録**: `mebuki portfolio add <code> <数量> <単価>`
-3. **保有確認**: `mebuki portfolio list --detail`
+1. **ウォッチ登録**: `ticker watch add <code> --name <備考>`
+2. **買付記録**: `ticker portfolio add <code> <数量> <単価>`
+3. **保有確認**: `ticker portfolio list --detail`
 
 ### 複数銘柄比較フロー
 
@@ -224,23 +224,23 @@ mebuki portfolio remove 7203 --broker SBI --account 特定
 
 ```bash
 # 1. キャッシュ確認と不足分の準備
-mebuki cache status
-mebuki cache catchup --years 3  # statusが不足を示した場合のみ
+ticker cache status
+ticker cache catchup --years 3  # statusが不足を示した場合のみ
 
 # 2. 銘柄コード確認（社名で検索）
-mebuki search <社名A>
-mebuki search <社名B>
-mebuki search <社名C>
+ticker search <社名A>
+ticker search <社名B>
+ticker search <社名C>
 
 # 3. 財務サマリー（デフォルト: ROIC・有利子負債を含む）
-mebuki analyze <codeA> --years 6
-mebuki analyze <codeB> --years 6
-mebuki analyze <codeC> --years 6
+ticker analyze <codeA> --years 6
+ticker analyze <codeB> --years 6
+ticker analyze <codeC> --years 6
 
 # 4. 有価証券報告書でリスクと経営方針を確認
-mebuki filing <codeA> --sections business_risks mda management_policy
-mebuki filing <codeB> --sections business_risks mda management_policy
-mebuki filing <codeC> --sections business_risks mda management_policy
+ticker filing <codeA> --sections business_risks mda management_policy
+ticker filing <codeB> --sections business_risks mda management_policy
+ticker filing <codeC> --sections business_risks mda management_policy
 ```
 
 **比較ポイント**:
@@ -305,7 +305,7 @@ ROE (%) = 当期純利益 ÷ 自己資本 × 100
 
 ### 出力フィールド
 
-`mebuki analyze <code> --include-debug-fields --format json` で確認できる詳細データの構造:
+`ticker analyze <code> --include-debug-fields --format json` で確認できる詳細データの構造:
 
 | フィールド | 内容 |
 |---|---|
@@ -380,7 +380,7 @@ WACC = (E/V) × Re + (D/V) × Rd × (1 − Tc)
 
 ### 概要
 
-`mebuki analyze` で取得した貸借対照表データを2本の積み上げ棒グラフとして可視化し、資産構成と資本調達構造の変化を年次で比較する。
+`ticker analyze` で取得した貸借対照表データを2本の積み上げ棒グラフとして可視化し、資産構成と資本調達構造の変化を年次で比較する。
 
 - **左棒（資産サイド）**: 流動資産（上）＋ 固定資産（下）
 - **右棒（負債・純資産サイド）**: 流動負債（上）＋ 固定負債（中）＋ 純資産（下）
@@ -402,7 +402,7 @@ WACC = (E/V) × Re + (D/V) × Rd × (1 − Tc)
 ### データ取得
 
 ```bash
-mebuki analyze <code> --years 6
+ticker analyze <code> --years 6
 ```
 
 または `--format json` で取得してプロットに利用する。
@@ -456,12 +456,12 @@ mebuki analyze <code> --years 6
 | `SGAChangeImpact` | 販管費増影響 | 百万円 | コスト効果（増加はマイナス） |
 | `OperatingProfitChangeReconciliationDiff` | 検証差分 | 百万円 | 3要素合計との誤差。デバッグ用（通常は0） |
 
-> これらは `mebuki analyze` の通常出力に含まれる。
+> これらは `ticker analyze` の通常出力に含まれる。
 
 ### データ取得
 
 ```bash
-mebuki analyze <code> --years 6
+ticker analyze <code> --years 6
 ```
 
 年次テーブルの「営業利益前年差」「売上差影響」「粗利率差影響」「販管費増影響」行に値が表示される。
@@ -486,4 +486,4 @@ OperatingProfitChange = SalesChangeImpact + GrossMarginChangeImpact + SGAChangeI
 | 3要素がすべてマイナス | トップライン・採算・コストの三重苦。構造的な問題の可能性 |
 | 販管費増影響が大きくマイナス | 積極的な先行投資か、コスト管理の問題かを定性情報で確認 |
 
-> **データ欠損時**: 売上総利益または販管費がXBRLから取得できない年は `None` となりすべての分解値が非表示になる。その場合は `mebuki filing` で有報のMD&Aセクションを参照する。
+> **データ欠損時**: 売上総利益または販管費がXBRLから取得できない年は `None` となりすべての分解値が非表示になる。その場合は `ticker filing` で有報のMD&Aセクションを参照する。

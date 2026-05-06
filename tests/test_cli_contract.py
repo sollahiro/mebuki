@@ -8,3 +8,8 @@ def test_cli_contract_subcommands_exist():
     )
     commands = set(subparsers_action.choices.keys())
     assert {"search", "analyze", "config", "mcp"}.issubset(commands)
+
+
+def test_cli_contract_uses_new_program_name():
+    parser = build_parser()
+    assert parser.prog == "ticker"

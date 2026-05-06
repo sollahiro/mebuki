@@ -119,7 +119,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="get_japan_stock_cache_stats",
-            description="Inspect mebuki cache usage. キャッシュ容量・EDINET件数を取得します。Read-only.",
+            description="Inspect BLUE TICKER cache usage. キャッシュ容量・EDINET件数を取得します。Read-only.",
             inputSchema={
                 "type": "object",
                 "properties": {},

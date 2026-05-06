@@ -113,10 +113,10 @@ def cache_status(cache_dir: str, years: int = EDINET_PREPARE_DEFAULT_YEARS) -> d
 
     if prepared < len(target_years):
         index_status = "missing"
-        next_action = f"mebuki cache prepare --years {years}"
+        next_action = f"ticker cache prepare --years {years}"
     elif stale:
         index_status = "stale"
-        next_action = f"mebuki cache catchup --years {years}"
+        next_action = f"ticker cache catchup --years {years}"
     else:
         index_status = "ready"
         next_action = None
@@ -185,7 +185,7 @@ def cmd_cache(args, parser) -> None:
             print("エラー: years には正の整数を指定してください。", file=sys.stderr)
             return
         if not settings_store.edinet_api_key:
-            print("EDINET APIキーが未設定です。mebuki config set edinet-key <KEY> を実行してください。", file=sys.stderr)
+            print("EDINET APIキーが未設定です。ticker config set edinet-key <KEY> を実行してください。", file=sys.stderr)
             return
 
         if args.format != "json":
@@ -223,7 +223,7 @@ def cmd_cache(args, parser) -> None:
             print("エラー: years には正の整数を指定してください。", file=sys.stderr)
             return
         if not settings_store.edinet_api_key:
-            print("EDINET APIキーが未設定です。mebuki config set edinet-key <KEY> を実行してください。", file=sys.stderr)
+            print("EDINET APIキーが未設定です。ticker config set edinet-key <KEY> を実行してください。", file=sys.stderr)
             return
         if args.format != "json":
             print(f"Now Loading... EDINET年次インデックスを更新しています（直近{years}年分）", file=sys.stderr)
@@ -246,7 +246,7 @@ def cmd_cache(args, parser) -> None:
             print("エラー: years には正の整数を指定してください。", file=sys.stderr)
             return
         if not settings_store.edinet_api_key:
-            print("EDINET APIキーが未設定です。mebuki config set edinet-key <KEY> を実行してください。", file=sys.stderr)
+            print("EDINET APIキーが未設定です。ticker config set edinet-key <KEY> を実行してください。", file=sys.stderr)
             return
         if args.format != "json":
             print(f"Now Loading... EDINET年次インデックスの不足分を取得しています（直近{years}年分）", file=sys.stderr)

@@ -37,7 +37,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='mebuki',
+    name='ticker',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

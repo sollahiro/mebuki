@@ -105,7 +105,7 @@ flowchart TD
 - `GrossProfitMethod`
 - `IBDAccountingStandard`
 
-`mebuki analyze --include-debug-fields` または MCP `include_debug_fields: true` を指定した場合だけ、上記を含む。`SalesLabel` / `OPLabel` は「売上高ではなく純収益」「営業利益ではなく事業利益/経常利益」といった意味情報なので、標準JSONにも残す。
+`ticker analyze --include-debug-fields` または MCP `include_debug_fields: true` を指定した場合だけ、上記を含む。`SalesLabel` / `OPLabel` は「売上高ではなく純収益」「営業利益ではなく事業利益/経常利益」といった意味情報なので、標準JSONにも残す。
 
 ### `MetricSources` の形
 
@@ -189,11 +189,11 @@ MCPとCLIは大枠では対応している。
 
 | コマンド/ツール | 目的 | 削除有無 |
 |---|---|---|
-| `mebuki cache status` | EDINET年次インデックスの準備状況、XBRL/分析キャッシュ容量、次の推奨アクションを確認 | なし |
-| `mebuki cache prepare` | 不足しているEDINET年次インデックスを事前準備 | キャッシュ優先 |
-| `mebuki cache catchup` | EDINET年次インデックスを `built_through` の翌日から今日まで差分更新 | APIキーが必要 |
-| `mebuki cache refresh` | EDINET年次インデックスを作り直して今日まで明示更新 | APIキーが必要 |
-| `mebuki cache clean` | 指定日数以上古いEDINET検索/XBRL展開などを削除 | dry-runがデフォルト。`--execute` 時のみ削除 |
+| `ticker cache status` | EDINET年次インデックスの準備状況、XBRL/分析キャッシュ容量、次の推奨アクションを確認 | なし |
+| `ticker cache prepare` | 不足しているEDINET年次インデックスを事前準備 | キャッシュ優先 |
+| `ticker cache catchup` | EDINET年次インデックスを `built_through` の翌日から今日まで差分更新 | APIキーが必要 |
+| `ticker cache refresh` | EDINET年次インデックスを作り直して今日まで明示更新 | APIキーが必要 |
+| `ticker cache clean` | 指定日数以上古いEDINET検索/XBRL展開などを削除 | dry-runがデフォルト。`--execute` 時のみ削除 |
 | MCP `get_japan_stock_cache_stats` | MCP利用中にキャッシュ状態を確認 | なし |
 
 削除方針:

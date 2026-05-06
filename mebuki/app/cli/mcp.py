@@ -151,7 +151,7 @@ def _get_mcp_command():
     """PyInstaller実行時とPython直接実行時で異なるMCPコマンドを返す"""
     if getattr(sys, 'frozen', False):
         import shutil
-        symlink = shutil.which("mebuki")
+        symlink = shutil.which("ticker") or shutil.which("blt") or shutil.which("mebuki")
         executable = symlink if symlink else sys.executable
         return executable, ["mcp", "start"]
     return sys.executable, ["-m", "mebuki", "mcp", "start"]
@@ -164,7 +164,7 @@ def cmd_mcp(args, parser):
         return
 
     if args.mcp_subcommand == "start":
-        print("mebuki native Python MCP server 起動中 (STDIO) ...", file=sys.stderr)
+        print("BLUE TICKER native Python MCP server 起動中 (STDIO) ...", file=sys.stderr)
         from mebuki.app.mcp_server import serve
         import asyncio
         import os
@@ -212,12 +212,12 @@ def cmd_mcp(args, parser):
                 if "mcpServers" not in config_data:
                     config_data["mcpServers"] = {}
 
-                config_data["mcpServers"]["mebuki"] = mcp_config
+                config_data["mcpServers"]["blue-ticker"] = mcp_config
 
                 with open(config_path, "w", encoding="utf-8") as f:
                     json.dump(config_data, f, indent=2, ensure_ascii=False)
 
-                print(f"成功: Claude Desktop に 'mebuki' MCP サーバーを登録しました。", file=sys.stderr)
+                print("成功: Claude Desktop に 'blue-ticker' MCP サーバーを登録しました。", file=sys.stderr)
                 print(f"設定ファイル: {config_path}", file=sys.stderr)
                 print("Claude Desktop を再起動して反映させてください。", file=sys.stderr)
             except Exception as e:
@@ -245,10 +245,10 @@ def cmd_mcp(args, parser):
             if "extensions" not in config_data:
                 config_data["extensions"] = {}
 
-            config_data["extensions"]["mebuki"] = {
+            config_data["extensions"]["blue-ticker"] = {
                 "enabled": True,
-                "name": "mebuki",
-                "description": "Expert investment analyst tool for Japanese stocks. Provides high-precision financial data from EDINET.",
+                "name": "BLUE TICKER",
+                "description": "Japanese stock analysis tool. Provides high-precision financial data from EDINET.",
                 "type": "stdio",
                 "cmd": executable,
                 "args": cmd_args,
@@ -261,7 +261,7 @@ def cmd_mcp(args, parser):
             with open(config_path, "w", encoding="utf-8") as f:
                 f.write(_yaml_dump(config_data) + "\n")
 
-            print(f"成功: Goose に 'mebuki' 拡張を登録しました。", file=sys.stderr)
+            print("成功: Goose に 'blue-ticker' 拡張を登録しました。", file=sys.stderr)
             print(f"設定ファイル: {config_path}", file=sys.stderr)
         except Exception as e:
             print(f"エラー: Goose への登録中に問題が発生しました: {e}", file=sys.stderr)
@@ -286,7 +286,7 @@ def cmd_mcp(args, parser):
             if "mcpServers" not in config_data:
                 config_data["mcpServers"] = {}
 
-            config_data["mcpServers"]["mebuki"] = {
+            config_data["mcpServers"]["blue-ticker"] = {
                 "command": executable,
                 "args": cmd_args,
                 "env": {
@@ -297,7 +297,7 @@ def cmd_mcp(args, parser):
             with open(config_path, "w", encoding="utf-8") as f:
                 json.dump(config_data, f, indent=2, ensure_ascii=False)
 
-            print(f"成功: LM Studio に 'mebuki' MCP サーバーを登録しました。", file=sys.stderr)
+            print("成功: LM Studio に 'blue-ticker' MCP サーバーを登録しました。", file=sys.stderr)
             print(f"設定ファイル: {config_path}", file=sys.stderr)
             print("LM Studio を再起動して反映させてください。", file=sys.stderr)
         except Exception as e:
