@@ -14,6 +14,7 @@ from ..constants.api import (
     EDINET_DOCUMENT_INDEX_BATCH_SIZE,
     EDINET_DOCUMENT_INDEX_MIN_RANGE_DAYS,
 )
+from .edinet_cache_backend import EdinetCacheBackend
 from mebuki.utils.fiscal_year import normalize_date_format, parse_date_string
 from .edinet_cache_store import EdinetCacheStore
 
@@ -26,7 +27,7 @@ class EdinetAPIClient:
         self,
         api_key: str | None = None,
         cache_dir: str | None = None,
-        cache_store: EdinetCacheStore | None = None,
+        cache_store: EdinetCacheBackend | None = None,
     ):
         self.api_key = api_key
         self.base_url = EDINET_API_BASE_URL
@@ -45,10 +46,14 @@ class EdinetAPIClient:
         self._session = None
         self._session_loop = None
 
+    def set_cache_store(self, cache_store: EdinetCacheBackend) -> None:
+        """EDINET API由来キャッシュの backend を差し替える。"""
+        self.cache_store = cache_store
+        self.cache_dir = self.cache_store.cache_dir
+
     def set_cache_dir(self, cache_dir: str | Path) -> None:
         """EDINET API由来キャッシュの保存先を差し替える。"""
-        self.cache_store = EdinetCacheStore(cache_dir)
-        self.cache_dir = self.cache_store.cache_dir
+        self.set_cache_store(EdinetCacheStore(cache_dir))
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """セッションを遅延作成して返す"""

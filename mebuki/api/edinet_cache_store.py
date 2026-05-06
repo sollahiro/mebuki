@@ -28,13 +28,14 @@ from mebuki.constants.api import (
     EDINET_SEARCH_PAST_TTL_DAYS,
     EDINET_XBRL_MAX_BYTES,
 )
+from mebuki.api.edinet_cache_backend import EdinetCacheBackend
 from mebuki.utils.fiscal_year import parse_date_string
 
 logger = logging.getLogger(__name__)
 
 
-class EdinetCacheStore:
-    """EDINET の日別検索結果と XBRL 展開ディレクトリを管理する。"""
+class EdinetCacheStore(EdinetCacheBackend):
+    """EDINET の日別検索結果と XBRL 展開ディレクトリをローカルで管理する。"""
 
     def __init__(
         self,

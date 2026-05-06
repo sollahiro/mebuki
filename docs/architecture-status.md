@@ -6,6 +6,7 @@
 このメモは、アーキテクチャ棚卸しで見つかった問題を「何が問題だったか」「現在どう扱っているか」で追えるようにした対応台帳です。
 
 詳細な構造図と指標カタログは `docs/architecture-review.md` を参照してください。
+リモートMCP移行とEDINETキャッシュbackendの将来計画は `docs/remote-mcp-cache-roadmap.md` を参照してください。
 
 ## 状況サマリー
 
@@ -15,6 +16,7 @@
 | 指標の出所情報 | 対応済み | `MetricSources` に集約し、内部計算では保持する |
 | CLI/MCPパリティ | 対応済み | `--include-debug-fields` と MCP `include_debug_fields` を揃えた |
 | キャッシュ可視化/削除 | 対応済み | stats/audit/prune を用意し、MCPは読み取りのみ |
+| リモートMCP移行ロードマップ | 設計中 | ローカルCLI/キャッシュは残し、EDINET backendをlocal/remoteで差し替える方針 |
 | 公開JSONスキーマ固定 | 対応済み | ゴールデンテストでpublicキー・debugキーを契約として固定 |
 | XBRL抽出結果の型 | 対応済み | 全抽出器の戻り値を `TypedDict` 化、pyright 0 errors |
 | EDINETキャッシュ境界 | 対応済み | `EdinetCacheStore` + TTL + 年次インデックス + XBRL容量上限・LRU対応済み |
