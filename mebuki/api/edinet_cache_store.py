@@ -54,7 +54,12 @@ class EdinetCacheStore:
         """年次書類インデックスのファイル名を返す。"""
         return f"doc_index_{year}.json"
 
-    def load_search_cache(self, filename: str) -> list[dict[str, Any]] | None:
+    def load_search_cache(
+        self,
+        filename: str,
+        *,
+        allow_expired: bool = False,
+    ) -> list[dict[str, Any]] | None:
         """日別検索結果をキャッシュから読み込む。"""
         cache_path = self.documents_by_date_dir / filename
         if not cache_path.exists():
@@ -70,7 +75,7 @@ class EdinetCacheStore:
         if not isinstance(data, list):
             logger.warning(f"Cache load failed: expected list in {cache_path}")
             return None
-        if self._is_search_cache_expired(cache_path, has_results=bool(data)):
+        if not allow_expired and self._is_search_cache_expired(cache_path, has_results=bool(data)):
             return None
         return data
 
@@ -91,6 +96,7 @@ class EdinetCacheStore:
         year: int,
         *,
         required_through: str | None = None,
+        allow_stale: bool = False,
     ) -> list[dict[str, Any]] | None:
         """年次書類インデックスをキャッシュから読み込む。"""
         cache_path = self.document_indexes_dir / self.document_index_cache_key(year)
@@ -112,7 +118,7 @@ class EdinetCacheStore:
         if payload.get("year") != year:
             return None
         built_through = payload.get("built_through")
-        if required_through is not None and (
+        if not allow_stale and required_through is not None and (
             not isinstance(built_through, str) or built_through < required_through
         ):
             return None

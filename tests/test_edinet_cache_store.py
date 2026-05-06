@@ -85,6 +85,20 @@ def test_load_search_cache_expires_old_hit_result(tmp_path):
     assert store.load_search_cache(filename) is None
 
 
+def test_load_search_cache_can_allow_expired_result(tmp_path):
+    store = EdinetCacheStore(
+        tmp_path,
+        search_empty_ttl_days=1,
+        search_hit_ttl_days=30,
+    )
+    filename = store.search_cache_key(_today_str())
+    documents = [{"docID": "S100TEST"}]
+    store.save_search_cache(filename, documents)
+    _age(_search_cache_path(store, filename), days=30)
+
+    assert store.load_search_cache(filename, allow_expired=True) == documents
+
+
 def test_load_search_cache_rejects_non_list_payload(tmp_path):
     store = EdinetCacheStore(
         tmp_path,
@@ -120,6 +134,14 @@ def test_document_index_roundtrip_requires_version_and_built_through(tmp_path):
 
     assert store.load_document_index(2024, required_through="2024-06-30") == documents
     assert store.load_document_index(2024, required_through="2025-01-01") is None
+
+
+def test_document_index_can_allow_stale_built_through(tmp_path):
+    store = EdinetCacheStore(tmp_path)
+    documents = [{"docID": "S100TEST", "docTypeCode": "120"}]
+    store.save_document_index(2024, documents, built_through="2024-06-30")
+
+    assert store.load_document_index(2024, required_through="2024-12-31", allow_stale=True) == documents
 
 
 def test_store_xbrl_zip_evicts_oldest_dirs_when_over_limit(tmp_path):

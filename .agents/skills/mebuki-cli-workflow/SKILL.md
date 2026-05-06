@@ -32,6 +32,12 @@ mebuki config show
 mebuki config init
 ```
 
+初回セットアップ時は、EDINET年次インデックスを事前準備する：
+
+```bash
+mebuki cache warmup --years 3
+```
+
 ## コマンドリファレンスと実行フロー
 
 ### ① 銘柄検索

@@ -35,10 +35,11 @@ brew install mebuki
 ```
 
 ### 2. API キーの設定
-CLI の初期設定コマンドを実行します：
+CLI の初期設定コマンドを実行し、EDINET APIキャッシュを準備します：
 
 ```bash
 mebuki config init
+mebuki cache warmup --years 3
 ```
 以下のキーが必要です：
 - **EDINET APIキー**: [公式サイト](https://disclosure2.edinet-fsa.go.jp/)で取得
@@ -59,39 +60,27 @@ mebuki mcp install-lm-studio
 
 ## 📂 使い方 (CLI)
 
-### 銘柄を検索する
-```bash
-mebuki search トヨタ
-```
+代表的なコマンドは以下です。詳しい見方や分析ワークフローは `.agents/skills/mebuki-cli-workflow/SKILL.md` を参照してください。
 
-### 財務データを分析する
 ```bash
+# 銘柄検索
+mebuki search トヨタ
+
+# 財務分析
 mebuki analyze 7203
 mebuki analyze 7203 --years 6
-```
 
-最新の財務省金利を反映したWACCを確認したい場合は、分析結果キャッシュを使わず再計算します。
-
-```bash
-mebuki analyze 7203 --years 6 --no-cache
-```
-
-### キャッシュを確認する
-```bash
+# キャッシュ確認
 mebuki cache warmup --years 3
 mebuki cache stats
 mebuki cache audit
-```
 
-### ウォッチリストを管理する
-```bash
+# ウォッチリスト
 mebuki watch add 7203
 mebuki watch list
 mebuki watch remove 7203
-```
 
-### ポートフォリオを管理する
-```bash
+# ポートフォリオ
 mebuki portfolio add 7203 100 2500 --broker SBI --account NISA
 mebuki portfolio list
 mebuki portfolio sell 7203 50

@@ -193,6 +193,10 @@ class EdinetAPIClient:
         """キャッシュから検索結果をロード"""
         return self.cache_store.load_search_cache(filename)
 
+    def _load_stale_search_cache(self, filename: str) -> list[dict[str, Any]] | None:
+        """期限切れを許容して検索結果をロードする。EDINET外部キャッシュ優先用。"""
+        return self.cache_store.load_search_cache(filename, allow_expired=True)
+
     def _save_search_cache(self, filename: str, data: list[dict[str, Any]]) -> None:
         """検索結果をキャッシュに保存"""
         self.cache_store.save_search_cache(filename, data)
@@ -200,12 +204,12 @@ class EdinetAPIClient:
     async def _get_documents_for_date(self, date_str: str) -> list[dict[str, Any]]:
         """特定の日付のドキュメント一覧を取得（キャッシュ対応）"""
         cache_key = self._get_search_cache_key(date_str)
-        documents = self._load_search_cache(cache_key)
+        documents = self._load_stale_search_cache(cache_key)
         if documents is not None:
             return documents
 
         async with self._date_fetch_semaphore:
-            documents = self._load_search_cache(cache_key)
+            documents = self._load_stale_search_cache(cache_key)
             if documents is not None:
                 return documents
             try:
@@ -226,14 +230,22 @@ class EdinetAPIClient:
         required_through_date = min(year_end, today)
         required_through = required_through_date.strftime("%Y-%m-%d")
 
-        cached = self.cache_store.load_document_index(year, required_through=required_through)
+        cached = self.cache_store.load_document_index(
+            year,
+            required_through=required_through,
+            allow_stale=True,
+        )
         if cached is not None:
             return cached
 
         if year not in self._document_index_locks:
             self._document_index_locks[year] = asyncio.Lock()
         async with self._document_index_locks[year]:
-            cached = self.cache_store.load_document_index(year, required_through=required_through)
+            cached = self.cache_store.load_document_index(
+                year,
+                required_through=required_through,
+                allow_stale=True,
+            )
             if cached is not None:
                 return cached
 
