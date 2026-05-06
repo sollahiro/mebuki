@@ -1,7 +1,7 @@
 # アーキテクチャ棚卸しメモ
 
 作成日: 2026-05-02
-最終更新: 2026-05-02
+最終更新: 2026-05-06
 
 mebuki は EDINET、財務省CSV、ローカル銘柄マスタを組み合わせて財務指標を作る。機能追加のたびに取得項目と補完ロジックが積み上がってきたため、ここでは現状の流れ、指標の出所、キャッシュ構造、見直し候補を整理する。
 
@@ -54,16 +54,17 @@ flowchart TD
 |---|---|---|---|
 | 銘柄基本情報 | local master | 個別分析結果に含まれる | 実用上OK |
 | 財務サマリー | EDINET XBRL/HTML | `individual_analysis_{code}` / `half_year_periods_{code}_{years}` | 指標再計算まで含むキャッシュのため便利だが、補完ロジック更新時は古い結果が残る |
-| EDINET日別検索 | EDINET `/documents.json?date=...` | `analysis_cache/edinet/search_YYYY-MM-DD.json` | `EdinetCacheStore` に分離済み。TTL/メタデータは未実装 |
-| EDINET XBRL | EDINET `/documents/{docID}?type=1` | `analysis_cache/edinet/{docID}_xbrl/` | `EdinetCacheStore` に分離済み。2回目以降は高速。容量が増えやすい |
+| EDINET日別検索 | EDINET `/documents.json?date=...` | `analysis_cache/edinet/search_YYYY-MM-DD.json` | `EdinetCacheStore` が管理。空結果1日、直近ヒット30日、過去日3650日のTTL |
+| EDINET書類インデックス | EDINET `/documents.json?date=...` | `analysis_cache/edinet/doc_index_YYYY.json` | 年次レンジ検索用。`_cache_version` と `built_through` で有効性を確認 |
+| EDINET XBRL | EDINET `/documents/{docID}?type=1` | `analysis_cache/edinet/{docID}_xbrl/` | `EdinetCacheStore` が管理。2GB上限を超えるとmtime LRUで古い展開ディレクトリを削除 |
 | 財務省金利 | MOF `jgbcm_all.csv`, `jgbcm.csv` | `mof_rf_rates` 1日TTL | 方針は明確。個別分析キャッシュ内WACCは更新されない点に注意 |
 
 ### キャッシュ上の課題
 
-- `CacheManager` 管理下のJSONと、EDINET配下のファイルキャッシュはまだ別系統。ただしEDINET側は `EdinetCacheStore` に分離済み。
-- EDINET検索キャッシュとXBRL展開ディレクトリにはバージョン、TTL、容量上限がない。
-- `individual_analysis_*` は最終成果物を丸ごと保持するため、XBRL抽出器やWACCロジックを改善してもキャッシュヒット時は再計算されない。
-- 廃止済み機能のキャッシュはコードから参照されなくなった後も残る。BOJは今回削除済み。
+- `CacheManager` 管理下のJSONと、EDINET配下のファイルキャッシュは役割が分かれている。EDINETの日別検索、年次インデックス、XBRL展開は `EdinetCacheStore` が管理する。
+- EDINET検索キャッシュはTTLを持ち、XBRL展開ディレクトリは容量上限とmtime LRU削除を持つ。
+- EDINET書類リストとXBRL parse結果は `CacheManager` 経由でも独立キャッシュする。最終分析キャッシュのバージョンを上げても、再取得・再parseを抑えやすい。
+- `individual_analysis_*` は最終成果物を保持するため、WACCなど取得時点の外部値を含む。最新値が必要な場合は `use_cache=False` / `--no-cache` で再計算する。
 
 ## 3. 指標カタログ
 
@@ -150,17 +151,14 @@ flowchart TD
 
 EDINETは現在、`EdinetFetcher` が「対象書類の選定」「各抽出器の実行」「年度別集約」を担う。API通信とファイルキャッシュ境界は `EdinetAPIClient` / `EdinetCacheStore` に分離済み。`ExtractorSpec` により年次抽出器の追加はしやすくなっている。
 
-良い点:
+現在の構成:
 
 - `predownload_and_parse()` でXBRLを一括ダウンロード/パースし、複数抽出器で `pre_parsed` を共有できる。
-- `_get_annual_docs()` で同一 `code + max_years` の書類検索をインスタンス内集約している。
-- 年次抽出器は `ExtractorSpec` に集約され、重複は以前より減っている。
-
-課題:
-
-- `EdinetCacheStore` は導入済みだが、TTL、容量上限、LRU、統一バージョン管理までは未実装。
-- 年次分析と半期分析でEDINET補完の呼び方が別経路になっており、GP/IBDなどの再利用単位が揃っていない。
-- 抽出器の戻り値スキーマがモジュールごとに緩く、型で保証されていない。
+- `_get_annual_docs()` / `_get_half_year_docs()` で書類検索を同じキャッシュ機構に乗せている。
+- `_download_and_parse_docs()` で年次・半期のダウンロードとparse共有を集約している。
+- 年次抽出器は `ExtractorSpec` に集約され、新しい抽出器を足すときの変更箇所を抑えている。
+- 抽出器の戻り値は `utils/xbrl_result_types.py` の `TypedDict` で型付けしている。
+- EDINET日別検索、年次インデックス、XBRL展開は `EdinetCacheStore` がTTL、バージョン、容量上限を管理する。
 
 ## 5. CLI/MCPの対応
 
@@ -179,11 +177,11 @@ MCPとCLIは大枠では対応している。
 | キャッシュ可視化 | `cache stats`, `cache audit` | `get_japan_stock_cache_stats` | 読み取りのみ対応 |
 | キャッシュ削除 | `cache prune` | なし | 安全のためCLIのみ |
 
-課題:
+運用方針:
 
 - `cache prune` はCLIに限定する。MCPでは削除せず、`get_japan_stock_cache_stats` で容量とaudit結果だけ見せる。
-- JSON出力時にバナーが混ざる問題は今回 `main.py` で抑制した。
-- CLIとMCPの標準分析JSONは serializer 経由でデバッグフィールドを除外するようになった。ただし公開スキーマとして完全固定するには、出力契約テストとドキュメント化がまだ薄い。
+- CLIとMCPの標準分析JSONは serializer 経由でデバッグフィールドを除外する。
+- 公開JSONのキー集合は `tests/test_output_serializer.py` のゴールデンテストで固定する。
 
 ## 6. キャッシュ運用方針
 
@@ -191,50 +189,38 @@ MCPとCLIは大枠では対応している。
 
 | コマンド/ツール | 目的 | 削除有無 |
 |---|---|---|
-| `mebuki cache stats` | 全体容量、ファイル数、EDINET検索/XBRL件数、BOJ痕跡、不明JSON件数を確認 | なし |
-| `mebuki cache audit` | 廃止済みBOJキャッシュ、metadata上のBOJキー、既知命名に合わないroot JSONを検出 | なし |
-| `mebuki cache prune` | BOJ痕跡、指定日数以上古いEDINET検索/XBRL展開を削除 | dry-runがデフォルト。`--execute` 時のみ削除 |
+| `mebuki cache stats` | 全体容量、ファイル数、EDINET検索/XBRL件数、不明JSON件数を確認 | なし |
+| `mebuki cache audit` | 既知命名に合わないroot JSONや整理対象キャッシュを検出 | なし |
+| `mebuki cache prune` | 指定日数以上古いEDINET検索/XBRL展開などを削除 | dry-runがデフォルト。`--execute` 時のみ削除 |
 | MCP `get_japan_stock_cache_stats` | MCP利用中にキャッシュ状態を確認 | なし |
 
 削除方針:
 
-- 廃止済みBOJキャッシュは `cache prune` の通常削除対象に含める。
 - 財務省金利キャッシュ `mof_rf_rates` は現行機能なので削除対象にしない。
 - EDINET検索キャッシュとXBRL展開ディレクトリは、ユーザーが日数を指定したときだけ削除する。
+- EDINET XBRL展開ディレクトリは保存時にも容量上限を確認し、上限を超えた場合は古いものから自動削除する。
 - MCPからの削除操作は当面提供しない。削除が必要な場合はCLIでdry-runを確認してから `--execute` する。
 
 ## 7. 改善候補
 
 ### すぐやる価値が高い
 
-1. CLI/MCP標準JSONの契約テストを増やす  
-   `MetricSources` などのデバッグフィールド除外は導入済み。年次・半期・キャッシュヒット・EDINET失敗経路で標準/デバッグ出力を検証する範囲を広げる。
+1. キャッシュstats/auditの表示をEDINET中心に整える
+   現在のstatsは全体容量と主要件数を返す。EDINET検索、年次インデックス、XBRL展開、parse結果キャッシュを利用者が判断しやすい単位で表示できると運用しやすい。
 
-2. EDINET検索キャッシュにTTL方針を入れる  
-   空結果は短め、ヒットありは長めなど。現状の `cache prune` は手動整理なので、取得時にも自然に古いものを無視できるとよい。
+2. 実企業サンプルの回帰テストを増やす
+   XBRL抽出器の単体テストは厚い。次はJ-GAAP、IFRS、US-GAAPの代表銘柄で、年次・半期・公開JSONの一連の形を固定するとよい。
 
-3. `CalculatedData` の公開フィールド一覧を固定する  
-   `MetricSources` は内部メタデータとして整理済み。次は標準JSONに残すキーとデバッグ専用キーをドキュメントとテストで固定する。
-
-4. `CFC` / `FreeCF` の命名整理  
-   半期にも `CFC` を追加済み。`FreeCF` は互換名として残す。
+3. WACC外部値のキャッシュ境界を明確にする
+   財務省金利は1日TTLだが、最終分析キャッシュ内のWACCは分析キャッシュの寿命に従う。最新WACCを重視するユースケースでは再計算導線を分かりやすくする。
 
 ### 設計してから進める
 
-1. EDINETキャッシュを正式なキャッシュ層に昇格する  
-   `EdinetAPIClient` からファイル管理を分離し、TTL、容量上限、LRU、stats/pruneを同じ場所で扱う。
+1. `CacheManager` とEDINETキャッシュの統計・削除ポリシーをどこまで統合するか
+   取得系ファイルキャッシュと分析結果JSONは性質が違う。無理に単一抽象へ寄せるより、CLI表示と削除導線の一貫性を優先する。
 
-2. XBRL抽出器の戻り値TypedDict化  
-   `current`, `prior`, `method`, `docID`, `components` などをモジュールごとに型定義する。`dict[str, Any]` を減らす。
-
-3. Pyrightの運用範囲を決める
-   dev依存には追加済み。全体を一気にstrict化せず、変更対象モジュール単位で型エラーを残さない運用にする。
-
-4. 年次/半期のEDINET補完ロジック統合
-   同じdoc検索、download、pre_parse、extractを共有し、半期だけ別処理になっている部分を小さくする。
-
-5. 個別分析キャッシュの粒度見直し
-   現在は最終成果物キャッシュ。EDINET doc map、XBRL parse result、最終metricsを分けると、ロジック更新時の再計算がしやすい。
+2. 個別分析キャッシュの粒度をさらに細かくするか
+   書類リストとXBRL parse結果は独立キャッシュ済み。最終metricsの年度別キャッシュは複雑度に対する効果を見て判断する。
 
 ### 今は触らないほうがよい
 
@@ -255,7 +241,6 @@ MCPとCLIは大枠では対応している。
 - `cache audit` 追加済み
 - `cache prune` はMCP非対応、読み取りstatsのみMCP対応
 - docsにキャッシュ方針を明記済み
-- 廃止済み機能のキャッシュ/設定検出をテスト追加済み
 
 ### Phase 2: 指標の出所整理
 
@@ -268,19 +253,19 @@ MCPとCLIは大枠では対応している。
 ### Phase 3: EDINET境界の再設計
 
 - `EdinetCacheStore` を追加し、日別検索キャッシュとXBRL zip展開を `EdinetAPIClient` から分離済み
-- 残: TTL、容量上限、LRU、統一バージョン管理は未対応
-- 次: pre_parsed結果の責務を分ける
-- 次: 年次/半期の補完パイプラインを共通化
+- EDINET検索キャッシュのTTL、年次インデックスのバージョン、XBRL展開の容量上限・LRU削除を実装済み
+- EDINET書類リストとXBRL parse結果を `CacheManager` 経由で独立キャッシュ済み
+- 年次/半期の書類検索、ダウンロード、pre_parse共有を共通化済み
 
 ### Phase 4: 型とテストの強化
 
-- XBRL抽出器戻り値のTypedDict化
-- Pyrightの運用範囲を決める。dev依存には追加済み
+- XBRL抽出器戻り値のTypedDict化済み
+- PyrightはCIに組み込み済み
 - 実企業サンプルを使った回帰テストを増やす
 - 会計基準別のゴールデンケースを整理する
 
 ## 9. 判断メモ
 
-現状は「実用上は動くが、キャッシュと出所情報が追いにくくなり始めている」段階。直ちに全面改修するより、まず可視化とキャッシュ境界の整備を進めるのが安全。
+現状は、EDINET/XBRLを中心に財務指標を構築し、出所情報・公開JSON境界・キャッシュ境界を分けて運用する構成になっている。次に大きく効くのは、実企業サンプルによる回帰テストと、キャッシュ可視化の粒度改善。
 
 特にEDINET/XBRLは価値の源泉なので、抽出ロジック自体を触る前に、キャッシュ、戻り値型、出所メタデータ、テストを先に固めるのがよい。
