@@ -1,5 +1,3 @@
-![mebuki](/assets/mebuki_ascii.png)
-
 mebukiは、EDINET APIを最大限に活用した、**MCP (Model Context Protocol) 対応** の財務分析 Python CLI ツールです。
 
 ---

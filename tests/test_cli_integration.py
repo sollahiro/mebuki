@@ -10,8 +10,7 @@ from mebuki.utils.cache_paths import edinet_cache_dir
 
 def _run_cli(monkeypatch, argv: list[str]) -> None:
     monkeypatch.setattr(sys, "argv", ["mebuki", *argv])
-    with patch("mebuki.app.cli.main.print_banner"):
-        main()
+    main()
 
 
 def test_main_keyboard_interrupt_exits_cleanly(monkeypatch, capsys) -> None:

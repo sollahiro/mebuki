@@ -1,6 +1,5 @@
 import sys
 import logging
-from .ui import print_banner
 from .parser import build_parser
 
 logger = logging.getLogger(__name__)
@@ -11,13 +10,10 @@ def main() -> int:
 
     try:
         if len(sys.argv) == 1:
-            print_banner()
             parser.print_help()
             return 0
 
         args = parser.parse_args()
-        if getattr(args, "format", "table") != "json":
-            print_banner()
 
         if args.command == "search":
             from .analyze import cmd_search
