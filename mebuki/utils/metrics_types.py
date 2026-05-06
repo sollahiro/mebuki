@@ -39,7 +39,7 @@ class RawData(TypedDict, total=False):
     Sales: float | None
     OP: float | None
     NP: float | None
-    Eq: float | None
+    NetAssets: float | None
     CFO: float | None
     CFI: float | None
     EPS: float | None
@@ -62,7 +62,7 @@ class CalculatedData(TypedDict, total=False):
     Sales: float | None
     OP: float | None
     NP: float | None
-    Eq: float | None
+    NetAssets: float | None
     CFO: float | None
     CFI: float | None
     CashEq: float | None
@@ -86,6 +86,7 @@ class CalculatedData(TypedDict, total=False):
     IBDAccountingStandard: str
     ROIC: float | None
     # ── analyzer.py: _apply_balance_sheet ──
+    TotalAssets: float | None
     CurrentAssets: float | None
     NonCurrentAssets: float | None
     CurrentLiabilities: float | None
@@ -151,6 +152,7 @@ class RawXbrlExtraction(TypedDict, total=False):
     ibd_components: list[IBDComponent]
     ibd_method: str
     ibd_accounting_standard: str
+    total_assets: float | None
     current_assets: float | None
     non_current_assets: float | None
     current_liabilities: float | None

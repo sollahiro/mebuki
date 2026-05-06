@@ -105,7 +105,7 @@ def _filter_annual_data(annual_data: list[dict[str, Any]], analysis_years: int) 
             is_valid_value(year_data.get("Sales"))
             or is_valid_value(year_data.get("OP"))
             or is_valid_value(year_data.get("NP"))
-            or is_valid_value(year_data.get("Eq"))
+            or is_valid_value(year_data.get("NetAssets"))
         ):
             continue
 
@@ -128,7 +128,7 @@ def _extract_raw_values(year_data: dict[str, Any]) -> RawData:
         'Sales': to_float(year_data.get("Sales")),
         'OP': to_float(year_data.get("OP")),
         'NP': to_float(year_data.get("NP")),
-        'Eq': to_float(year_data.get("Eq")),
+        'NetAssets': to_float(year_data.get("NetAssets")),
         'CFO': to_float(year_data.get("CFO")),
         'CFI': to_float(year_data.get("CFI")),
         'EPS': to_float(year_data.get("EPS")),
@@ -156,7 +156,7 @@ def _calculate_base_values(raw_values: RawData) -> CalculatedData:
         'Sales': to_millions(raw_values.get('Sales')),
         'OP': to_millions(raw_values.get('OP')),
         'NP': to_millions(raw_values.get('NP')),
-        'Eq': to_millions(raw_values.get('Eq')),
+        'NetAssets': to_millions(raw_values.get('NetAssets')),
         'CFO': cfo_m,
         'CFI': cfi_m,
         'CashEq': to_millions(raw_values.get('CashEq')),
@@ -168,7 +168,7 @@ def _calculate_base_values(raw_values: RawData) -> CalculatedData:
         "Sales": {"source": base_source, "unit": "million_yen"},
         "OP": {"source": base_source, "unit": "million_yen"},
         "NP": {"source": base_source, "unit": "million_yen"},
-        "Eq": {"source": base_source, "unit": "million_yen"},
+        "NetAssets": {"source": base_source, "unit": "million_yen"},
         "CFO": {"source": base_source, "unit": "million_yen"},
         "CFI": {"source": base_source, "unit": "million_yen"},
         "CashEq": {"source": base_source, "unit": "million_yen"},
@@ -210,7 +210,7 @@ def _build_year_entry(
     profit_metrics = _calculate_profitability_metrics(
         calc_values.get('NP'),
         calc_values.get('OP'),
-        calc_values.get('Eq'),
+        calc_values.get('NetAssets'),
         calc_values.get('CFO'),
     )
     calc_values.update({
@@ -219,7 +219,7 @@ def _build_year_entry(
     })
     metric_sources = calc_values.get("MetricSources") or {}
     metric_sources.update({
-        "ROE": {"source": "derived", "method": "NP / Eq", "unit": "percent"},
+        "ROE": {"source": "derived", "method": "NP / NetAssets", "unit": "percent"},
         "CFCVR": {"source": "derived", "method": "CFO / NP", "unit": "percent"},
     })
     calc_values["MetricSources"] = metric_sources

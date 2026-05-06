@@ -136,6 +136,19 @@ XBRL_SECTIONS: dict[str, _XBRLSection] = {
 
 BALANCE_SHEET_COMPONENT_DEFINITIONS: list[_BalanceSheetComponentDef] = [
     {
+        "field": "TotalAssets",
+        "label": "総資産",
+        "tags": [
+            "TotalAssets",                         # J-GAAP 要約情報
+            "Assets",                              # J-GAAP BS
+            "TotalAssetsIFRS",                     # IFRS
+            "AssetsIFRS",                          # IFRS 代替
+            "TotalAssetsUSGAAP",                   # US-GAAP
+            "TotalAssetsUSGAAPSummaryOfBusinessResults",
+            "TotalAssetsSummaryOfBusinessResults", # J-GAAP 要約情報
+        ],
+    },
+    {
         "field": "CurrentAssets",
         "label": "流動資産",
         "tags": [
@@ -389,6 +402,7 @@ CF_INVESTING_TAGS: list[str] = [
     "CashFlowsFromUsedInInvestingActivitiesIFRSSummaryOfBusinessResults", # IFRS（決算短信）
     "CashFlowsFromUsedInInvestingActivitiesUSGAAPSummaryOfBusinessResults", # US-GAAP 要約情報
     "NetCashProvidedByUsedInInvestingActivities",                       # J-GAAP 連結（CF計算書）
+    "NetCashProvidedByUsedInInvestmentActivities",                      # J-GAAP 連結（表記ゆれ）
     "NetCashProvidedByUsedInInvestingActivitiesSummaryOfBusinessResults", # J-GAAP 連結（決算短信）
 ]
 

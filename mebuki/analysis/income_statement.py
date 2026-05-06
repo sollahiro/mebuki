@@ -20,7 +20,10 @@ from pathlib import Path
 from mebuki.analysis.context_helpers import (
     _is_consolidated_duration,
     _is_consolidated_prior_duration,
+    _is_nonconsolidated_duration,
+    _is_nonconsolidated_prior_duration,
     _is_pure_context,
+    _is_pure_nonconsolidated_context,
 )
 from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
 from mebuki.constants.xbrl import (
@@ -46,21 +49,26 @@ _IS_RELEVANT_TAGS: frozenset[str] = frozenset(
 def _find_first_duration_value(
     tag_elements: XbrlTagElements,
     tags: list[str],
+    *,
+    consolidated: bool = True,
 ) -> tuple[float | None, float | None]:
     """タグリストを優先順に試み、最初にヒットした連結 Duration 値（当期・前期）を返す。"""
+    is_current = _is_consolidated_duration if consolidated else _is_nonconsolidated_duration
+    is_prior = _is_consolidated_prior_duration if consolidated else _is_nonconsolidated_prior_duration
+    is_pure = _is_pure_context if consolidated else _is_pure_nonconsolidated_context
     for tag in tags:
         if tag not in tag_elements:
             continue
         current = prior = None
         current_pure = prior_pure = None
         for ctx, val in tag_elements[tag].items():
-            if _is_consolidated_duration(ctx):
-                if _is_pure_context(ctx, DURATION_CONTEXT_PATTERNS):
+            if is_current(ctx):
+                if is_pure(ctx, DURATION_CONTEXT_PATTERNS):
                     current_pure = val
                 else:
                     current = val
-            elif _is_consolidated_prior_duration(ctx):
-                if _is_pure_context(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
+            elif is_prior(ctx):
+                if is_pure(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
                     prior_pure = val
                 else:
                     prior = val
@@ -105,6 +113,13 @@ def extract_income_statement(
     sales_cur, sales_prior = _find_first_duration_value(tag_elements, NET_SALES_TAGS)
     op_cur, op_prior = _find_first_duration_value(tag_elements, OPERATING_PROFIT_DIRECT_TAGS)
     np_cur, np_prior = _find_first_duration_value(tag_elements, NET_PROFIT_TAGS)
+
+    if sales_cur is None:
+        sales_cur, sales_prior = _find_first_duration_value(tag_elements, NET_SALES_TAGS, consolidated=False)
+    if op_cur is None:
+        op_cur, op_prior = _find_first_duration_value(tag_elements, OPERATING_PROFIT_DIRECT_TAGS, consolidated=False)
+    if np_cur is None:
+        np_cur, np_prior = _find_first_duration_value(tag_elements, NET_PROFIT_TAGS, consolidated=False)
 
     found_tags = [
         k for k in ("sales", "operating_profit", "net_profit")

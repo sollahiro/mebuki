@@ -17,7 +17,10 @@ from pathlib import Path
 from mebuki.analysis.context_helpers import (
     _is_consolidated_duration,
     _is_consolidated_prior_duration,
+    _is_nonconsolidated_duration,
+    _is_nonconsolidated_prior_duration,
     _is_pure_context,
+    _is_pure_nonconsolidated_context,
 )
 from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
 from mebuki.utils.xbrl_result_types import CashFlowResult, XbrlTagElements
@@ -40,21 +43,24 @@ _CF_RELEVANT_TAGS: frozenset[str] = frozenset(
 
 
 def _find_duration_value(
-    tag_elements: XbrlTagElements, tag: str
+    tag_elements: XbrlTagElements, tag: str, *, consolidated: bool = True
 ) -> tuple[float | None, float | None]:
     """指定タグの連結当期・前期（Duration）値を返す。"""
     if tag not in tag_elements:
         return None, None
+    is_current = _is_consolidated_duration if consolidated else _is_nonconsolidated_duration
+    is_prior = _is_consolidated_prior_duration if consolidated else _is_nonconsolidated_prior_duration
+    is_pure = _is_pure_context if consolidated else _is_pure_nonconsolidated_context
     current = prior = None
     current_pure = prior_pure = None
     for ctx, val in tag_elements[tag].items():
-        if _is_consolidated_duration(ctx):
-            if _is_pure_context(ctx, DURATION_CONTEXT_PATTERNS):
+        if is_current(ctx):
+            if is_pure(ctx, DURATION_CONTEXT_PATTERNS):
                 current_pure = val
             else:
                 current = val
-        elif _is_consolidated_prior_duration(ctx):
-            if _is_pure_context(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
+        elif is_prior(ctx):
+            if is_pure(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
                 prior_pure = val
             else:
                 prior = val
@@ -107,6 +113,8 @@ def extract_cash_flow(
     cfo_current = cfo_prior = None
     for tag in CF_OPERATING_TAGS:
         c, p = _find_duration_value(tag_elements, tag)
+        if c is None and p is None:
+            c, p = _find_duration_value(tag_elements, tag, consolidated=False)
         if c is not None or p is not None:
             cfo_current, cfo_prior = c, p
             break
@@ -115,6 +123,8 @@ def extract_cash_flow(
     cfi_current = cfi_prior = None
     for tag in CF_INVESTING_TAGS:
         c, p = _find_duration_value(tag_elements, tag)
+        if c is None and p is None:
+            c, p = _find_duration_value(tag_elements, tag, consolidated=False)
         if c is not None or p is not None:
             cfi_current, cfi_prior = c, p
             break

@@ -7,6 +7,7 @@ from mebuki.infrastructure.helpers import validate_stock_code
 from mebuki.infrastructure.settings import settings_store
 from mebuki.services.master_data import master_data_manager
 from mebuki.utils.converters import extract_year_month
+from mebuki.constants.api import EDINET_FILINGS_DEFAULT_YEARS
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,10 @@ async def cmd_analyze(args):
         return
 
     include_debug = getattr(args, "include_debug_fields", False)
+    requested_years = getattr(args, "years", None)
+    if requested_years is not None and requested_years <= 0:
+        print("エラー: years には正の整数を指定してください。", file=sys.stderr)
+        return
 
     # --half が指定された場合は半期推移表示
     if getattr(args, "half", False):
@@ -73,7 +78,7 @@ async def cmd_analyze(args):
                 print(f"エラー: 銘柄コード {code} が見つかりません。", file=sys.stderr)
                 return
 
-            half_years = args.years or 3
+            half_years = requested_years or 3
             print(f"\n分析中: {code} {info['name']} ({info['market_name']}) ...", file=sys.stderr)
             print(f"分析対象期間: 直近 {half_years} 年分 (上半期 / 下半期)", file=sys.stderr)
 
@@ -150,7 +155,7 @@ async def cmd_analyze(args):
             return
 
         # 分析年数の決定
-        years_to_analyze = args.years or settings_store.analysis_years
+        years_to_analyze = requested_years or settings_store.analysis_years
 
         print(f"\n分析中: {code} {info['name']} ({info['market_name']}) ...", file=sys.stderr)
         years_label = f"直近 {years_to_analyze} 年分" if years_to_analyze else "全期間"
@@ -227,6 +232,7 @@ async def cmd_analyze(args):
             ("販管費増影響",           lambda c: c.get("SGAChangeImpact")),
             ("ROE (%)",               lambda c: c.get("ROE")),
             ("ROIC (%)",              lambda c: c.get("ROIC")),
+            ("総資産 (百万)",           lambda c: c.get("TotalAssets")),
             ("流動資産 (百万)",         lambda c: c.get("CurrentAssets")),
             ("固定資産 (百万)",         lambda c: c.get("NonCurrentAssets")),
             ("流動負債 (百万)",         lambda c: c.get("CurrentLiabilities")),
@@ -246,7 +252,7 @@ async def cmd_analyze(args):
             # ── 有利子負債・支払利息 ──
             ("有利子負債合計 (百万)",   lambda c: c.get("InterestBearingDebt")),
             ("支払利息 (百万)",         lambda c: c.get("InterestExpense")),
-            ("投下資本 (百万)",         lambda c: (c.get("InterestBearingDebt") + c.get("Eq")) if c.get("InterestBearingDebt") is not None and c.get("Eq") is not None else None),
+            ("投下資本 (百万)",         lambda c: (c.get("InterestBearingDebt") + c.get("NetAssets")) if c.get("InterestBearingDebt") is not None and c.get("NetAssets") is not None else None),
             # ── 従業員数 ──
             ("従業員数 (人)",           lambda c: c.get("Employees"),   "int"),
             ("DocID",                  lambda c: c.get("DocID")),
@@ -300,9 +306,13 @@ async def cmd_filings(args):
 
     try:
         code = validate_stock_code(args.code)
+        years = getattr(args, "years", EDINET_FILINGS_DEFAULT_YEARS)
+        if years <= 0:
+            print("エラー: years には正の整数を指定してください。", file=sys.stderr)
+            return
         docs = await data_service.search_filings(
             code,
-            max_years=10,
+            max_years=years,
             doc_types=["120", "130", "140", "150", "160", "170"],
             max_documents=10,
         )

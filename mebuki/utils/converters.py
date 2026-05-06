@@ -159,13 +159,13 @@ def is_valid_financial_record(record: dict[str, Any]) -> bool:
     sales = record.get("Sales")
     op = record.get("OP")
     np_value = record.get("NP")
-    eq = record.get("Eq")
+    net_assets = record.get("NetAssets")
     
     has_financial_data = (
         is_valid_value(sales) or
         is_valid_value(op) or
         is_valid_value(np_value) or
-        is_valid_value(eq)
+        is_valid_value(net_assets)
     )
     
     if has_financial_data:

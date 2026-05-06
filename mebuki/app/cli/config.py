@@ -1,5 +1,7 @@
 import sys
 import logging
+import asyncio
+from mebuki.constants.api import EDINET_WARMUP_DEFAULT_YEARS
 from mebuki.infrastructure.settings import settings_store
 
 logger = logging.getLogger(__name__)
@@ -74,5 +76,20 @@ def cmd_config(args, parser):
         if updates:
             settings_store.update(updates, save=True)
             print("設定を保存しました。", file=sys.stderr)
+            from mebuki.app.cli.cache import warmup_edinet_index_async
+            from mebuki.app.cli.ui import confirm
+
+            if e_key and confirm(f"直近{EDINET_WARMUP_DEFAULT_YEARS}年分のEDINETキャッシュを準備しますか？ (y/N): "):
+                data = asyncio.run(
+                    warmup_edinet_index_async(
+                        settings_store.edinet_api_key or e_key,
+                        settings_store.cache_dir,
+                        EDINET_WARMUP_DEFAULT_YEARS,
+                    )
+                )
+                print(
+                    f"EDINETキャッシュを準備しました: {data['prepared_years']}年分",
+                    file=sys.stderr,
+                )
         else:
             print("変更はありません。", file=sys.stderr)

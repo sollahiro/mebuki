@@ -12,7 +12,6 @@ PUBLIC_CALCULATED_DATA_KEYS = {
     "Sales",
     "OP",
     "NP",
-    "Eq",
     "CFO",
     "CFI",
     "CashEq",
@@ -28,6 +27,7 @@ PUBLIC_CALCULATED_DATA_KEYS = {
     "GrossProfitMargin",
     "InterestBearingDebt",
     "ROIC",
+    "TotalAssets",
     "CurrentAssets",
     "NonCurrentAssets",
     "CurrentLiabilities",
@@ -77,7 +77,7 @@ def _complete_calculated_data():
         "Sales": 1.0,
         "OP": 1.0,
         "NP": 1.0,
-        "Eq": 1.0,
+        "NetAssets": 1.0,
         "CFO": 1.0,
         "CFI": 1.0,
         "CashEq": 1.0,
@@ -93,6 +93,7 @@ def _complete_calculated_data():
         "GrossProfitMargin": 1.0,
         "InterestBearingDebt": 1.0,
         "ROIC": 1.0,
+        "TotalAssets": 1.0,
         "CurrentAssets": 1.0,
         "NonCurrentAssets": 1.0,
         "CurrentLiabilities": 1.0,
@@ -187,10 +188,11 @@ def test_serialize_metrics_result_excludes_debug_fields_by_default():
         "years": [
             {
                 "fy_end": "2024-03-31",
-                "RawData": {"Sales": 45_000_000},
+                "RawData": {"Sales": 45_000_000, "NetAssets": 4_000_000},
                 "CalculatedData": {
                     "Sales": 45_000.0,
                     "SalesLabel": "売上高",
+                    "NetAssets": 4_000.0,
                     "OP": 5_000.0,
                     "OPLabel": "営業利益",
                     "MetricSources": {"Sales": {"source": "external"}},
@@ -211,10 +213,11 @@ def test_serialize_metrics_result_excludes_debug_fields_by_default():
         "years": [
             {
                 "fy_end": "2024-03-31",
-                "RawData": {"Sales": 45_000_000},
+                "RawData": {"Sales": 45_000_000, "NetAssets": 4_000_000},
                 "CalculatedData": {
                     "Sales": 45_000.0,
                     "SalesLabel": "売上高",
+                    "NetAssets": 4_000.0,
                     "OP": 5_000.0,
                     "OPLabel": "営業利益",
                 },
@@ -222,6 +225,7 @@ def test_serialize_metrics_result_excludes_debug_fields_by_default():
         ],
     }
     assert "MetricSources" in metrics["years"][0]["CalculatedData"]
+    assert "NetAssets" in metrics["years"][0]["CalculatedData"]
 
 
 def test_serialize_metrics_result_includes_debug_fields_when_requested():

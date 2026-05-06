@@ -1,10 +1,12 @@
 import json
 import sys
 import asyncio
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from mebuki.api.edinet_client import EdinetAPIClient
+from mebuki.constants.api import EDINET_WARMUP_DEFAULT_YEARS
 from mebuki.infrastructure.settings import settings_store
 from mebuki.services.cache_pruner import CachePruner
 from mebuki.services.edinet_smoke_cache import (
@@ -29,8 +31,66 @@ async def _prepare_smoke_cache_async(api_key: str, cache_dir: str, codes: list[s
         await client.close()
 
 
+async def warmup_edinet_index_async(api_key: str, cache_dir: str, years: int) -> dict[str, Any]:
+    """直近 years 年分の EDINET 年次インデックスを準備する。"""
+    client = EdinetAPIClient(
+        api_key=api_key,
+        cache_dir=str(Path(cache_dir) / "edinet"),
+    )
+    current_year = datetime.now().year
+    target_years = [current_year - offset for offset in range(years)]
+    entries: list[dict[str, Any]] = []
+    try:
+        for year in target_years:
+            docs = await client.ensure_document_index_for_year(year)
+            entries.append({"year": year, "documents": len(docs), "status": "prepared"})
+    finally:
+        await client.close()
+
+    return {
+        "requested_years": years,
+        "prepared_years": len(entries),
+        "entries": entries,
+    }
+
+
 def cmd_cache(args, parser) -> None:
     """キャッシュ管理コマンド"""
+    if args.cache_subcommand == "warmup":
+        years = getattr(args, "years", EDINET_WARMUP_DEFAULT_YEARS)
+        if years <= 0:
+            print("エラー: years には正の整数を指定してください。", file=sys.stderr)
+            return
+        if not settings_store.edinet_api_key:
+            print("EDINET APIキーが未設定です。mebuki config set edinet-key <KEY> を実行してください。", file=sys.stderr)
+            return
+
+        data = asyncio.run(
+            warmup_edinet_index_async(
+                settings_store.edinet_api_key,
+                settings_store.cache_dir,
+                years,
+            )
+        )
+        if args.format == "json":
+            print(json.dumps(data, indent=2, ensure_ascii=False))
+            return
+
+        print("cache warmup", file=sys.stderr)
+        print(f"  requested years: {data['requested_years']}", file=sys.stderr)
+        print(f"  prepared years:  {data['prepared_years']}", file=sys.stderr)
+        entries = data["entries"]
+        if isinstance(entries, list):
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                print(
+                    f"  prepared {entry.get('year')} "
+                    f"documents={entry.get('documents')}",
+                    file=sys.stderr,
+                )
+        return
+
     if args.cache_subcommand == "stats":
         pruner = CachePruner(settings_store.cache_dir)
         data = pruner.stats().to_dict()

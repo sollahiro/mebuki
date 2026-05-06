@@ -57,7 +57,7 @@ mebuki search 7203 --format json
 mebuki analyze <code> [--years N] [--format table|json] [--half] [--no-cache]
 ```
 
-- `--years N`: 取得年数（デフォルト: 5、`--half` 時は 3）。**FY（通期）の件数**でカウントする
+- `--years N`: 取得年数（デフォルト: 6、`--half` 時は 3）。**FY（通期）の件数**でカウントする
 - `--half`: 上半期(H1)・下半期(H2)の半期推移を表示する（seasonalityの確認に有用）
 - `--no-cache`: キャッシュを使用せず最新データを取得する
 
@@ -85,7 +85,7 @@ mebuki analyze <code> [--years N] [--format table|json] [--half] [--no-cache]
 例：
 ```bash
 mebuki analyze 7203
-mebuki analyze 7203 --years 5
+mebuki analyze 7203 --years 6
 mebuki analyze 7203 --half                           # 上半期・下半期の推移を表示（デフォルト3年）
 mebuki analyze 7203 --half --years 5                 # 5年分の半期推移
 mebuki analyze 7203 --no-cache                       # キャッシュ無効化
@@ -96,12 +96,15 @@ mebuki analyze 7203 --no-cache                       # キャッシュ無効化
 EDINETに提出された書類の一覧を取得する。
 
 ```bash
-mebuki filings <code> [--format table|json]
+mebuki filings <code> [--years N] [--format table|json]
 ```
+
+- `--years N`: EDINET書類探索年数（デフォルト: 3）
 
 例：
 ```bash
 mebuki filings 7203
+mebuki filings 7203 --years 6
 mebuki filings 7203 --format json
 ```
 
@@ -180,7 +183,7 @@ mebuki portfolio remove 7203 --broker SBI --account 特定
 新規銘柄を調査する際の標準フロー：
 
 1. **銘柄特定**: `mebuki search <社名>` でコードを確認
-2. **財務分析**: `mebuki analyze <code> --years 5` で財務推移を確認（ROIC・有利子負債を含む）
+2. **財務分析**: `mebuki analyze <code> --years 6` で財務推移を確認（ROIC・有利子負債を含む）
    - 半期推移も確認したい場合: `--half` を追加
 3. **書類一覧**: `mebuki filings <code>` でEDINET提出書類を確認
 4. **報告書抽出**: `mebuki filing <code> --sections business_risks mda` でリスクと経営状況を確認
@@ -204,9 +207,9 @@ mebuki search <社名B>
 mebuki search <社名C>
 
 # 2. 財務サマリー（デフォルト: ROIC・有利子負債を含む）
-mebuki analyze <codeA> --years 5
-mebuki analyze <codeB> --years 5
-mebuki analyze <codeC> --years 5
+mebuki analyze <codeA> --years 6
+mebuki analyze <codeB> --years 6
+mebuki analyze <codeC> --years 6
 
 # 3. 有価証券報告書でリスクと経営方針を確認
 mebuki filing <codeA> --sections business_risks mda management_policy
@@ -307,7 +310,7 @@ WACC = (E/V) × Re + (D/V) × Rd × (1 − Tc)
 | **Rf** | 財務省公表 10年国債流通利回り（FY終了日時点） | 毎営業日更新 CSV から取得・1日キャッシュ |
 | **β** | 1.0（固定） | 暫定値（市場平均） |
 | **MRP** | 5.5%（固定） | 日本株 市場リスクプレミアム標準値 |
-| **E** | `Eq`（帳簿純資産、百万円） | J-Quants から取得 |
+| **E** | `NetAssets`（純資産、百万円） | EDINET XBRL から取得 |
 | **D** | `InterestBearingDebt`（百万円） | EDINET XBRL 貸借対照表から抽出 |
 | **Rd** | `InterestExpense` ÷ `InterestBearingDebt` | EDINET XBRL 損益計算書から抽出 |
 | **Tc** | `EffectiveTaxRate`（%） | EDINET XBRL 損益計算書から算出 |
@@ -343,7 +346,7 @@ WACC = (E/V) × Re + (D/V) × Rd × (1 − Tc)
 
 - **E は帳簿純資産**。時価総額ではないため D/(D+E) 比率に影響する。将来的には J-Quants の株価データで時価ベースに移行予定。
 - **β=1.0 は暫定値**。実測βは株価時系列と市場インデックスの共分散から計算するが、EDINET/XBRLには記載がないため現時点では固定。
-- **ROIC との違い**: ROIC は NP/(Eq+IBD) × 100。WACC は資本コストの加重平均であり、ROICと比較することで経済的付加価値（EVA）の判断ができる（ROIC > WACC なら価値創造）。
+- **ROIC との違い**: ROIC は NP/(NetAssets+IBD) × 100。WACC は資本コストの加重平均であり、ROICと比較することで経済的付加価値（EVA）の判断ができる（ROIC > WACC なら価値創造）。
 
 ---
 
@@ -373,7 +376,7 @@ WACC = (E/V) × Re + (D/V) × Rd × (1 − Tc)
 ### データ取得
 
 ```bash
-mebuki analyze <code> --years 5
+mebuki analyze <code> --years 6
 ```
 
 または `--format json` で取得してプロットに利用する。
@@ -432,7 +435,7 @@ mebuki analyze <code> --years 5
 ### データ取得
 
 ```bash
-mebuki analyze <code> --years 5
+mebuki analyze <code> --years 6
 ```
 
 年次テーブルの「営業利益前年差」「売上差影響」「粗利率差影響」「販管費増影響」行に値が表示される。

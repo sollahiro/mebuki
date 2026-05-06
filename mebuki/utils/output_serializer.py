@@ -27,7 +27,11 @@ _REDUNDANT_SUMMARY_FIELDS: frozenset[str] = frozenset({
 
 
 def _strip_debug(cd: dict[str, Any]) -> dict[str, Any]:
-    return {k: v for k, v in cd.items() if k not in _DEBUG_FIELDS}
+    return {
+        k: v
+        for k, v in cd.items()
+        if k not in _DEBUG_FIELDS
+    }
 
 
 def _strip_redundant_summary(metrics: dict[str, Any]) -> dict[str, Any]:
@@ -48,7 +52,14 @@ def serialize_metrics_result(
         return metrics
     result = dict(metrics)
     result["years"] = [
-        {**entry, "CalculatedData": _strip_debug(entry.get("CalculatedData") or {})}
+        {
+            **entry,
+            "RawData": {
+                k: v
+                for k, v in (entry.get("RawData") or {}).items()
+            },
+            "CalculatedData": _strip_debug(entry.get("CalculatedData") or {}),
+        }
         for entry in years
     ]
     return result

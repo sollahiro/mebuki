@@ -59,6 +59,7 @@ class TestBalanceSheetExtraction:
                 <jppfs_cor:CurrentLiabilities contextRef="CurrentYearInstant" unitRef="JPY">1770928000000</jppfs_cor:CurrentLiabilities>
                 <jppfs_cor:NoncurrentLiabilities contextRef="CurrentYearInstant" unitRef="JPY">1560957000000</jppfs_cor:NoncurrentLiabilities>
                 <jppfs_cor:NetAssets contextRef="CurrentYearInstant" unitRef="JPY">2873024000000</jppfs_cor:NetAssets>
+                <jppfs_cor:TotalAssets contextRef="CurrentYearInstant" unitRef="JPY">6204909000000</jppfs_cor:TotalAssets>
                 <jppfs_cor:NetAssets contextRef="CurrentYearInstant_NonControllingInterestsMember" unitRef="JPY">250039000000</jppfs_cor:NetAssets>
                 """,
             )
@@ -69,6 +70,7 @@ class TestBalanceSheetExtraction:
         assert result["method"] == "direct"
         assert result["current_assets"] == pytest.approx(2_923_181 * MILLION_YEN)
         assert result["non_current_assets"] == pytest.approx(3_281_728 * MILLION_YEN)
+        assert result["total_assets"] == pytest.approx(6_204_909 * MILLION_YEN)
         assert result["current_liabilities"] == pytest.approx(1_770_928 * MILLION_YEN)
         assert result["non_current_liabilities"] == pytest.approx(1_560_957 * MILLION_YEN)
         assert result["net_assets"] == pytest.approx(2_873_024 * MILLION_YEN)
@@ -120,7 +122,7 @@ class TestBalanceSheetExtraction:
         assert result["current_liabilities"] == pytest.approx(1_125_940 * MILLION_YEN)
         assert result["non_current_liabilities"] == pytest.approx(771_286 * MILLION_YEN)
         assert result["net_assets"] == pytest.approx(3_352_682 * MILLION_YEN)
-        assert result["components"][1]["label"] == "投資及び長期債権合計＋有形固定資産合計＋その他の資産合計"
+        assert result["components"][2]["label"] == "投資及び長期債権合計＋有形固定資産合計＋その他の資産合計"
 
     def test_uses_usgaap_html_balance_sheet_rows_when_xbrl_has_only_summary(self):
         html = """
@@ -182,7 +184,7 @@ class TestBalanceSheetExtraction:
 
             result = extract_balance_sheet(xbrl_dir)
 
-        assert result["components"][1]["label"] == "OtherAssetsUSGAAP"
+        assert result["components"][2]["label"] == "OtherAssetsUSGAAP"
 
     def test_falls_back_to_nonconsolidated_when_no_consolidated_values(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -215,6 +217,7 @@ class TestApplyBalanceSheet:
             {
                 "20250331": {
                     "current_assets": 164_367_000_000,
+                    "total_assets": 194_395_000_000,
                     "non_current_assets": 30_028_000_000,
                     "current_liabilities": 64_401_000_000,
                     "non_current_liabilities": 8_799_000_000,
@@ -228,6 +231,7 @@ class TestApplyBalanceSheet:
         )
 
         cd = cast(dict[str, Any], years[0]["CalculatedData"])
+        assert cd["TotalAssets"] == pytest.approx(194_395)
         assert cd["CurrentAssets"] == pytest.approx(164_367)
         assert cd["NonCurrentAssets"] == pytest.approx(30_028)
         assert cd["CurrentLiabilities"] == pytest.approx(64_401)

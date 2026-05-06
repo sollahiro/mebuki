@@ -129,6 +129,7 @@ def _raw_by_year(all_metrics: dict[str, dict[str, Any]]) -> dict[str, RawXbrlExt
         if (doc_id := _metric_doc_id(bs)) is not None:
             raw["doc_id"] = doc_id
         raw["current_assets"] = bs.get("current_assets")
+        raw["total_assets"] = bs.get("total_assets")
         raw["non_current_assets"] = bs.get("non_current_assets")
         raw["current_liabilities"] = bs.get("current_liabilities")
         raw["non_current_liabilities"] = bs.get("non_current_liabilities")
@@ -248,10 +249,10 @@ def _apply_ibd(
             label=raw.get("ibd_accounting_standard"),
         )
         np_ = cd.get("NP")
-        eq = cd.get("Eq")
-        if np_ is not None and eq is not None and (eq + ibd_m) != 0:
-            cd["ROIC"] = np_ / (eq + ibd_m) * PERCENT
-            _set_metric_source(cd, "ROIC", source="derived", unit="percent", method="NP / (Eq + InterestBearingDebt)")
+        net_assets = cd.get("NetAssets")
+        if np_ is not None and net_assets is not None and (net_assets + ibd_m) != 0:
+            cd["ROIC"] = np_ / (net_assets + ibd_m) * PERCENT
+            _set_metric_source(cd, "ROIC", source="derived", unit="percent", method="NP / (NetAssets + InterestBearingDebt)")
 
 
 def _apply_balance_sheet(
@@ -260,6 +261,7 @@ def _apply_balance_sheet(
 ) -> None:
     raw_by_year = _ensure_raw_by_year("bs", raw_by_year)
     field_map = {
+        "total_assets": "TotalAssets",
         "current_assets": "CurrentAssets",
         "non_current_assets": "NonCurrentAssets",
         "current_liabilities": "CurrentLiabilities",
@@ -553,7 +555,7 @@ def _apply_wacc(years: list[YearEntry], rf_rates: dict[str, float]) -> None:
         fy_end = year.get("fy_end") or ""
         rf, rf_source = resolve_rf_for_date(rf_rates, fy_end)
         wacc = calculate_wacc(
-            eq=cd.get("Eq"),
+            eq=cd.get("NetAssets"),
             ibd=cd.get("InterestBearingDebt"),
             ie=cd.get("InterestExpense"),
             tc_pct=cd.get("EffectiveTaxRate"),

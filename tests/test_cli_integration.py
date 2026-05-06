@@ -86,7 +86,26 @@ def test_main_filings_outputs_json(monkeypatch, capsys) -> None:
     assert json.loads(captured.out) == docs
     data_service.search_filings.assert_awaited_once_with(
         "72030",
-        max_years=10,
+        max_years=3,
+        doc_types=["120", "130", "140", "150", "160", "170"],
+        max_documents=10,
+    )
+    data_service.close.assert_awaited_once()
+
+
+def test_main_filings_accepts_years(monkeypatch, capsys) -> None:
+    data_service = Mock()
+    data_service.search_filings = AsyncMock(return_value=[])
+    data_service.close = AsyncMock()
+
+    with patch("mebuki.services.data_service.data_service", data_service):
+        _run_cli(monkeypatch, ["filings", "7203", "--years", "6", "--format", "json"])
+
+    captured = capsys.readouterr()
+    assert "書類が見つかりませんでした" in captured.err
+    data_service.search_filings.assert_awaited_once_with(
+        "72030",
+        max_years=6,
         doc_types=["120", "130", "140", "150", "160", "170"],
         max_documents=10,
     )
@@ -266,6 +285,27 @@ def test_main_cache_prepare_smoke_outputs_json(monkeypatch, capsys) -> None:
     captured = capsys.readouterr()
     assert json.loads(captured.out)["prepared"] == 1
     prepare.assert_awaited_once_with("dummy", "/tmp/mebuki-cache", ["7203"], 365)
+
+
+def test_main_cache_warmup_outputs_json(monkeypatch, capsys) -> None:
+    with (
+        patch("mebuki.app.cli.cache.settings_store") as settings,
+        patch("mebuki.app.cli.cache.warmup_edinet_index_async", AsyncMock(return_value={
+            "requested_years": 2,
+            "prepared_years": 2,
+            "entries": [
+                {"year": 2026, "documents": 100, "status": "prepared"},
+                {"year": 2025, "documents": 200, "status": "prepared"},
+            ],
+        })) as warmup,
+    ):
+        settings.cache_dir = "/tmp/mebuki-cache"
+        settings.edinet_api_key = "dummy"
+        _run_cli(monkeypatch, ["cache", "warmup", "--years", "2", "--format", "json"])
+
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)["prepared_years"] == 2
+    warmup.assert_awaited_once_with("dummy", "/tmp/mebuki-cache", 2)
 
 
 

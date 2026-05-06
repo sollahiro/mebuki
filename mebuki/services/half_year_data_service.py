@@ -119,12 +119,12 @@ def _apply_h1_edinet_data(
 
     ibd_current = ibd_result.get("current")
     h1_ibd_m = ibd_current / MILLION_YEN if ibd_current is not None else None
-    q2_eq_raw = to_float(q2_rec.get("Eq"))
-    q2_eq_m = q2_eq_raw / MILLION_YEN if q2_eq_raw is not None else None
+    q2_net_assets_raw = to_float(q2_rec.get("NetAssets"))
+    q2_net_assets_m = q2_net_assets_raw / MILLION_YEN if q2_net_assets_raw is not None else None
     np_h1 = data.get("NP")
-    if np_h1 is not None and q2_eq_m is not None and h1_ibd_m is not None and (q2_eq_m + h1_ibd_m) != 0:
-        data["ROIC"] = np_h1 / (q2_eq_m + h1_ibd_m) * 100
-        _set_metric_source(data, "ROIC", source="derived", unit="percent", method="NP / (Eq + InterestBearingDebt)")
+    if np_h1 is not None and q2_net_assets_m is not None and h1_ibd_m is not None and (q2_net_assets_m + h1_ibd_m) != 0:
+        data["ROIC"] = np_h1 / (q2_net_assets_m + h1_ibd_m) * 100
+        _set_metric_source(data, "ROIC", source="derived", unit="percent", method="NP / (NetAssets + InterestBearingDebt)")
 
     return h1_gp_m, h1_cfo_m, h1_cfi_m
 
@@ -175,12 +175,12 @@ def _apply_h2_edinet_data(
 
     h2_ibd = ibd_by_year.get(fy_end_8)
     h2_ibd_m = h2_ibd["current"] / MILLION_YEN if h2_ibd and h2_ibd.get("current") is not None else None
-    h2_eq_raw = to_float(fy_rec.get("Eq"))
-    h2_eq_m = h2_eq_raw / MILLION_YEN if h2_eq_raw is not None else None
+    h2_net_assets_raw = to_float(fy_rec.get("NetAssets"))
+    h2_net_assets_m = h2_net_assets_raw / MILLION_YEN if h2_net_assets_raw is not None else None
     np_h2 = data.get("NP")
-    if np_h2 is not None and h2_eq_m is not None and h2_ibd_m is not None and (h2_eq_m + h2_ibd_m) != 0:
-        data["ROIC"] = np_h2 / (h2_eq_m + h2_ibd_m) * 100
-        _set_metric_source(data, "ROIC", source="derived", unit="percent", method="NP / (Eq + InterestBearingDebt)")
+    if np_h2 is not None and h2_net_assets_m is not None and h2_ibd_m is not None and (h2_net_assets_m + h2_ibd_m) != 0:
+        data["ROIC"] = np_h2 / (h2_net_assets_m + h2_ibd_m) * 100
+        _set_metric_source(data, "ROIC", source="derived", unit="percent", method="NP / (NetAssets + InterestBearingDebt)")
 
 
 def _apply_fy_only_edinet_data(
@@ -202,12 +202,12 @@ def _apply_fy_only_edinet_data(
 
     fy_ibd = ibd_by_year.get(fy_end_8)
     fy_ibd_m = fy_ibd["current"] / MILLION_YEN if fy_ibd and fy_ibd.get("current") is not None else None
-    fy_eq_raw = to_float(fy_rec.get("Eq"))
-    fy_eq_m = fy_eq_raw / MILLION_YEN if fy_eq_raw is not None else None
+    fy_net_assets_raw = to_float(fy_rec.get("NetAssets"))
+    fy_net_assets_m = fy_net_assets_raw / MILLION_YEN if fy_net_assets_raw is not None else None
     np_fy = data.get("NP")
-    if np_fy is not None and fy_eq_m is not None and fy_ibd_m is not None and (fy_eq_m + fy_ibd_m) != 0:
-        data["ROIC"] = np_fy / (fy_eq_m + fy_ibd_m) * 100
-        _set_metric_source(data, "ROIC", source="derived", unit="percent", method="NP / (Eq + InterestBearingDebt)")
+    if np_fy is not None and fy_net_assets_m is not None and fy_ibd_m is not None and (fy_net_assets_m + fy_ibd_m) != 0:
+        data["ROIC"] = np_fy / (fy_net_assets_m + fy_ibd_m) * 100
+        _set_metric_source(data, "ROIC", source="derived", unit="percent", method="NP / (NetAssets + InterestBearingDebt)")
 
 
 class HalfYearDataService:

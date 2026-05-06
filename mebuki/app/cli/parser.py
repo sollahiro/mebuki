@@ -1,5 +1,6 @@
 import argparse
 from mebuki import __version__
+from mebuki.constants.api import EDINET_FILINGS_DEFAULT_YEARS, EDINET_WARMUP_DEFAULT_YEARS
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -16,7 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
     # analyze
     analyze_parser = subparsers.add_parser("analyze", help="銘柄を分析")
     analyze_parser.add_argument("code", help="銘柄コード")
-    analyze_parser.add_argument("--years", type=int, help="分析年数")
+    analyze_parser.add_argument("--years", type=int, help="分析年数（未指定時は設定値、初期値: 6）")
     analyze_parser.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
     analyze_parser.add_argument(
         "--no-cache",
@@ -35,6 +36,12 @@ def build_parser() -> argparse.ArgumentParser:
     # filings
     filings_parser = subparsers.add_parser("filings", help="EDINET書類一覧を取得")
     filings_parser.add_argument("code", help="銘柄コード")
+    filings_parser.add_argument(
+        "--years",
+        type=int,
+        default=EDINET_FILINGS_DEFAULT_YEARS,
+        help=f"探索年数（デフォルト: {EDINET_FILINGS_DEFAULT_YEARS}）",
+    )
     filings_parser.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
 
     # filing
@@ -57,6 +64,14 @@ def build_parser() -> argparse.ArgumentParser:
     # cache
     cache_parser = subparsers.add_parser("cache", help="キャッシュ管理")
     cache_sub = cache_parser.add_subparsers(dest="cache_subcommand", help="キャッシュサブコマンド")
+    warmup_parser = cache_sub.add_parser("warmup", help="EDINET年次インデックスを事前準備")
+    warmup_parser.add_argument(
+        "--years",
+        type=int,
+        default=EDINET_WARMUP_DEFAULT_YEARS,
+        help=f"準備する直近年数（デフォルト: {EDINET_WARMUP_DEFAULT_YEARS}）",
+    )
+    warmup_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
     stats_parser = cache_sub.add_parser("stats", help="キャッシュ使用量を表示")
     stats_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
     audit_parser = cache_sub.add_parser("audit", help="キャッシュ内訳をカテゴリ別に表示（削除なし）")

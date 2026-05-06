@@ -139,6 +139,7 @@ _EXTRACTOR_SPECS: list[ExtractorSpec] = [
             r.get(key) is not None
             for key in (
                 "current_assets",
+                "total_assets",
                 "non_current_assets",
                 "current_liabilities",
                 "non_current_liabilities",
@@ -768,7 +769,7 @@ class EdinetFetcher:
         """XBRL から年度財務レコードを構築する。
 
         calculate_metrics_flexible へ渡せる形式の年度レコードリストを返す。
-        各レコードは CurFYEn/CurFYSt/Sales/OP/NP/Eq/CFO/CFI を含む。
+        各レコードは CurFYEn/CurFYSt/Sales/OP/NP/NetAssets/CFO/CFI を含む。
         値はすべて円単位。
 
         Args:
@@ -808,7 +809,7 @@ class EdinetFetcher:
             sales = is_result.get("sales")
             operating_profit = is_result.get("operating_profit")
             operating_profit_label = None
-            sales_label = None
+            sales_label = "売上高" if sales is not None else None
             if sales is None:
                 gp_for_sales = extract_gross_profit(xbrl_path, pre_parsed=pre_parsed)
                 sales = gp_for_sales.get("current_sales")
@@ -846,7 +847,7 @@ class EdinetFetcher:
                 "OP": None if operating_profit_label == "経常利益" else operating_profit,
                 "NP": is_result.get("net_profit"),
                 # BS: 円単位
-                "Eq": bs_result.get("net_assets"),
+                "NetAssets": bs_result.get("net_assets"),
                 # CF: 円単位
                 "CFO": cf_result["cfo"].get("current"),
                 "CFI": cf_result["cfi"].get("current"),
@@ -869,7 +870,7 @@ class EdinetFetcher:
             logger.info(
                 f"[XBRL-IS] {code} {fy_end}: "
                 f"Sales={record['Sales']}, OP={record['OP']}, NP={record['NP']}, "
-                f"Eq={record['Eq']}, CFO={record['CFO']}, CFI={record['CFI']}"
+                f"NetAssets={record['NetAssets']}, CFO={record['CFO']}, CFI={record['CFI']}"
             )
 
         return records
@@ -912,7 +913,7 @@ class EdinetFetcher:
             sales = is_result.get("sales")
             operating_profit = is_result.get("operating_profit")
             operating_profit_label = None
-            sales_label = None
+            sales_label = "売上高" if sales is not None else None
             if sales is None:
                 gp_for_sales = extract_gross_profit(xbrl_path, pre_parsed=pre_parsed)
                 sales = gp_for_sales.get("current_sales")
@@ -948,7 +949,7 @@ class EdinetFetcher:
                 "SalesLabel": sales_label,
                 "OP": None if operating_profit_label == "経常利益" else operating_profit,
                 "NP": is_result.get("net_profit"),
-                "Eq": bs_result.get("net_assets"),
+                "NetAssets": bs_result.get("net_assets"),
                 "CFO": cf_result["cfo"].get("current"),
                 "CFI": cf_result["cfi"].get("current"),
                 "EPS": sh_result.get("EPS"),
@@ -968,7 +969,7 @@ class EdinetFetcher:
             logger.info(
                 f"[XBRL-2Q] {code} {fy_end}: "
                 f"Sales={record['Sales']}, OP={record['OP']}, NP={record['NP']}, "
-                f"Eq={record['Eq']}, CFO={record['CFO']}, CFI={record['CFI']}"
+                f"NetAssets={record['NetAssets']}, CFO={record['CFO']}, CFI={record['CFI']}"
             )
 
         return records

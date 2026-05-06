@@ -37,7 +37,7 @@ class SettingsStore:
 
         self._settings: dict[str, Any] = {
             "edinetApiKey": "",
-            "analysisYears": 5,
+            "analysisYears": 6,
             "cacheDir": str(cache_dir),
             "cacheEnabled": True,
             "mcpEnabled": True,

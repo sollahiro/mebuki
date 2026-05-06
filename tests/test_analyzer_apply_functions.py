@@ -6,6 +6,8 @@ dict を直接組み立てて単体テストできる。
 """
 
 import pytest
+from typing import Any, cast
+
 from mebuki.services.analyzer import (
     _apply_ibd,
     _apply_interest_expense,
@@ -18,6 +20,7 @@ from mebuki.services.analyzer import (
     _apply_order_book,
     _apply_wacc,
 )
+from mebuki.utils.metrics_types import YearEntry
 from mebuki.constants.financial import (
     MILLION_YEN,
     PERCENT,
@@ -29,12 +32,12 @@ from mebuki.constants.financial import (
 )
 
 
-def _make_year(fy_end: str, **cd_fields) -> dict:
-    return {
+def _make_year(fy_end: str, **cd_fields: Any) -> YearEntry:
+    return cast(YearEntry, {
         "fy_end": fy_end,
         "CalculatedData": dict(cd_fields),
         "RawData": {},
-    }
+    })
 
 
 # ──────────────────────────────────────────────────────────────
@@ -79,7 +82,7 @@ class TestApplyIbd:
         assert "InterestBearingDebt" not in cd
 
     def test_calculates_roic(self):
-        years = [_make_year("2024-03-31", NP=100.0, Eq=800.0)]
+        years = [_make_year("2024-03-31", NP=100.0, NetAssets=800.0)]
         ibd_by_year = {"20240331": {"current": 200_000_000, "components": [], "accounting_standard": "J-GAAP"}}
         _apply_ibd(years, ibd_by_year, {})
         cd = years[0]["CalculatedData"]
@@ -88,7 +91,7 @@ class TestApplyIbd:
         assert cd["ROIC"] == pytest.approx(expected)
 
     def test_skips_roic_when_np_missing(self):
-        years = [_make_year("2024-03-31", Eq=800.0)]
+        years = [_make_year("2024-03-31", NetAssets=800.0)]
         ibd_by_year = {"20240331": {"current": 200_000_000, "components": [], "accounting_standard": "J-GAAP"}}
         _apply_ibd(years, ibd_by_year, {})
         assert "ROIC" not in years[0]["CalculatedData"]
@@ -458,7 +461,7 @@ class TestApplyWacc:
     _RE = (_RF + WACC_DEFAULT_BETA * WACC_MARKET_RISK_PREMIUM) * PERCENT
 
     def test_sets_cost_of_equity(self):
-        years = [_make_year("2024-03-31", Eq=800.0)]
+        years = [_make_year("2024-03-31", NetAssets=800.0)]
         _apply_wacc(years, {})
         cd = years[0]["CalculatedData"]
         assert cd["CostOfEquity"] == pytest.approx(self._RE)
@@ -466,7 +469,7 @@ class TestApplyWacc:
         assert cd["MetricSources"]["CostOfEquity"]["rf_source"] == "fallback"
 
     def test_sets_mof_rf_source(self):
-        years = [_make_year("2024-03-31", Eq=800.0)]
+        years = [_make_year("2024-03-31", NetAssets=800.0)]
         _apply_wacc(years, {"2024-03-31": 0.01})
         cd = years[0]["CalculatedData"]
         assert cd["CostOfEquity"] == pytest.approx(self._RE)
@@ -475,14 +478,14 @@ class TestApplyWacc:
 
     def test_no_ibd_wacc_equals_cost_of_equity(self):
         """無借金: WACC = CostOfEquity"""
-        years = [_make_year("2024-03-31", Eq=800.0)]
+        years = [_make_year("2024-03-31", NetAssets=800.0)]
         _apply_wacc(years, {})
         cd = years[0]["CalculatedData"]
         assert cd["WACC"] == pytest.approx(self._RE)
 
     def test_full_wacc_calculation(self):
         """IBD・IE・ETRが揃っている場合のWACC"""
-        years = [_make_year("2024-03-31", Eq=800.0, InterestBearingDebt=200.0, InterestExpense=5.0, EffectiveTaxRate=30.0)]
+        years = [_make_year("2024-03-31", NetAssets=800.0, InterestBearingDebt=200.0, InterestExpense=5.0, EffectiveTaxRate=30.0)]
         _apply_wacc(years, {})
         cd = years[0]["CalculatedData"]
         rf = self._RF
@@ -496,7 +499,7 @@ class TestApplyWacc:
 
     def test_wacc_none_when_ie_missing(self):
         """IE がなければ WACC = None（CostOfEquity はセットされる）"""
-        years = [_make_year("2024-03-31", Eq=800.0, InterestBearingDebt=200.0, EffectiveTaxRate=30.0)]
+        years = [_make_year("2024-03-31", NetAssets=800.0, InterestBearingDebt=200.0, EffectiveTaxRate=30.0)]
         _apply_wacc(years, {})
         cd = years[0]["CalculatedData"]
         assert cd["WACC"] is None
@@ -508,7 +511,7 @@ class TestApplyWacc:
         years = [
             _make_year(
                 "2024-03-31",
-                Eq=800.0,
+                NetAssets=800.0,
                 InterestBearingDebt=200.0,
                 InterestExpense=5.0,
                 EffectiveTaxRate=249.0,
@@ -521,7 +524,7 @@ class TestApplyWacc:
         assert cd["WACCLabel"] == WACC_LABEL_TAX_RATE_OUT_OF_RANGE
 
     def test_applies_to_multiple_years(self):
-        years = [_make_year("2024-03-31", Eq=800.0), _make_year("2023-03-31", Eq=700.0)]
+        years = [_make_year("2024-03-31", NetAssets=800.0), _make_year("2023-03-31", NetAssets=700.0)]
         _apply_wacc(years, {})
         assert "CostOfEquity" in years[0]["CalculatedData"]
         assert "CostOfEquity" in years[1]["CalculatedData"]

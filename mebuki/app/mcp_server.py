@@ -10,6 +10,7 @@ from mcp.types import TextContent, Tool
 
 from mebuki.infrastructure.helpers import validate_stock_code
 from mebuki.infrastructure.settings import settings_store
+from mebuki.constants.api import EDINET_FILINGS_DEFAULT_YEARS
 from mebuki.services.cache_pruner import CachePruner
 from mebuki.services.data_service import data_service
 from mebuki.services.master_data import master_data_manager
@@ -54,7 +55,7 @@ async def list_tools() -> list[Tool]:
                     },
                     "years": {
                         "type": "number",
-                        "description": "Number of fiscal years to include (default: 5).",
+                        "description": "Number of fiscal years to include (default: 6).",
                     },
                     "half": {
                         "type": "boolean",
@@ -84,6 +85,10 @@ async def list_tools() -> list[Tool]:
                     "code": {
                         "type": "string",
                         "description": "Four-digit or five-digit Japanese stock code.",
+                    },
+                    "years": {
+                        "type": "number",
+                        "description": f"Number of recent years to search (default: {EDINET_FILINGS_DEFAULT_YEARS}).",
                     }
                 },
                 "required": ["code"],
@@ -243,8 +248,13 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             code = validate_stock_code(str(arguments["code"]))
             use_cache = arguments.get("use_cache", True)
             half = arguments.get("half", False)
-            years = int(arguments["years"]) if "years" in arguments else None
+            years = int(arguments["years"]) if "years" in arguments else settings_store.analysis_years
             include_debug_fields = bool(arguments.get("include_debug_fields", False))
+            if years is not None and years <= 0:
+                return [TextContent(type="text", text=json.dumps(
+                    {"error": "invalid_years", "message": "years には正の整数を指定してください。"},
+                    ensure_ascii=False,
+                ))]
             try:
                 if half:
                     result = await asyncio.wait_for(
@@ -265,9 +275,15 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
         if name == "search_japan_stock_filings":
             code = validate_stock_code(str(arguments["code"]))
+            years = int(arguments["years"]) if "years" in arguments else EDINET_FILINGS_DEFAULT_YEARS
+            if years <= 0:
+                return [TextContent(type="text", text=json.dumps(
+                    {"error": "invalid_years", "message": "years には正の整数を指定してください。"},
+                    ensure_ascii=False,
+                ))]
             docs = await data_service.search_filings(
                 code=code,
-                max_years=10,
+                max_years=years,
                 doc_types=["120", "130", "140", "150", "160", "170"],
                 max_documents=10,
             )

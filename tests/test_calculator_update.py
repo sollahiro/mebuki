@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 # プロジェクトルートをパスに追加
 project_root = Path(__file__).parent.parent
@@ -17,13 +18,13 @@ def test_calculate_metrics_preserves_sales_label_from_xbrl_record():
                 "Sales": 2_922_428_000_000,
                 "SalesLabel": "経常収益",
                 "NP": 257_635_000_000,
-                "Eq": 3_127_317_000_000,
+                "NetAssets": 3_127_317_000_000,
             }
         ],
         analysis_years=1,
     )
 
-    cd = metrics["years"][0]["CalculatedData"]
+    cd = cast(dict[str, Any], metrics["years"][0]["CalculatedData"])
     assert cd["Sales"] == 2_922_428
     assert cd["SalesLabel"] == "経常収益"
     assert cd["MetricSources"]["Sales"]["label"] == "経常収益"

@@ -219,7 +219,7 @@ class TestGetRawAnalysisData:
                     "CalculatedData": {
                         "DocID": "S100TEST",
                         "NP": 100.0,
-                        "Eq": 1000.0,
+                        "NetAssets": 1000.0,
                     },
                 }
             ]
@@ -553,7 +553,7 @@ class TestHalfYearDataService:
             "NP": 8_000_000,
             "CFO": 12_000_000,
             "CFI": -3_000_000,
-            "Eq": 40_000_000,
+            "NetAssets": 40_000_000,
         }
 
     def _q2_record(self) -> dict:
@@ -566,7 +566,7 @@ class TestHalfYearDataService:
             "NP": 3_000_000,
             "CFO": 5_000_000,
             "CFI": -1_000_000,
-            "Eq": 35_000_000,
+            "NetAssets": 35_000_000,
         }
 
     @pytest.mark.asyncio

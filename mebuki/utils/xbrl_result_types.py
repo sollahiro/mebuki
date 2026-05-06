@@ -48,6 +48,7 @@ class InterestBearingDebtResult(TypedDict):
 
 
 class BalanceSheetResult(TypedDict):
+    total_assets: float | None
     current_assets: float | None
     non_current_assets: float | None
     current_liabilities: float | None

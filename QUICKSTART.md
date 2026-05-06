@@ -64,18 +64,20 @@ mebuki config init
 - **EDINET API**: [登録・発行サイトへ](https://disclosure2.edinet-fsa.go.jp/)
 
 EDINET APIキーは、財務データ分析と有価証券報告書の検索・抽出に使用します。
+初回設定時に確認される `cache warmup` を実行すると、直近3年分のEDINET年次インデックスを事前準備できます。
 
 ### WACCとキャッシュ
 
 WACCのリスクフリーレートには、財務省の10年国債利回りCSVを使用します。金利データ自体は1日TTLでキャッシュされますが、分析結果キャッシュに保存済みのWACCは再計算されません。最新の金利を反映したWACCを確認する場合は、分析時に `--no-cache` を指定してください。
 
 ```bash
-mebuki analyze 7203 --years 5 --no-cache
+mebuki analyze 7203 --years 6 --no-cache
 ```
 
 ### キャッシュ確認
 
 ```bash
+mebuki cache warmup --years 3
 mebuki cache stats
 mebuki cache audit
 ```

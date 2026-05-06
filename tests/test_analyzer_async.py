@@ -22,7 +22,7 @@ class _ConcurrentEdinetFetcher:
             "Sales": 1_000_000_000,
             "OP": 100_000_000,
             "NP": 80_000_000,
-            "Eq": 500_000_000,
+            "NetAssets": 500_000_000,
             "_xbrl_source": True,
         }]
 
@@ -88,7 +88,7 @@ class _EdinetOnlyFetcher:
                 "Sales": 1_000_000_000,
                 "OP": 100_000_000,
                 "NP": 80_000_000,
-                "Eq": 500_000_000,
+                "NetAssets": 500_000_000,
                 "_xbrl_source": True,
             }
         ]

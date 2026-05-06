@@ -13,6 +13,7 @@ from mebuki.analysis.context_helpers import (
     _is_consolidated_prior_instant,
     _is_nonconsolidated_instant,
     _is_nonconsolidated_prior_instant,
+    _is_pure_nonconsolidated_context,
 )
 from mebuki.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files, parse_html_number
 from mebuki.constants.xbrl import (
@@ -37,6 +38,7 @@ _BS_RELEVANT_TAGS: frozenset[str] = frozenset(
 )
 
 _RESULT_FIELD_BY_COMPONENT_FIELD: dict[str, str] = {
+    "TotalAssets": "total_assets",
     "CurrentAssets": "current_assets",
     "NonCurrentAssets": "non_current_assets",
     "CurrentLiabilities": "current_liabilities",
@@ -72,12 +74,22 @@ def _find_nonconsolidated_value(tag_elements: XbrlTagElements, tag: str) -> tupl
     if tag not in tag_elements:
         return None, None
     current = prior = None
+    current_pure = prior_pure = None
     for ctx, val in tag_elements[tag].items():
         if _is_nonconsolidated_instant(ctx):
-            current = val
+            if _is_pure_nonconsolidated_context(ctx, INSTANT_CONTEXT_PATTERNS):
+                current_pure = val
+            else:
+                current = val
         elif _is_nonconsolidated_prior_instant(ctx):
-            prior = val
-    return current, prior
+            if _is_pure_nonconsolidated_context(ctx, PRIOR_INSTANT_CONTEXT_PATTERNS):
+                prior_pure = val
+            else:
+                prior = val
+    return (
+        current_pure if current_pure is not None else current,
+        prior_pure if prior_pure is not None else prior,
+    )
 
 
 def _safe_sum(values: list[float | None]) -> float | None:
@@ -210,6 +222,7 @@ def _build_result(
     reason: str | None = None,
 ) -> BalanceSheetResult:
     values: dict[str, float | None] = {
+        "total_assets": None,
         "current_assets": None,
         "non_current_assets": None,
         "current_liabilities": None,
@@ -220,6 +233,7 @@ def _build_result(
         values[_RESULT_FIELD_BY_COMPONENT_FIELD[comp_def["field"]]] = component["current"]
 
     result: BalanceSheetResult = {
+        "total_assets": values["total_assets"],
         "current_assets": values["current_assets"],
         "non_current_assets": values["non_current_assets"],
         "current_liabilities": values["current_liabilities"],
@@ -235,6 +249,7 @@ def _build_result(
 
 
 _USGAAP_HTML_LABELS: dict[str, list[str]] = {
+    "total_assets": ["資産合計"],
     "current_assets": ["流動資産合計"],
     "non_current_assets": ["投資及び長期債権合計", "有形固定資産合計", "その他の資産合計"],
     "current_liabilities": ["流動負債合計"],
@@ -334,6 +349,8 @@ def extract_balance_sheet(
         return _apply_usgaap_html_fallback(result, xbrl_dir)
 
     result = _build_result(components, accounting_standard, "direct")
+    if result["total_assets"] is None and result["current_assets"] is not None and result["non_current_assets"] is not None:
+        result["total_assets"] = result["current_assets"] + result["non_current_assets"]
     if accounting_standard == "US-GAAP":
         return _apply_usgaap_html_fallback(result, xbrl_dir)
     return result
