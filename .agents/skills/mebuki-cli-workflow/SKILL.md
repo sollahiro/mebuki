@@ -17,8 +17,9 @@ description: mebuki CLIを使って日本株の検索・財務分析・有価証
 ## 厳格なルール
 - **売買推奨の禁止**: データは客観的に提示し、最終判断は必ずユーザーに委ねること。
 - **データの忠実な提示**: mebukiコマンドの出力をそのまま提示し、恣意的な解釈を加えないこと。
+- **API負荷軽減のためのキャッシュ優先**: `analyze` / `filings` / `filing` などEDINETデータを使う調査コマンドの前に、必ず `mebuki cache status` を実行すること。キャッシュが不足している場合は、調査コマンドへ進む前に `mebuki cache prepare` または `mebuki cache catchup` を実行する。
 
-## 前提条件チェック
+## 必須の事前チェック
 
 実行前に設定を確認する：
 
@@ -32,23 +33,25 @@ mebuki config show
 mebuki config init
 ```
 
-初回セットアップ時は、調査コマンドの前にEDINET年次インデックスを単独で事前準備する。既に準備済みの場合はすぐ終わる：
-
-```bash
-mebuki cache prepare --years 3
-```
-
-キャッシュ状態を確認する：
+日本株の調査・分析依頼では、銘柄検索だけで完了する場合を除き、最初にキャッシュ状態を確認する：
 
 ```bash
 mebuki cache status
 ```
 
-不足分だけ追いつかせる：
+`cache status` の `next_action` が `mebuki cache prepare --years N` を示す場合は、調査コマンドの前に実行する。既に準備済みの場合はすぐ終わる：
+
+```bash
+mebuki cache prepare --years 3
+```
+
+`cache status` の `next_action` が `mebuki cache catchup --years N` を示す場合は、不足分だけ追いつかせる：
 
 ```bash
 mebuki cache catchup --years 3
 ```
+
+`--years` はユーザーが求める分析・ファイリング探索年数に合わせる。指定がなければ通常調査では `3`、長期の財務分析を行う場合は分析年数に合わせて `6` を使う。
 
 ## コマンドリファレンスと実行フロー
 
@@ -200,11 +203,12 @@ mebuki portfolio remove 7203 --broker SBI --account 特定
 
 新規銘柄を調査する際の標準フロー：
 
-1. **銘柄特定**: `mebuki search <社名>` でコードを確認
-2. **財務分析**: `mebuki analyze <code> --years 6` で財務推移を確認（ROIC・有利子負債を含む）
+1. **キャッシュ確認**: `mebuki cache status` を実行し、必要なら `mebuki cache prepare --years 3` または `mebuki cache catchup --years 3` を実行
+2. **銘柄特定**: `mebuki search <社名>` でコードを確認
+3. **財務分析**: `mebuki analyze <code> --years 6` で財務推移を確認（ROIC・有利子負債を含む）
    - 半期推移も確認したい場合: `--half` を追加
-3. **書類一覧**: `mebuki filings <code>` でEDINET提出書類を確認
-4. **報告書抽出**: `mebuki filing <code> --sections business_risks mda` でリスクと経営状況を確認
+4. **書類一覧**: `mebuki filings <code>` でEDINET提出書類を確認
+5. **報告書抽出**: `mebuki filing <code> --sections business_risks mda` でリスクと経営状況を確認
 
 ### 銘柄管理フロー
 
@@ -219,17 +223,21 @@ mebuki portfolio remove 7203 --broker SBI --account 特定
 同セクター内の銘柄を横断比較する際の標準フロー。
 
 ```bash
-# 1. 銘柄コード確認（社名で検索）
+# 1. キャッシュ確認と不足分の準備
+mebuki cache status
+mebuki cache catchup --years 3  # statusが不足を示した場合のみ
+
+# 2. 銘柄コード確認（社名で検索）
 mebuki search <社名A>
 mebuki search <社名B>
 mebuki search <社名C>
 
-# 2. 財務サマリー（デフォルト: ROIC・有利子負債を含む）
+# 3. 財務サマリー（デフォルト: ROIC・有利子負債を含む）
 mebuki analyze <codeA> --years 6
 mebuki analyze <codeB> --years 6
 mebuki analyze <codeC> --years 6
 
-# 3. 有価証券報告書でリスクと経営方針を確認
+# 4. 有価証券報告書でリスクと経営方針を確認
 mebuki filing <codeA> --sections business_risks mda management_policy
 mebuki filing <codeB> --sections business_risks mda management_policy
 mebuki filing <codeC> --sections business_risks mda management_policy
