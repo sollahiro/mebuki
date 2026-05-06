@@ -1,5 +1,5 @@
 ---
-name: mebuki-cli-workflow
+name: blue-ticker-cli-workflow
 description: BLUE TICKER CLIを使って日本株の検索・財務分析・有価証券報告書抽出・ウォッチリスト/ポートフォリオ管理を行う汎用ワークフロースキル
 ---
 

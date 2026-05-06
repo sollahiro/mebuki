@@ -16,8 +16,8 @@ from mebuki.services.data_service import data_service
 from mebuki.services.master_data import master_data_manager
 from mebuki.services.portfolio_service import portfolio_service
 
-logger = logging.getLogger("mebuki-mcp")
-app = Server("mebuki-mcp-server")
+logger = logging.getLogger("blue-ticker-mcp")
+app = Server("blue-ticker-mcp-server")
 
 
 def _stdio_server_context() -> AbstractAsyncContextManager[tuple[Any, Any]]:
