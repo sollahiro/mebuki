@@ -303,6 +303,16 @@ class TestApplyGrossProfit:
         assert cd["GrossProfitLabel"] == "業務粗利益"
         assert cd["MetricSources"]["GrossProfit"]["label"] == "業務粗利益"
 
+    def test_sets_operating_gross_profit_label(self):
+        years = [_make_year("2024-03-31", Sales=27_840.047)]
+        gp_by_year = {"20240331": {"current": 3_320_406_000, "method": "operating_gross_profit"}}
+        _apply_gross_profit(years, gp_by_year)
+        cd = years[0]["CalculatedData"]
+        assert cd["GrossProfit"] == pytest.approx(3_320.406)
+        assert cd["GrossProfitMethod"] == "operating_gross_profit"
+        assert cd["GrossProfitLabel"] == "営業総利益"
+        assert cd["MetricSources"]["GrossProfit"]["label"] == "営業総利益"
+
     def test_skips_when_no_entry(self):
         years = [_make_year("2024-03-31", Sales=1000.0)]
         _apply_gross_profit(years, {})

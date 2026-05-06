@@ -51,6 +51,7 @@ from mebuki.constants.xbrl import (
     GROSS_PROFIT_COMPONENT_DEFINITIONS,
     GROSS_PROFIT_DIRECT_TAGS,
     IFRS_PL_MARKER_TAGS,
+    OPERATING_GROSS_PROFIT_DIRECT_TAGS,
     ORDINARY_REVENUE_TAGS,
     PRIOR_DURATION_CONTEXT_PATTERNS,
     USGAAP_MARKER_TAGS,
@@ -60,6 +61,7 @@ from mebuki.utils.xbrl_result_types import GrossProfitResult, MetricComponent, X
 # XBRL解析で収集対象とするローカルタグ名のセット
 _GP_RELEVANT_TAGS: frozenset[str] = frozenset(
     GROSS_PROFIT_DIRECT_TAGS
+    + OPERATING_GROSS_PROFIT_DIRECT_TAGS
     + [tag for comp in GROSS_PROFIT_COMPONENT_DEFINITIONS for tag in comp["tags"]]
     + [tag for comp in BUSINESS_GROSS_PROFIT_COMPONENT_DEFINITIONS for tag in comp["tags"]]
     + ORDINARY_REVENUE_TAGS
@@ -383,6 +385,27 @@ def extract_gross_profit(
     business_gross_profit = _extract_business_gross_profit(tag_elements)
     if business_gross_profit is not None:
         return business_gross_profit
+
+    # 直接法: OperatingGrossProfit タグを検索
+    for gp_tag in OPERATING_GROSS_PROFIT_DIRECT_TAGS:
+        current, prior = _find_consolidated_duration_value(tag_elements, gp_tag)
+        if current is None and prior is None:
+            current, prior = _find_nonconsolidated_duration_value(tag_elements, gp_tag)
+        if current is not None or prior is not None:
+            sales_c, sales_p = _extract_sales_for_yoy(tag_elements)
+            result: GrossProfitResult = {
+                "current": current,
+                "prior": prior,
+                "method": "operating_gross_profit",
+                "accounting_standard": accounting_standard,
+                "components": [
+                    {"label": "営業総利益", "tag": gp_tag, "current": current, "prior": prior}
+                ],
+            }
+            if sales_c is not None or sales_p is not None:
+                result["current_sales"] = sales_c
+                result["prior_sales"] = sales_p
+            return result
 
     # 計算法: 売上高タグ・売上原価タグをそれぞれ取得して差し引く
     comp_results: list[MetricComponent] = []

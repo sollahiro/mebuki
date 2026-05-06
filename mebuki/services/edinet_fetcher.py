@@ -807,7 +807,7 @@ class EdinetFetcher:
             sales = is_result.get("sales")
             operating_profit = is_result.get("operating_profit")
             operating_profit_label = None
-            sales_label = "売上高" if sales is not None else None
+            sales_label = is_result.get("sales_label", "売上高") if sales is not None else None
             if sales is None:
                 gp_for_sales = extract_gross_profit(xbrl_path, pre_parsed=pre_parsed)
                 sales = gp_for_sales.get("current_sales")
@@ -911,7 +911,7 @@ class EdinetFetcher:
             sales = is_result.get("sales")
             operating_profit = is_result.get("operating_profit")
             operating_profit_label = None
-            sales_label = "売上高" if sales is not None else None
+            sales_label = is_result.get("sales_label", "売上高") if sales is not None else None
             if sales is None:
                 gp_for_sales = extract_gross_profit(xbrl_path, pre_parsed=pre_parsed)
                 sales = gp_for_sales.get("current_sales")

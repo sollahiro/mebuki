@@ -302,11 +302,21 @@ COMPONENT_DEFINITIONS: list[_ComponentDef] = [
 # 売上総利益（GP）タグ定義
 # analysis/gross_profit.py で使用
 
+# 営業収益（売上高に相当するトップライン）タグ
+OPERATING_REVENUE_TAGS: list[str] = [
+    "OperatingRevenue1",                         # J-GAAP 営業収益
+    "OperatingRevenue1SummaryOfBusinessResults", # J-GAAP 営業収益（要約情報）
+]
+
 # 売上総利益合計タグ（直接法）
 # EDINET XBRL では IFRS連結は "IFRS" サフィックス付き、J-GAAP連結はサフィックスなし
 GROSS_PROFIT_DIRECT_TAGS: list[str] = [
     "GrossProfitIFRS",  # IFRS連結（例: 味の素, 日立）
     "GrossProfit",      # J-GAAP連結（例: ニチレイ）
+]
+
+OPERATING_GROSS_PROFIT_DIRECT_TAGS: list[str] = [
+    "OperatingGrossProfit",  # J-GAAP 営業総利益（倉庫・運輸等）
 ]
 
 # 売上総利益 計算法コンポーネント（直接タグが存在しない場合のフォールバック）
@@ -320,6 +330,7 @@ GROSS_PROFIT_COMPONENT_DEFINITIONS: list[_ComponentDef] = [
             "Revenue",          # IFRS代替
             "Revenues",         # US-GAAP
             "RevenuesUSGAAPSummaryOfBusinessResults",  # US-GAAP 要約情報
+            *OPERATING_REVENUE_TAGS,
         ],
     },
     {
@@ -328,6 +339,7 @@ GROSS_PROFIT_COMPONENT_DEFINITIONS: list[_ComponentDef] = [
             "CostOfSalesIFRS",  # IFRS連結
             "CostOfSales",      # J-GAAP連結
             "CostOfRevenue",    # US-GAAP
+            "OperatingCost",     # J-GAAP 営業原価
         ],
     },
 ]
@@ -519,6 +531,7 @@ NET_SALES_TAGS: list[str] = [
     "RevenuesUSGAAPSummaryOfBusinessResults",   # US-GAAP 要約情報
     "NetSales",                                 # J-GAAP連結
     "NetSalesSummaryOfBusinessResults",         # J-GAAP 要約情報（決算短信）
+    *OPERATING_REVENUE_TAGS,
 ]
 
 # 当期純利益（Net Profit）タグ（親会社帰属 → PL全体の優先順）

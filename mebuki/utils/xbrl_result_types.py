@@ -127,6 +127,7 @@ class OrderBookResult(TypedDict):
 class IncomeStatementResult(TypedDict):
     sales: float | None
     sales_prior: float | None
+    sales_label: NotRequired[str]
     operating_profit: float | None
     operating_profit_prior: float | None
     net_profit: float | None

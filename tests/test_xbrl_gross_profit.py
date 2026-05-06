@@ -152,6 +152,40 @@ class TestGrossProfitComputedMethod(unittest.TestCase):
         self.assertAlmostEqual(result["current"], 120_000_000_000)  # 300B - 180B
         self.assertAlmostEqual(result["prior"], 110_000_000_000)    # 280B - 170B
 
+    def test_direct_jgaap_operating_gross_profit(self):
+        """J-GAAP: 営業総利益タグを直接取得する（中央倉庫想定）"""
+        xml = _make_xbrl_duration("""
+            <jppfs_cor:OperatingRevenue1 contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">27840047000</jppfs_cor:OperatingRevenue1>
+            <jppfs_cor:OperatingRevenue1 contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">26512364000</jppfs_cor:OperatingRevenue1>
+            <jppfs_cor:OperatingGrossProfit contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">3320406000</jppfs_cor:OperatingGrossProfit>
+            <jppfs_cor:OperatingGrossProfit contextRef="Prior1YearDuration"
+                unitRef="JPY" decimals="-6">2932980000</jppfs_cor:OperatingGrossProfit>
+        """)
+        (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
+        result = extract_gross_profit(self.xbrl_dir)
+        self.assertEqual(result["method"], "operating_gross_profit")
+        self.assertEqual(result["accounting_standard"], "J-GAAP")
+        self.assertAlmostEqual(result["current"], 3_320_406_000)
+        self.assertAlmostEqual(result["prior"], 2_932_980_000)
+        self.assertAlmostEqual(result["current_sales"], 27_840_047_000)
+        self.assertEqual(result["components"][0]["label"], "営業総利益")
+
+    def test_computed_jgaap_operating_revenue_operating_cost(self):
+        """J-GAAP: OperatingRevenue1 − OperatingCost で営業総利益相当を計算する"""
+        xml = _make_xbrl_duration("""
+            <jppfs_cor:OperatingRevenue1 contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">27840047000</jppfs_cor:OperatingRevenue1>
+            <jppfs_cor:OperatingCost contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">24519640000</jppfs_cor:OperatingCost>
+        """)
+        (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
+        result = extract_gross_profit(self.xbrl_dir)
+        self.assertEqual(result["method"], "computed")
+        self.assertAlmostEqual(result["current"], 3_320_407_000)
+
     def test_computed_ifrs_revenue_costofsales(self):
         """IFRS: NetSalesIFRS − CostOfSalesIFRS で計算（GrossProfitIFRS タグなし）"""
         xml = _make_xbrl_duration("""

@@ -86,7 +86,13 @@ def _raw_by_year(all_metrics: dict[str, dict[str, Any]]) -> dict[str, RawXbrlExt
             raw["doc_id"] = doc_id
         raw["gross_profit"] = gp.get("current")
         raw["gross_profit_method"] = str(gp.get("method", "unknown"))
-        raw["gross_profit_label"] = "業務粗利益" if gp.get("method") == "business_gross_profit" else None
+        gp_method = gp.get("method")
+        if gp_method == "business_gross_profit":
+            raw["gross_profit_label"] = "業務粗利益"
+        elif gp_method == "operating_gross_profit":
+            raw["gross_profit_label"] = "営業総利益"
+        else:
+            raw["gross_profit_label"] = None
 
     for fy_end_key, op in all_metrics.get("op", {}).items():
         raw = raw_for(fy_end_key)

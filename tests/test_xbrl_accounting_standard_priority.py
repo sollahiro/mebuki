@@ -70,6 +70,31 @@ def test_income_statement_reads_usgaap_summary_values() -> None:
     assert result["net_profit"] == 260_951_000_000.0
 
 
+def test_income_statement_reads_jgaap_operating_revenue_summary() -> None:
+    result = extract_income_statement(
+        Path("."),
+        pre_parsed={
+            "OperatingRevenue1SummaryOfBusinessResults": {
+                "Prior1YearDuration": 26_512_000_000.0,
+                "CurrentYearDuration": 27_840_000_000.0,
+            },
+            "OperatingIncome": {
+                "CurrentYearDuration": 2_189_902_000.0,
+            },
+            "NetIncomeLossSummaryOfBusinessResults": {
+                "CurrentYearDuration": 1_588_000_000.0,
+            },
+        },
+    )
+
+    assert result["accounting_standard"] == "J-GAAP"
+    assert result["sales"] == 27_840_000_000.0
+    assert result["sales_prior"] == 26_512_000_000.0
+    assert result["sales_label"] == "営業収益"
+    assert result["operating_profit"] == 2_189_902_000.0
+    assert result["net_profit"] == 1_588_000_000.0
+
+
 def test_cash_flow_reads_usgaap_summary_values() -> None:
     result = extract_cash_flow(
         Path("."),
