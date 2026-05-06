@@ -32,7 +32,7 @@ mebuki config show
 mebuki config init
 ```
 
-初回セットアップ時は、EDINET年次インデックスを事前準備する：
+初回セットアップ時は、EDINET年次インデックスを事前準備する。既に準備済みの場合はすぐ終わる：
 
 ```bash
 mebuki cache warmup --years 3
