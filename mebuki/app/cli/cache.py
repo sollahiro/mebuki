@@ -6,13 +6,13 @@ from typing import Any
 
 from mebuki.api.edinet_cache_store import EdinetCacheStore
 from mebuki.api.edinet_client import EdinetAPIClient
-from mebuki.constants.api import EDINET_WARMUP_DEFAULT_YEARS
+from mebuki.constants.api import EDINET_PREPARE_DEFAULT_YEARS
 from mebuki.infrastructure.settings import settings_store
 from mebuki.utils.cache_paths import edinet_cache_dir
 from mebuki.services.cache_pruner import CachePruner
 
 
-async def warmup_edinet_index_async(api_key: str, cache_dir: str, years: int) -> dict[str, Any]:
+async def prepare_edinet_index_async(api_key: str, cache_dir: str, years: int) -> dict[str, Any]:
     """直近 years 年分の EDINET 年次インデックスを準備する。"""
     client = EdinetAPIClient(
         api_key=api_key,
@@ -58,7 +58,30 @@ async def refresh_edinet_index_async(api_key: str, cache_dir: str, years: int) -
     }
 
 
-def cache_status(cache_dir: str, years: int = EDINET_WARMUP_DEFAULT_YEARS) -> dict[str, Any]:
+async def catchup_edinet_index_async(api_key: str, cache_dir: str, years: int) -> dict[str, Any]:
+    """直近 years 年分の EDINET 年次インデックスを差分更新する。"""
+    client = EdinetAPIClient(
+        api_key=api_key,
+        cache_dir=str(edinet_cache_dir(cache_dir)),
+    )
+    current_year = datetime.now().year
+    target_years = [current_year - offset for offset in range(years)]
+    entries: list[dict[str, Any]] = []
+    try:
+        for year in target_years:
+            docs = await client.catchup_document_index_for_year(year)
+            entries.append({"year": year, "documents": len(docs), "status": "caught_up"})
+    finally:
+        await client.close()
+
+    return {
+        "requested_years": years,
+        "caught_up_years": len(entries),
+        "entries": entries,
+    }
+
+
+def cache_status(cache_dir: str, years: int = EDINET_PREPARE_DEFAULT_YEARS) -> dict[str, Any]:
     """ユーザー向けキャッシュ状態を返す。"""
     store = EdinetCacheStore(edinet_cache_dir(cache_dir))
     pruner = CachePruner(cache_dir)
@@ -90,10 +113,10 @@ def cache_status(cache_dir: str, years: int = EDINET_WARMUP_DEFAULT_YEARS) -> di
 
     if prepared < len(target_years):
         index_status = "missing"
-        next_action = f"mebuki cache warmup --years {years}"
+        next_action = f"mebuki cache prepare --years {years}"
     elif stale:
         index_status = "stale"
-        next_action = f"mebuki cache refresh --years {years}"
+        next_action = f"mebuki cache catchup --years {years}"
     else:
         index_status = "ready"
         next_action = None
@@ -113,12 +136,12 @@ def cache_status(cache_dir: str, years: int = EDINET_WARMUP_DEFAULT_YEARS) -> di
     }
 
 
-def print_warmup_loading(years: int) -> None:
+def print_prepare_loading(years: int) -> None:
     """EDINETキャッシュ準備中の状態を表示する。"""
     print(f"Now Loading... EDINET年次インデックスを準備しています（直近{years}年分）", file=sys.stderr)
 
 
-def print_warmup_done(data: dict[str, Any]) -> None:
+def print_prepare_done(data: dict[str, Any]) -> None:
     """EDINETキャッシュ準備完了を表示する。"""
     print(f"Ready. EDINETキャッシュを準備しました: {data['prepared_years']}年分", file=sys.stderr)
 
@@ -126,7 +149,7 @@ def print_warmup_done(data: dict[str, Any]) -> None:
 def cmd_cache(args, parser) -> None:
     """キャッシュ管理コマンド"""
     if args.cache_subcommand == "status":
-        years = getattr(args, "years", EDINET_WARMUP_DEFAULT_YEARS)
+        years = getattr(args, "years", EDINET_PREPARE_DEFAULT_YEARS)
         if years <= 0:
             print("エラー: years には正の整数を指定してください。", file=sys.stderr)
             return
@@ -156,8 +179,8 @@ def cmd_cache(args, parser) -> None:
             print(f"  next action:   {data['next_action']}", file=sys.stderr)
         return
 
-    if args.cache_subcommand == "warmup":
-        years = getattr(args, "years", EDINET_WARMUP_DEFAULT_YEARS)
+    if args.cache_subcommand == "prepare":
+        years = getattr(args, "years", EDINET_PREPARE_DEFAULT_YEARS)
         if years <= 0:
             print("エラー: years には正の整数を指定してください。", file=sys.stderr)
             return
@@ -166,9 +189,9 @@ def cmd_cache(args, parser) -> None:
             return
 
         if args.format != "json":
-            print_warmup_loading(years)
+            print_prepare_loading(years)
         data = asyncio.run(
-            warmup_edinet_index_async(
+            prepare_edinet_index_async(
                 settings_store.edinet_api_key,
                 settings_store.cache_dir,
                 years,
@@ -178,8 +201,8 @@ def cmd_cache(args, parser) -> None:
             print(json.dumps(data, indent=2, ensure_ascii=False))
             return
 
-        print_warmup_done(data)
-        print("cache warmup", file=sys.stderr)
+        print_prepare_done(data)
+        print("cache prepare", file=sys.stderr)
         print(f"  requested years: {data['requested_years']}", file=sys.stderr)
         print(f"  prepared years:  {data['prepared_years']}", file=sys.stderr)
         entries = data["entries"]
@@ -195,7 +218,7 @@ def cmd_cache(args, parser) -> None:
         return
 
     if args.cache_subcommand == "refresh":
-        years = getattr(args, "years", EDINET_WARMUP_DEFAULT_YEARS)
+        years = getattr(args, "years", EDINET_PREPARE_DEFAULT_YEARS)
         if years <= 0:
             print("エラー: years には正の整数を指定してください。", file=sys.stderr)
             return
@@ -215,6 +238,29 @@ def cmd_cache(args, parser) -> None:
             print(json.dumps(data, indent=2, ensure_ascii=False))
             return
         print(f"Ready. EDINETキャッシュを更新しました: {data['refreshed_years']}年分", file=sys.stderr)
+        return
+
+    if args.cache_subcommand == "catchup":
+        years = getattr(args, "years", EDINET_PREPARE_DEFAULT_YEARS)
+        if years <= 0:
+            print("エラー: years には正の整数を指定してください。", file=sys.stderr)
+            return
+        if not settings_store.edinet_api_key:
+            print("EDINET APIキーが未設定です。mebuki config set edinet-key <KEY> を実行してください。", file=sys.stderr)
+            return
+        if args.format != "json":
+            print(f"Now Loading... EDINET年次インデックスの不足分を取得しています（直近{years}年分）", file=sys.stderr)
+        data = asyncio.run(
+            catchup_edinet_index_async(
+                settings_store.edinet_api_key,
+                settings_store.cache_dir,
+                years,
+            )
+        )
+        if args.format == "json":
+            print(json.dumps(data, indent=2, ensure_ascii=False))
+            return
+        print(f"Ready. EDINETキャッシュを差分更新しました: {data['caught_up_years']}年分", file=sys.stderr)
         return
 
     if args.cache_subcommand == "clean":
@@ -239,6 +285,8 @@ def cmd_cache(args, parser) -> None:
         return
 
     parser.print_help()
+
+
 def _mb(value: object) -> str:
     if isinstance(value, int):
         size = value

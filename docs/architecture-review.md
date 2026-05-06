@@ -190,8 +190,9 @@ MCPとCLIは大枠では対応している。
 | コマンド/ツール | 目的 | 削除有無 |
 |---|---|---|
 | `mebuki cache status` | EDINET年次インデックスの準備状況、XBRL/分析キャッシュ容量、次の推奨アクションを確認 | なし |
-| `mebuki cache warmup` | 不足しているEDINET年次インデックスを事前準備 | キャッシュ優先 |
-| `mebuki cache refresh` | EDINET年次インデックスを今日まで明示更新 | APIキーが必要 |
+| `mebuki cache prepare` | 不足しているEDINET年次インデックスを事前準備 | キャッシュ優先 |
+| `mebuki cache catchup` | EDINET年次インデックスを `built_through` の翌日から今日まで差分更新 | APIキーが必要 |
+| `mebuki cache refresh` | EDINET年次インデックスを作り直して今日まで明示更新 | APIキーが必要 |
 | `mebuki cache clean` | 指定日数以上古いEDINET検索/XBRL展開などを削除 | dry-runがデフォルト。`--execute` 時のみ削除 |
 | MCP `get_japan_stock_cache_stats` | MCP利用中にキャッシュ状態を確認 | なし |
 
@@ -233,7 +234,7 @@ MCPとCLIは大枠では対応している。
 ### Phase 1: 可視化と運用整理
 
 - `cache status` 追加済み
-- `cache warmup` / `cache refresh` 追加済み
+- `cache prepare` / `cache catchup` / `cache refresh` 追加済み
 - `cache clean` はMCP非対応、読み取りstatsのみMCP対応
 - docsにキャッシュ方針を明記済み
 

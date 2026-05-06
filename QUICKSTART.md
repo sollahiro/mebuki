@@ -64,7 +64,7 @@ mebuki config init
 - **EDINET API**: [登録・発行サイトへ](https://disclosure2.edinet-fsa.go.jp/)
 
 EDINET APIキーは、財務データ分析と有価証券報告書の検索・抽出に使用します。
-初回設定時に確認される `cache warmup` を実行すると、直近3年分のEDINET年次インデックスを事前準備できます。
+初回設定時に確認される `cache prepare` を実行すると、直近3年分のEDINET年次インデックスを事前準備できます。
 
 ### WACCとキャッシュ
 
@@ -78,7 +78,8 @@ mebuki analyze 7203 --years 6 --no-cache
 
 ```bash
 mebuki cache status
-mebuki cache warmup --years 3
+mebuki cache prepare --years 3
+mebuki cache catchup --years 3
 mebuki cache refresh --years 3
 mebuki cache clean
 ```

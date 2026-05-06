@@ -26,7 +26,7 @@ def test_main_keyboard_interrupt_exits_cleanly(monkeypatch, capsys) -> None:
     assert captured.err == "\n中断しました。\n"
 
 
-def test_main_cache_status_reports_missing_warmup_cache(monkeypatch, capsys, tmp_path) -> None:
+def test_main_cache_status_reports_missing_prepare_cache(monkeypatch, capsys, tmp_path) -> None:
     with patch("mebuki.app.cli.cache.settings_store") as settings:
         settings.cache_dir = str(tmp_path)
 
@@ -38,7 +38,7 @@ def test_main_cache_status_reports_missing_warmup_cache(monkeypatch, capsys, tmp
     assert data["edinet_index_prepared_years"] == 0
 
 
-def test_main_cache_status_reports_ready_warmup_cache(monkeypatch, capsys, tmp_path) -> None:
+def test_main_cache_status_reports_ready_prepare_cache(monkeypatch, capsys, tmp_path) -> None:
     store = EdinetCacheStore(edinet_cache_dir(tmp_path))
     current_year = datetime.now().year
     for offset in range(3):
@@ -214,25 +214,25 @@ def test_main_cache_clean_outputs_json(monkeypatch, capsys) -> None:
     )
 
 
-def test_main_cache_warmup_outputs_json(monkeypatch, capsys) -> None:
+def test_main_cache_prepare_outputs_json(monkeypatch, capsys) -> None:
     with (
         patch("mebuki.app.cli.cache.settings_store") as settings,
-        patch("mebuki.app.cli.cache.warmup_edinet_index_async", AsyncMock(return_value={
+        patch("mebuki.app.cli.cache.prepare_edinet_index_async", AsyncMock(return_value={
             "requested_years": 2,
             "prepared_years": 2,
             "entries": [
                 {"year": 2026, "documents": 100, "status": "prepared"},
                 {"year": 2025, "documents": 200, "status": "prepared"},
             ],
-        })) as warmup,
+        })) as prepare,
     ):
         settings.cache_dir = "/tmp/mebuki-cache"
         settings.edinet_api_key = "dummy"
-        _run_cli(monkeypatch, ["cache", "warmup", "--years", "2", "--format", "json"])
+        _run_cli(monkeypatch, ["cache", "prepare", "--years", "2", "--format", "json"])
 
     captured = capsys.readouterr()
     assert json.loads(captured.out)["prepared_years"] == 2
-    warmup.assert_awaited_once_with("dummy", "/tmp/mebuki-cache", 2)
+    prepare.assert_awaited_once_with("dummy", "/tmp/mebuki-cache", 2)
 
 
 def test_main_cache_refresh_outputs_json(monkeypatch, capsys) -> None:
@@ -254,6 +254,27 @@ def test_main_cache_refresh_outputs_json(monkeypatch, capsys) -> None:
     captured = capsys.readouterr()
     assert json.loads(captured.out)["refreshed_years"] == 2
     refresh.assert_awaited_once_with("dummy", "/tmp/mebuki-cache", 2)
+
+
+def test_main_cache_catchup_outputs_json(monkeypatch, capsys) -> None:
+    with (
+        patch("mebuki.app.cli.cache.settings_store") as settings,
+        patch("mebuki.app.cli.cache.catchup_edinet_index_async", AsyncMock(return_value={
+            "requested_years": 2,
+            "caught_up_years": 2,
+            "entries": [
+                {"year": 2026, "documents": 100, "status": "caught_up"},
+                {"year": 2025, "documents": 200, "status": "caught_up"},
+            ],
+        })) as catchup,
+    ):
+        settings.cache_dir = "/tmp/mebuki-cache"
+        settings.edinet_api_key = "dummy"
+        _run_cli(monkeypatch, ["cache", "catchup", "--years", "2", "--format", "json"])
+
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)["caught_up_years"] == 2
+    catchup.assert_awaited_once_with("dummy", "/tmp/mebuki-cache", 2)
 
 
 

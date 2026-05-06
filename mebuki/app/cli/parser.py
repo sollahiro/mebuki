@@ -1,6 +1,6 @@
 import argparse
 from mebuki import __version__
-from mebuki.constants.api import EDINET_FILINGS_DEFAULT_YEARS, EDINET_WARMUP_DEFAULT_YEARS
+from mebuki.constants.api import EDINET_FILINGS_DEFAULT_YEARS, EDINET_PREPARE_DEFAULT_YEARS
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -68,24 +68,32 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument(
         "--years",
         type=int,
-        default=EDINET_WARMUP_DEFAULT_YEARS,
-        help=f"確認する直近年数（デフォルト: {EDINET_WARMUP_DEFAULT_YEARS}）",
+        default=EDINET_PREPARE_DEFAULT_YEARS,
+        help=f"確認する直近年数（デフォルト: {EDINET_PREPARE_DEFAULT_YEARS}）",
     )
     status_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
-    warmup_parser = cache_sub.add_parser("warmup", help="EDINET年次インデックスを事前準備")
-    warmup_parser.add_argument(
+    prepare_parser = cache_sub.add_parser("prepare", help="EDINET年次インデックスを事前準備")
+    prepare_parser.add_argument(
         "--years",
         type=int,
-        default=EDINET_WARMUP_DEFAULT_YEARS,
-        help=f"準備する直近年数（デフォルト: {EDINET_WARMUP_DEFAULT_YEARS}）",
+        default=EDINET_PREPARE_DEFAULT_YEARS,
+        help=f"準備する直近年数（デフォルト: {EDINET_PREPARE_DEFAULT_YEARS}）",
     )
-    warmup_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+    prepare_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+    catchup_parser = cache_sub.add_parser("catchup", help="EDINET年次インデックスの不足分を取得")
+    catchup_parser.add_argument(
+        "--years",
+        type=int,
+        default=EDINET_PREPARE_DEFAULT_YEARS,
+        help=f"差分更新する直近年数（デフォルト: {EDINET_PREPARE_DEFAULT_YEARS}）",
+    )
+    catchup_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
     refresh_parser = cache_sub.add_parser("refresh", help="EDINET年次インデックスを更新")
     refresh_parser.add_argument(
         "--years",
         type=int,
-        default=EDINET_WARMUP_DEFAULT_YEARS,
-        help=f"更新する直近年数（デフォルト: {EDINET_WARMUP_DEFAULT_YEARS}）",
+        default=EDINET_PREPARE_DEFAULT_YEARS,
+        help=f"更新する直近年数（デフォルト: {EDINET_PREPARE_DEFAULT_YEARS}）",
     )
     refresh_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
     clean_parser = cache_sub.add_parser("clean", help="不要なキャッシュを削除")

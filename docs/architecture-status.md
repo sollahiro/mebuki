@@ -126,7 +126,7 @@ EDINETの日別検索キャッシュとXBRL zip展開処理が `EdinetAPIClient`
 **対応**
 
 - `mebuki cache status` を追加
-- `mebuki cache warmup` / `mebuki cache refresh` を追加
+- `mebuki cache prepare` / `mebuki cache catchup` / `mebuki cache refresh` を追加
 - `mebuki cache clean` をdry-runデフォルトで追加
 - EDINET-onlyスモークテスト用の検索/XBRLキャッシュ準備処理を追加
 - MCP `get_japan_stock_cache_stats` は読み取り専用にした

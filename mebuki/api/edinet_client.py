@@ -308,6 +308,56 @@ class EdinetAPIClient:
                 )
                 return cached or []
 
+    async def catchup_document_index_for_year(self, year: int) -> list[dict[str, Any]]:
+        """指定年のEDINET年次インデックスを built_through の翌日から今日まで追いつかせる。"""
+        today = datetime.now().date()
+        year_start = date(year, 1, 1)
+        year_end = date(year, 12, 31)
+        if year_start > today:
+            return []
+        required_through_date = min(year_end, today)
+        required_through = required_through_date.strftime("%Y-%m-%d")
+
+        if year not in self._document_index_locks:
+            self._document_index_locks[year] = asyncio.Lock()
+        async with self._document_index_locks[year]:
+            try:
+                with self.cache_store.file_lock(f"document_index_{year}"):
+                    cached_info = self.cache_store.load_document_index_info(
+                        year,
+                        required_through=required_through,
+                        allow_stale=True,
+                    )
+                    if cached_info is None:
+                        docs = await self._build_document_index_for_year(year, required_through_date)
+                        self.cache_store.save_document_index(year, docs, built_through=required_through)
+                        return docs
+
+                    documents = cached_info.get("documents")
+                    existing_docs = list(documents) if isinstance(documents, list) else []
+                    built_through = cached_info.get("built_through")
+                    built_dt = parse_date_string(built_through) if isinstance(built_through, str) else None
+                    if built_dt is not None and built_dt.date() >= required_through_date:
+                        return existing_docs
+
+                    start_date = (built_dt.date() + timedelta(days=1)) if built_dt is not None else year_start
+                    if start_date > required_through_date:
+                        self.cache_store.save_document_index(year, existing_docs, built_through=required_through)
+                        return existing_docs
+
+                    docs_by_date = await self._get_documents_for_date_range_daily(start_date, required_through_date)
+                    merged = _merge_document_index_docs(existing_docs, docs_by_date)
+                    self.cache_store.save_document_index(year, merged, built_through=required_through)
+                    return merged
+            except TimeoutError as e:
+                logger.warning(f"[EDINET] document index catchup lock timeout: year={year} error={e}")
+                cached = self.cache_store.load_document_index(
+                    year,
+                    required_through=required_through,
+                    allow_stale=True,
+                )
+                return cached or []
+
     async def get_documents_for_date_range(
         self,
         start: date,
@@ -448,6 +498,33 @@ def _empty_date_range(start: date, end: date) -> dict[str, list[dict[str, Any]]]
         (start + timedelta(days=offset)).strftime("%Y-%m-%d"): []
         for offset in range(days)
     }
+
+
+def _merge_document_index_docs(
+    existing_docs: list[dict[str, Any]],
+    docs_by_date: dict[str, list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def append_doc(doc: dict[str, Any], list_date: str | None = None) -> None:
+        indexed_doc = dict(doc)
+        if list_date is not None:
+            indexed_doc["_edinet_list_date"] = list_date
+        doc_id = str(indexed_doc.get("docID") or "")
+        doc_date = str(indexed_doc.get("_edinet_list_date") or indexed_doc.get("submitDateTime") or "")
+        key = (doc_id, doc_date)
+        if key in seen:
+            return
+        seen.add(key)
+        merged.append(indexed_doc)
+
+    for doc in existing_docs:
+        append_doc(doc)
+    for list_date in sorted(docs_by_date.keys()):
+        for doc in docs_by_date[list_date]:
+            append_doc(doc, list_date)
+    return merged
 
 
 def _strip_index_metadata(doc: dict[str, Any]) -> dict[str, Any]:

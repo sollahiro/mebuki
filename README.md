@@ -39,7 +39,7 @@ CLI の初期設定コマンドを実行し、EDINET APIキャッシュを準備
 
 ```bash
 mebuki config init
-mebuki cache warmup --years 3
+mebuki cache prepare --years 3
 ```
 以下のキーが必要です：
 - **EDINET APIキー**: [公式サイト](https://disclosure2.edinet-fsa.go.jp/)で取得
@@ -72,7 +72,8 @@ mebuki analyze 7203 --years 6
 
 # キャッシュ確認
 mebuki cache status
-mebuki cache warmup --years 3
+mebuki cache prepare --years 3
+mebuki cache catchup --years 3
 mebuki cache refresh --years 3
 mebuki cache clean
 

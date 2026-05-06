@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 import pytest
@@ -127,3 +127,32 @@ async def test_document_index_prefers_stale_index(tmp_path) -> None:
 
     assert await client.ensure_document_index_for_year(year) == documents
     assert client.build_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_document_index_catchup_fetches_only_missing_dates(tmp_path) -> None:
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    store = EdinetCacheStore(tmp_path)
+    store.save_document_index(
+        today.year,
+        [{"docID": "OLD", "_edinet_list_date": yesterday.strftime("%Y-%m-%d")}],
+        built_through=yesterday.strftime("%Y-%m-%d"),
+    )
+    client = _FakeEdinetClient(
+        store,
+        {
+            today.strftime("%Y-%m-%d"): [{
+                "docID": "NEW",
+                "submitDateTime": f"{today.strftime('%Y-%m-%d')} 10:00",
+            }]
+        },
+    )
+
+    docs = await client.catchup_document_index_for_year(today.year)
+    cached_info = store.load_document_index_info(today.year, allow_stale=True)
+
+    assert [doc["docID"] for doc in docs] == ["OLD", "NEW"]
+    assert client.fetch_dates == [today.strftime("%Y-%m-%d")]
+    assert cached_info is not None
+    assert cached_info["built_through"] == today.strftime("%Y-%m-%d")
