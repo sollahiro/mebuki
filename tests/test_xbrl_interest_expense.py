@@ -177,6 +177,29 @@ class TestIfrs(unittest.TestCase):
         self.assertEqual(result["accounting_standard"], "IFRS")
         self.assertAlmostEqual(result["current"], 6_000_000_000)
 
+    def test_interest_expense_note_textblock_fallback(self):
+        """IFRS: numeric タグがない場合、支払利息注記のテキストから取得する。"""
+        xml = _make_xbrl("""
+            <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">100000000000</jpifrs_cor:BorrowingsCLIFRS>
+        """)
+        (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
+        html = """
+            <html><body>
+            <h4>（５）支払利息</h4>
+            <p>2024年３月31日および2025年３月31日に終了した各１年間における支払利息は、
+            それぞれ<span>1,213,021百万円</span>および<span>1,654,702百万円</span>です。</p>
+            </body></html>
+        """
+        (self.xbrl_dir / "note_ixbrl.htm").write_text(html, encoding="utf-8")
+
+        result = extract_interest_expense(self.xbrl_dir)
+
+        self.assertEqual(result["method"], "ifrs_textblock")
+        self.assertEqual(result["accounting_standard"], "IFRS")
+        self.assertAlmostEqual(result["prior"], 1_213_021_000_000)
+        self.assertAlmostEqual(result["current"], 1_654_702_000_000)
+
 
 class TestUsGaapHtml(unittest.TestCase):
 
