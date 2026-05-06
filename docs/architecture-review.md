@@ -174,12 +174,12 @@ MCPとCLIは大枠では対応している。
 | EDINET本文 | `filing` | `extract_japan_stock_filing_content` | 対応 |
 | セクター | `sector` | `search_japan_stocks_by_sector` | 対応 |
 | watch/portfolio | `watch`, `portfolio` | 対応ツール | 対応 |
-| キャッシュ可視化 | `cache stats`, `cache audit` | `get_japan_stock_cache_stats` | 読み取りのみ対応 |
-| キャッシュ削除 | `cache prune` | なし | 安全のためCLIのみ |
+| キャッシュ可視化 | `cache status` | `get_japan_stock_cache_stats` | 読み取りのみ対応 |
+| キャッシュ削除 | `cache clean` | なし | 安全のためCLIのみ |
 
 運用方針:
 
-- `cache prune` はCLIに限定する。MCPでは削除せず、`get_japan_stock_cache_stats` で容量とaudit結果だけ見せる。
+- `cache clean` はCLIに限定する。MCPでは削除せず、`get_japan_stock_cache_stats` で容量とaudit結果だけ見せる。
 - CLIとMCPの標準分析JSONは serializer 経由でデバッグフィールドを除外する。
 - 公開JSONのキー集合は `tests/test_output_serializer.py` のゴールデンテストで固定する。
 
@@ -189,9 +189,10 @@ MCPとCLIは大枠では対応している。
 
 | コマンド/ツール | 目的 | 削除有無 |
 |---|---|---|
-| `mebuki cache stats` | 全体容量、ファイル数、EDINET検索/年次インデックス/XBRL展開/parseキャッシュ/分析キャッシュの件数と容量を確認 | なし |
-| `mebuki cache audit` | EDINET検索、年次インデックス、XBRL展開、parseキャッシュ、分析キャッシュ、不明root JSONをカテゴリ別に一覧表示 | なし |
-| `mebuki cache prune` | 指定日数以上古いEDINET検索/XBRL展開などを削除 | dry-runがデフォルト。`--execute` 時のみ削除 |
+| `mebuki cache status` | EDINET年次インデックスの準備状況、XBRL/分析キャッシュ容量、次の推奨アクションを確認 | なし |
+| `mebuki cache warmup` | 不足しているEDINET年次インデックスを事前準備 | キャッシュ優先 |
+| `mebuki cache refresh` | EDINET年次インデックスを今日まで明示更新 | APIキーが必要 |
+| `mebuki cache clean` | 指定日数以上古いEDINET検索/XBRL展開などを削除 | dry-runがデフォルト。`--execute` 時のみ削除 |
 | MCP `get_japan_stock_cache_stats` | MCP利用中にキャッシュ状態を確認 | なし |
 
 削除方針:
@@ -231,9 +232,9 @@ MCPとCLIは大枠では対応している。
 
 ### Phase 1: 可視化と運用整理
 
-- `cache stats` 追加済み
-- `cache audit` 追加済み
-- `cache prune` はMCP非対応、読み取りstatsのみMCP対応
+- `cache status` 追加済み
+- `cache warmup` / `cache refresh` 追加済み
+- `cache clean` はMCP非対応、読み取りstatsのみMCP対応
 - docsにキャッシュ方針を明記済み
 
 ### Phase 2: 指標の出所整理

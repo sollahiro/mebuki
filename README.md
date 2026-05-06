@@ -71,9 +71,10 @@ mebuki analyze 7203
 mebuki analyze 7203 --years 6
 
 # キャッシュ確認
+mebuki cache status
 mebuki cache warmup --years 3
-mebuki cache stats
-mebuki cache audit
+mebuki cache refresh --years 3
+mebuki cache clean
 
 # ウォッチリスト
 mebuki watch add 7203

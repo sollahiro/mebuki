@@ -208,17 +208,26 @@ class EdinetAPIClient:
         if documents is not None:
             return documents
 
-        async with self._date_fetch_semaphore:
-            documents = self._load_stale_search_cache(cache_key)
-            if documents is not None:
-                return documents
-            try:
-                data = await self._request("/documents.json", {"date": date_str, "type": 2})
-                documents = data.get("results", [])
-                self._save_search_cache(cache_key, documents)
-                return documents
-            except Exception:
-                return []
+        try:
+            with self.cache_store.file_lock(f"documents_by_date_{date_str}"):
+                documents = self._load_stale_search_cache(cache_key)
+                if documents is not None:
+                    return documents
+
+                async with self._date_fetch_semaphore:
+                    documents = self._load_stale_search_cache(cache_key)
+                    if documents is not None:
+                        return documents
+                    try:
+                        data = await self._request("/documents.json", {"date": date_str, "type": 2})
+                        documents = data.get("results", [])
+                        self._save_search_cache(cache_key, documents)
+                        return documents
+                    except Exception:
+                        return []
+        except TimeoutError as e:
+            logger.warning(f"[EDINET] date cache lock timeout: date={date_str} error={e}")
+            return self._load_stale_search_cache(cache_key) or []
 
     async def ensure_document_index_for_year(self, year: int) -> list[dict[str, Any]]:
         """指定年の日次書類一覧を束ねたローカルインデックスを返す。"""
@@ -249,9 +258,55 @@ class EdinetAPIClient:
             if cached is not None:
                 return cached
 
-            docs = await self._build_document_index_for_year(year, required_through_date)
-            self.cache_store.save_document_index(year, docs, built_through=required_through)
-            return docs
+            try:
+                with self.cache_store.file_lock(f"document_index_{year}"):
+                    cached = self.cache_store.load_document_index(
+                        year,
+                        required_through=required_through,
+                        allow_stale=True,
+                    )
+                    if cached is not None:
+                        return cached
+
+                    docs = await self._build_document_index_for_year(year, required_through_date)
+                    self.cache_store.save_document_index(year, docs, built_through=required_through)
+                    return docs
+            except TimeoutError as e:
+                logger.warning(f"[EDINET] document index lock timeout: year={year} error={e}")
+                cached = self.cache_store.load_document_index(
+                    year,
+                    required_through=required_through,
+                    allow_stale=True,
+                )
+                return cached or []
+
+    async def refresh_document_index_for_year(self, year: int) -> list[dict[str, Any]]:
+        """指定年のEDINET年次インデックスを今日まで更新する。"""
+        today = datetime.now().date()
+        year_start = date(year, 1, 1)
+        year_end = date(year, 12, 31)
+        if year_start > today:
+            return []
+        required_through_date = min(year_end, today)
+        required_through = required_through_date.strftime("%Y-%m-%d")
+
+        if year not in self._document_index_locks:
+            self._document_index_locks[year] = asyncio.Lock()
+        async with self._document_index_locks[year]:
+            try:
+                with self.cache_store.file_lock(f"document_index_{year}"):
+                    self.cache_store.clear_document_index(year)
+                    docs = await self._build_document_index_for_year(year, required_through_date)
+                    self.cache_store.save_document_index(year, docs, built_through=required_through)
+                    return docs
+            except TimeoutError as e:
+                logger.warning(f"[EDINET] document index refresh lock timeout: year={year} error={e}")
+                cached = self.cache_store.load_document_index(
+                    year,
+                    required_through=required_through,
+                    allow_stale=True,
+                )
+                return cached or []
 
     async def get_documents_for_date_range(
         self,

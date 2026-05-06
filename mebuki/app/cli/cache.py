@@ -4,31 +4,12 @@ import asyncio
 from datetime import datetime
 from typing import Any
 
+from mebuki.api.edinet_cache_store import EdinetCacheStore
 from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.constants.api import EDINET_WARMUP_DEFAULT_YEARS
 from mebuki.infrastructure.settings import settings_store
 from mebuki.utils.cache_paths import edinet_cache_dir
 from mebuki.services.cache_pruner import CachePruner
-from mebuki.services.edinet_smoke_cache import (
-    prepare_edinet_smoke_cache,
-    smoke_companies_from_codes,
-)
-
-
-async def _prepare_smoke_cache_async(api_key: str, cache_dir: str, codes: list[str] | None, initial_scan_days: int):
-    companies = smoke_companies_from_codes(codes)
-    client = EdinetAPIClient(
-        api_key=api_key,
-        cache_dir=str(edinet_cache_dir(cache_dir)),
-    )
-    try:
-        return await prepare_edinet_smoke_cache(
-            client,
-            companies,
-            initial_scan_days=initial_scan_days,
-        )
-    finally:
-        await client.close()
 
 
 async def warmup_edinet_index_async(api_key: str, cache_dir: str, years: int) -> dict[str, Any]:
@@ -54,8 +35,127 @@ async def warmup_edinet_index_async(api_key: str, cache_dir: str, years: int) ->
     }
 
 
+async def refresh_edinet_index_async(api_key: str, cache_dir: str, years: int) -> dict[str, Any]:
+    """直近 years 年分の EDINET 年次インデックスを今日まで更新する。"""
+    client = EdinetAPIClient(
+        api_key=api_key,
+        cache_dir=str(edinet_cache_dir(cache_dir)),
+    )
+    current_year = datetime.now().year
+    target_years = [current_year - offset for offset in range(years)]
+    entries: list[dict[str, Any]] = []
+    try:
+        for year in target_years:
+            docs = await client.refresh_document_index_for_year(year)
+            entries.append({"year": year, "documents": len(docs), "status": "refreshed"})
+    finally:
+        await client.close()
+
+    return {
+        "requested_years": years,
+        "refreshed_years": len(entries),
+        "entries": entries,
+    }
+
+
+def cache_status(cache_dir: str, years: int = EDINET_WARMUP_DEFAULT_YEARS) -> dict[str, Any]:
+    """ユーザー向けキャッシュ状態を返す。"""
+    store = EdinetCacheStore(edinet_cache_dir(cache_dir))
+    pruner = CachePruner(cache_dir)
+    stats = pruner.stats().to_dict()
+    current_year = datetime.now().year
+    target_years = [current_year - offset for offset in range(years)]
+    index_entries: list[dict[str, Any]] = []
+    prepared = 0
+    stale = False
+    today = datetime.now().strftime("%Y-%m-%d")
+    for year in target_years:
+        info = store.load_document_index_info(year, allow_stale=True)
+        if info is None:
+            index_entries.append({"year": year, "status": "missing", "documents": 0, "built_through": None})
+            continue
+        prepared += 1
+        built_through = info.get("built_through")
+        year_end = f"{year}-12-31"
+        required_through = min(year_end, today)
+        entry_status = "ready" if isinstance(built_through, str) and built_through >= required_through else "stale"
+        stale = stale or entry_status == "stale"
+        documents = info.get("documents")
+        index_entries.append({
+            "year": year,
+            "status": entry_status,
+            "documents": len(documents) if isinstance(documents, list) else 0,
+            "built_through": built_through if isinstance(built_through, str) else None,
+        })
+
+    if prepared < len(target_years):
+        index_status = "missing"
+        next_action = f"mebuki cache warmup --years {years}"
+    elif stale:
+        index_status = "stale"
+        next_action = f"mebuki cache refresh --years {years}"
+    else:
+        index_status = "ready"
+        next_action = None
+
+    return {
+        "cache_dir": cache_dir,
+        "edinet_index_status": index_status,
+        "edinet_index_prepared_years": prepared,
+        "edinet_index_requested_years": len(target_years),
+        "edinet_index_entries": index_entries,
+        "edinet_xbrl_dirs": stats["edinet_xbrl_dirs"],
+        "edinet_xbrl_bytes": stats["edinet_xbrl_bytes"],
+        "analysis_files": int(stats["individual_analysis_files"]) + int(stats["half_year_analysis_files"]),
+        "analysis_bytes": int(stats["individual_analysis_bytes"]) + int(stats["half_year_analysis_bytes"]),
+        "total_bytes": stats["total_bytes"],
+        "next_action": next_action,
+    }
+
+
+def print_warmup_loading(years: int) -> None:
+    """EDINETキャッシュ準備中の状態を表示する。"""
+    print(f"Now Loading... EDINET年次インデックスを準備しています（直近{years}年分）", file=sys.stderr)
+
+
+def print_warmup_done(data: dict[str, Any]) -> None:
+    """EDINETキャッシュ準備完了を表示する。"""
+    print(f"Ready. EDINETキャッシュを準備しました: {data['prepared_years']}年分", file=sys.stderr)
+
+
 def cmd_cache(args, parser) -> None:
     """キャッシュ管理コマンド"""
+    if args.cache_subcommand == "status":
+        years = getattr(args, "years", EDINET_WARMUP_DEFAULT_YEARS)
+        if years <= 0:
+            print("エラー: years には正の整数を指定してください。", file=sys.stderr)
+            return
+        data = cache_status(settings_store.cache_dir, years=years)
+        if args.format == "json":
+            print(json.dumps(data, indent=2, ensure_ascii=False))
+            return
+
+        print("cache status", file=sys.stderr)
+        print(f"  dir:           {data['cache_dir']}", file=sys.stderr)
+        print(
+            f"  EDINET index:  {data['edinet_index_status']} "
+            f"({data['edinet_index_prepared_years']}/{data['edinet_index_requested_years']} years)",
+            file=sys.stderr,
+        )
+        for entry in data["edinet_index_entries"]:
+            if not isinstance(entry, dict):
+                continue
+            print(
+                f"    {entry.get('year')}: {entry.get('status')} "
+                f"documents={entry.get('documents')} built_through={entry.get('built_through') or '-'}",
+                file=sys.stderr,
+            )
+        print(f"  XBRL cache:    {data['edinet_xbrl_dirs']} dirs ({_mb(data['edinet_xbrl_bytes'])})", file=sys.stderr)
+        print(f"  analysis:      {data['analysis_files']} files ({_mb(data['analysis_bytes'])})", file=sys.stderr)
+        if data["next_action"]:
+            print(f"  next action:   {data['next_action']}", file=sys.stderr)
+        return
+
     if args.cache_subcommand == "warmup":
         years = getattr(args, "years", EDINET_WARMUP_DEFAULT_YEARS)
         if years <= 0:
@@ -65,6 +165,8 @@ def cmd_cache(args, parser) -> None:
             print("EDINET APIキーが未設定です。mebuki config set edinet-key <KEY> を実行してください。", file=sys.stderr)
             return
 
+        if args.format != "json":
+            print_warmup_loading(years)
         data = asyncio.run(
             warmup_edinet_index_async(
                 settings_store.edinet_api_key,
@@ -76,6 +178,7 @@ def cmd_cache(args, parser) -> None:
             print(json.dumps(data, indent=2, ensure_ascii=False))
             return
 
+        print_warmup_done(data)
         print("cache warmup", file=sys.stderr)
         print(f"  requested years: {data['requested_years']}", file=sys.stderr)
         print(f"  prepared years:  {data['prepared_years']}", file=sys.stderr)
@@ -91,54 +194,30 @@ def cmd_cache(args, parser) -> None:
                 )
         return
 
-    if args.cache_subcommand == "stats":
-        pruner = CachePruner(settings_store.cache_dir)
-        data = pruner.stats().to_dict()
+    if args.cache_subcommand == "refresh":
+        years = getattr(args, "years", EDINET_WARMUP_DEFAULT_YEARS)
+        if years <= 0:
+            print("エラー: years には正の整数を指定してください。", file=sys.stderr)
+            return
+        if not settings_store.edinet_api_key:
+            print("EDINET APIキーが未設定です。mebuki config set edinet-key <KEY> を実行してください。", file=sys.stderr)
+            return
+        if args.format != "json":
+            print(f"Now Loading... EDINET年次インデックスを更新しています（直近{years}年分）", file=sys.stderr)
+        data = asyncio.run(
+            refresh_edinet_index_async(
+                settings_store.edinet_api_key,
+                settings_store.cache_dir,
+                years,
+            )
+        )
         if args.format == "json":
             print(json.dumps(data, indent=2, ensure_ascii=False))
             return
-
-        mb = int(data["total_bytes"]) / 1024 / 1024
-        print("cache stats", file=sys.stderr)
-        print(f"  dir:                {data['cache_dir']}", file=sys.stderr)
-        print(f"  total files:        {data['total_files']}", file=sys.stderr)
-        print(f"  total dirs:         {data['total_dirs']}", file=sys.stderr)
-        print(f"  total size:         {mb:.2f} MB", file=sys.stderr)
-        print(f"  metadata entries:   {data['metadata_entries']}", file=sys.stderr)
-        print(f"  root json files:    {data['root_json_files']}", file=sys.stderr)
-        print("  EDINET", file=sys.stderr)
-        print(f"    searches:         {data['edinet_search_files']} ({_mb(data['edinet_search_bytes'])})", file=sys.stderr)
-        print(f"    doc indexes:      {data['edinet_doc_index_files']} ({_mb(data['edinet_doc_index_bytes'])})", file=sys.stderr)
-        print(f"    XBRL dirs:        {data['edinet_xbrl_dirs']} ({_mb(data['edinet_xbrl_bytes'])})", file=sys.stderr)
-        print(f"    doc caches:       {data['edinet_docs_cache_files']} ({_mb(data['edinet_docs_cache_bytes'])})", file=sys.stderr)
-        print(f"    parse caches:     {data['xbrl_parse_cache_files']} ({_mb(data['xbrl_parse_cache_bytes'])})", file=sys.stderr)
-        print("  analysis", file=sys.stderr)
-        print(f"    annual:           {data['individual_analysis_files']} ({_mb(data['individual_analysis_bytes'])})", file=sys.stderr)
-        print(f"    half-year:        {data['half_year_analysis_files']} ({_mb(data['half_year_analysis_bytes'])})", file=sys.stderr)
-        print(f"    MOF rates:        {data['mof_cache_files']} ({_mb(data['mof_cache_bytes'])})", file=sys.stderr)
-        print(f"  unknown root json:  {data['unknown_root_json_files']}", file=sys.stderr)
+        print(f"Ready. EDINETキャッシュを更新しました: {data['refreshed_years']}年分", file=sys.stderr)
         return
 
-    if args.cache_subcommand == "audit":
-        pruner = CachePruner(settings_store.cache_dir)
-        data = pruner.audit().to_dict()
-        if args.format == "json":
-            print(json.dumps(data, indent=2, ensure_ascii=False))
-            return
-
-        print("cache audit", file=sys.stderr)
-        print(f"  dir: {data['cache_dir']}", file=sys.stderr)
-        for key, value in data.items():
-            if key == "cache_dir" or not isinstance(value, list):
-                continue
-            print(f"  {key}: {len(value)}", file=sys.stderr)
-            for name in value[:20]:
-                print(f"    {name}", file=sys.stderr)
-            if len(value) > 20:
-                print(f"    ... ({len(value) - 20} more)", file=sys.stderr)
-        return
-
-    if args.cache_subcommand == "prune":
+    if args.cache_subcommand == "clean":
         pruner = CachePruner(settings_store.cache_dir)
         summary = pruner.prune(
             dry_run=not args.execute,
@@ -153,55 +232,13 @@ def cmd_cache(args, parser) -> None:
 
         mode = "dry-run" if data["dry_run"] else "executed"
         mb = data["freed_bytes"] / 1024 / 1024
-        print(f"cache prune ({mode})", file=sys.stderr)
+        print(f"cache clean ({mode})", file=sys.stderr)
         print(f"  removed files: {data['removed_files']}", file=sys.stderr)
         print(f"  removed dirs:  {data['removed_dirs']}", file=sys.stderr)
         print(f"  freed:         {mb:.2f} MB", file=sys.stderr)
         return
 
-    if args.cache_subcommand == "prepare-smoke":
-        if not settings_store.edinet_api_key:
-            print("EDINET APIキーが未設定です。mebuki config set edinet-key <KEY> を実行してください。", file=sys.stderr)
-            return
-        summary = asyncio.run(
-            _prepare_smoke_cache_async(
-                settings_store.edinet_api_key,
-                settings_store.cache_dir,
-                args.codes,
-                args.initial_scan_days,
-            )
-        )
-
-        data = summary.to_dict()
-        if args.format == "json":
-            print(json.dumps(data, indent=2, ensure_ascii=False))
-            return
-
-        print("cache prepare-smoke", file=sys.stderr)
-        print(f"  requested: {data['requested']}", file=sys.stderr)
-        print(f"  prepared:  {data['prepared']}", file=sys.stderr)
-        print(f"  skipped:   {data['skipped']}", file=sys.stderr)
-        print(f"  failed:    {data['failed']}", file=sys.stderr)
-        entries = data["entries"]
-        if isinstance(entries, list):
-            for entry in entries:
-                if not isinstance(entry, dict):
-                    continue
-                _print_smoke_entry(entry)
-        return
-
     parser.print_help()
-
-
-def _print_smoke_entry(entry: dict[str, Any]) -> None:
-    status = str(entry.get("status") or "-")
-    code = str(entry.get("code") or "-")
-    name = str(entry.get("name") or "-")
-    doc_id = str(entry.get("doc_id") or "-")
-    fy_end = str(entry.get("fy_end") or "-")
-    print(f"  {status:<8} {code} {name} doc={doc_id} fy={fy_end}", file=sys.stderr)
-
-
 def _mb(value: object) -> str:
     if isinstance(value, int):
         size = value

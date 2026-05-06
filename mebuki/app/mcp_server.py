@@ -302,7 +302,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 "stats": pruner.stats().to_dict(),
                 "audit": pruner.audit().to_dict(),
                 "prune_available_in_mcp": False,
-                "message": "削除系の cache prune は安全のためCLIのみ対応です。",
+                "message": "削除系の cache clean は安全のためCLIのみ対応です。",
             }
             return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
 

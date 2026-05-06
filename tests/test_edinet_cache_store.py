@@ -1,5 +1,6 @@
 import json
 import os
+import time
 import zipfile
 from datetime import datetime, timedelta
 from io import BytesIO
@@ -200,3 +201,52 @@ def test_touch_xbrl_dir_updates_mtime(tmp_path):
     after = xbrl_dir.stat().st_mtime
 
     assert after > before
+
+
+def test_file_lock_creates_and_removes_lock_file(tmp_path):
+    store = EdinetCacheStore(tmp_path)
+
+    with store.file_lock("documents_by_date_2024-06-24"):
+        assert list(store.locks_dir.glob("documents_by_date_2024-06-24.lock"))
+
+    assert not list(store.locks_dir.glob("documents_by_date_2024-06-24.lock"))
+
+
+def test_file_lock_removes_stale_lock(tmp_path, monkeypatch):
+    store = EdinetCacheStore(tmp_path)
+    store.locks_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = store.locks_dir / "document_index_2024.lock"
+    lock_path.write_text("stale", encoding="utf-8")
+    stale_ts = time.time() - 3600
+    os.utime(lock_path, (stale_ts, stale_ts))
+    monkeypatch.setattr("mebuki.api.edinet_cache_store.EDINET_CACHE_LOCK_STALE_SECONDS", 1)
+
+    with store.file_lock("document_index_2024"):
+        assert lock_path.exists()
+
+    assert not lock_path.exists()
+
+
+def test_file_lock_prints_wait_notice(tmp_path, monkeypatch, capsys):
+    store = EdinetCacheStore(tmp_path)
+    store.locks_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = store.locks_dir / "document_index_2024.lock"
+    lock_path.write_text("active", encoding="utf-8")
+    calls = {"count": 0}
+
+    def fake_sleep(seconds: float) -> None:
+        calls["count"] += 1
+        if calls["count"] == 2 and lock_path.exists():
+            lock_path.unlink()
+
+    times = iter([0.0, 1.1, 1.3, 1.5])
+    monkeypatch.setattr("mebuki.api.edinet_cache_store.time.monotonic", lambda: next(times))
+    monkeypatch.setattr("mebuki.api.edinet_cache_store.time.sleep", fake_sleep)
+    monkeypatch.setattr("mebuki.api.edinet_cache_store.EDINET_CACHE_LOCK_NOTICE_SECONDS", 1.0)
+
+    with store.file_lock("document_index_2024"):
+        pass
+
+    captured = capsys.readouterr()
+    assert "別のmebukiプロセスの完了を待っています" in captured.err
+    assert "処理を続行します" in captured.err

@@ -8,12 +8,20 @@ import json
 import logging
 import os
 import shutil
+import sys
+import time
 import zipfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from mebuki.constants.api import (
+    EDINET_CACHE_LOCK_NOTICE_SECONDS,
+    EDINET_CACHE_LOCK_POLL_SECONDS,
+    EDINET_CACHE_LOCK_STALE_SECONDS,
+    EDINET_CACHE_LOCK_TIMEOUT_SECONDS,
     EDINET_DOCUMENT_INDEX_VERSION,
     EDINET_SEARCH_EMPTY_TTL_DAYS,
     EDINET_SEARCH_HIT_TTL_DAYS,
@@ -41,6 +49,7 @@ class EdinetCacheStore:
         self.documents_by_date_dir = self.cache_dir / "documents_by_date"
         self.document_indexes_dir = self.cache_dir / "document_indexes"
         self.xbrl_root_dir = self.cache_dir / "xbrl"
+        self.locks_dir = self.cache_dir / "locks"
         self.search_empty_ttl_days = search_empty_ttl_days
         self.search_hit_ttl_days = search_hit_ttl_days
         self.search_past_ttl_days = search_past_ttl_days
@@ -91,6 +100,55 @@ class EdinetCacheStore:
         except Exception as e:
             logger.warning(f"Cache save failed: {e}")
 
+    @contextmanager
+    def file_lock(self, name: str) -> Iterator[None]:
+        """複数CLIプロセス間で同じEDINETキャッシュ生成を重複させないためのロック。"""
+        lock_path = self.locks_dir / f"{_safe_lock_name(name)}.lock"
+        self.locks_dir.mkdir(parents=True, exist_ok=True)
+        start = time.monotonic()
+        fd: int | None = None
+        notice_printed = False
+        while fd is None:
+            try:
+                fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                payload = f"pid={os.getpid()} created_at={datetime.now().isoformat()}\n"
+                os.write(fd, payload.encode("utf-8"))
+            except FileExistsError:
+                self._unlink_stale_lock(lock_path)
+                elapsed = time.monotonic() - start
+                if not notice_printed and elapsed >= EDINET_CACHE_LOCK_NOTICE_SECONDS:
+                    print(
+                        "EDINETキャッシュを準備中です。別のmebukiプロセスの完了を待っています...",
+                        file=sys.stderr,
+                    )
+                    notice_printed = True
+                if elapsed >= EDINET_CACHE_LOCK_TIMEOUT_SECONDS:
+                    raise TimeoutError(f"EDINET cache lock timeout: {name}")
+                time.sleep(EDINET_CACHE_LOCK_POLL_SECONDS)
+        if notice_printed:
+            print("EDINETキャッシュの準備が完了しました。処理を続行します。", file=sys.stderr)
+        try:
+            yield
+        finally:
+            if fd is not None:
+                os.close(fd)
+            try:
+                lock_path.unlink()
+            except FileNotFoundError:
+                pass
+
+    def _unlink_stale_lock(self, lock_path: Path) -> None:
+        try:
+            age_seconds = time.time() - lock_path.stat().st_mtime
+        except FileNotFoundError:
+            return
+        if age_seconds >= EDINET_CACHE_LOCK_STALE_SECONDS:
+            try:
+                lock_path.unlink()
+                logger.warning(f"[EDINET] stale cache lock removed: {lock_path}")
+            except FileNotFoundError:
+                pass
+
     def load_document_index(
         self,
         year: int,
@@ -99,6 +157,24 @@ class EdinetCacheStore:
         allow_stale: bool = False,
     ) -> list[dict[str, Any]] | None:
         """年次書類インデックスをキャッシュから読み込む。"""
+        info = self.load_document_index_info(
+            year,
+            required_through=required_through,
+            allow_stale=allow_stale,
+        )
+        if info is None:
+            return None
+        documents = info.get("documents")
+        return documents if isinstance(documents, list) else None
+
+    def load_document_index_info(
+        self,
+        year: int,
+        *,
+        required_through: str | None = None,
+        allow_stale: bool = False,
+    ) -> dict[str, Any] | None:
+        """年次書類インデックスのメタ情報込み payload を読み込む。"""
         cache_path = self.document_indexes_dir / self.document_index_cache_key(year)
         if not cache_path.exists():
             legacy_path = self.cache_dir / self.document_index_cache_key(year)
@@ -126,7 +202,7 @@ class EdinetCacheStore:
         if not isinstance(documents, list):
             logger.warning(f"Document index load failed: expected documents list in {cache_path}")
             return None
-        return documents
+        return payload
 
     def save_document_index(
         self,
@@ -151,6 +227,18 @@ class EdinetCacheStore:
             )
         except Exception as e:
             logger.warning(f"Document index save failed: {e}")
+
+    def clear_document_index(self, year: int) -> None:
+        """年次書類インデックスを削除する。存在しない場合は何もしない。"""
+        paths = [
+            self.document_indexes_dir / self.document_index_cache_key(year),
+            self.cache_dir / self.document_index_cache_key(year),
+        ]
+        for path in paths:
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
 
     def xbrl_dir(self, doc_id: str, save_dir: str | Path | None = None) -> Path:
         """XBRL 展開ディレクトリのパスを返す。"""
@@ -240,3 +328,7 @@ class EdinetCacheStore:
     @staticmethod
     def _path_size(path: Path) -> int:
         return sum(child.stat().st_size for child in path.rglob("*") if child.is_file())
+
+
+def _safe_lock_name(name: str) -> str:
+    return "".join(ch if ch.isalnum() or ch in ("-", "_", ".") else "_" for ch in name)

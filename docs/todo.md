@@ -20,7 +20,7 @@
 - 依存方向が明確。`app -> services -> api/analysis/infrastructure/utils` を基本とし、`tests/test_dependency_rules.py` で逆流を検出する。
 - EDINET関連の責務が分かれている。通信は `api/edinet_client.py`、ファイルキャッシュは `api/edinet_cache_store.py`、書類選定と抽出 orchestration は `services/edinet_fetcher.py` が担当する。
 - EDINETキャッシュは日別検索TTL、年次インデックスバージョン、XBRL展開ディレクトリの2GB上限とmtime LRU削除を持つ。
-- `cache stats/audit` でEDINET検索、年次インデックス、XBRL展開、parse結果、分析結果をカテゴリ別に確認できる。
+- `cache status` でEDINET年次インデックス、XBRL展開、分析結果キャッシュの状態を確認できる。
 - EDINET-onlyスモークテストは、実企業の有報検索キャッシュとXBRL展開キャッシュから実行できる。
 - XBRL parse結果とEDINET書類リストは `CacheManager` 経由で独立キャッシュされ、最終分析キャッシュ更新時の再取得・再parseを抑えられる。
 - 標準JSONとデバッグフィールドの境界は `utils/output_serializer.py` に集約され、公開キー集合は `tests/test_output_serializer.py` で固定している。

@@ -64,6 +64,14 @@ def build_parser() -> argparse.ArgumentParser:
     # cache
     cache_parser = subparsers.add_parser("cache", help="キャッシュ管理")
     cache_sub = cache_parser.add_subparsers(dest="cache_subcommand", help="キャッシュサブコマンド")
+    status_parser = cache_sub.add_parser("status", help="キャッシュ状態を表示")
+    status_parser.add_argument(
+        "--years",
+        type=int,
+        default=EDINET_WARMUP_DEFAULT_YEARS,
+        help=f"確認する直近年数（デフォルト: {EDINET_WARMUP_DEFAULT_YEARS}）",
+    )
+    status_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
     warmup_parser = cache_sub.add_parser("warmup", help="EDINET年次インデックスを事前準備")
     warmup_parser.add_argument(
         "--years",
@@ -72,44 +80,35 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"準備する直近年数（デフォルト: {EDINET_WARMUP_DEFAULT_YEARS}）",
     )
     warmup_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
-    stats_parser = cache_sub.add_parser("stats", help="キャッシュ使用量を表示")
-    stats_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
-    audit_parser = cache_sub.add_parser("audit", help="キャッシュ内訳をカテゴリ別に表示（削除なし）")
-    audit_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
-    prune_parser = cache_sub.add_parser("prune", help="不要なキャッシュを削除")
-    prune_parser.add_argument("--execute", action="store_true", help="実際に削除する（未指定時は dry-run）")
-    prune_parser.add_argument(
+    refresh_parser = cache_sub.add_parser("refresh", help="EDINET年次インデックスを更新")
+    refresh_parser.add_argument(
+        "--years",
+        type=int,
+        default=EDINET_WARMUP_DEFAULT_YEARS,
+        help=f"更新する直近年数（デフォルト: {EDINET_WARMUP_DEFAULT_YEARS}）",
+    )
+    refresh_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+    clean_parser = cache_sub.add_parser("clean", help="不要なキャッシュを削除")
+    clean_parser.add_argument("--execute", action="store_true", help="実際に削除する（未指定時は dry-run）")
+    clean_parser.add_argument(
         "--edinet-search-days",
         type=int,
         default=None,
         help="指定日数以上古い EDINET 検索キャッシュを削除",
     )
-    prune_parser.add_argument(
+    clean_parser.add_argument(
         "--edinet-xbrl-days",
         type=int,
         default=None,
         help="指定日数以上古い EDINET XBRL 展開ディレクトリを削除",
     )
-    prune_parser.add_argument(
+    clean_parser.add_argument(
         "--edinet-doc-index-years",
         type=int,
         default=6,
         help="保持する EDINET 年次インデックス年数（デフォルト: 6、0で全削除）",
     )
-    prune_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
-    smoke_parser = cache_sub.add_parser("prepare-smoke", help=argparse.SUPPRESS)
-    smoke_parser.add_argument(
-        "--codes",
-        nargs="+",
-        help="準備する銘柄コード。省略時は標準スモーク対象企業を使用",
-    )
-    smoke_parser.add_argument(
-        "--initial-scan-days",
-        type=int,
-        default=365,
-        help="最新有報を探す直近スキャン日数（デフォルト: 365）",
-    )
-    smoke_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
+    clean_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
 
     # mcp
     mcp_parser = subparsers.add_parser("mcp", help="MCP連携管理")

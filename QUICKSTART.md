@@ -77,9 +77,10 @@ mebuki analyze 7203 --years 6 --no-cache
 ### キャッシュ確認
 
 ```bash
+mebuki cache status
 mebuki cache warmup --years 3
-mebuki cache stats
-mebuki cache audit
+mebuki cache refresh --years 3
+mebuki cache clean
 ```
 
 ---
