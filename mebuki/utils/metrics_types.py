@@ -133,6 +133,48 @@ class YearEntry(TypedDict):
     CalculatedData: CalculatedData
 
 
+class RawXbrlExtraction(TypedDict, total=False):
+    """XBRLから直接抽出した年度別の生値。金額は円単位で保持する。"""
+
+    doc_id: str
+    gross_profit: float | None
+    gross_profit_method: str
+    gross_profit_label: str | None
+    operating_profit: float | None
+    operating_profit_method: str
+    operating_profit_label: str
+    sales: float | None
+    sales_label: str | None
+    net_revenue: float | None
+    business_profit: float | None
+    interest_bearing_debt: float | None
+    ibd_components: list[IBDComponent]
+    ibd_method: str
+    ibd_accounting_standard: str
+    current_assets: float | None
+    non_current_assets: float | None
+    current_liabilities: float | None
+    non_current_liabilities: float | None
+    net_assets: float | None
+    balance_sheet_components: list[BalanceSheetComponent]
+    balance_sheet_method: str
+    balance_sheet_accounting_standard: str
+    interest_expense: float | None
+    interest_expense_method: str
+    pretax_income: float | None
+    income_tax: float | None
+    effective_tax_rate: float | None
+    tax_method: str
+    employees: int | None
+    employees_method: str
+    employees_scope: str
+    depreciation_amortization: float | None
+    depreciation_method: str
+    order_intake: float | None
+    order_backlog: float | None
+    order_book_method: str
+
+
 class MetricsResult(TypedDict, total=False):
     code: str | None
     latest_fy_end: str | None

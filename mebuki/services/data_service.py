@@ -18,6 +18,7 @@ from mebuki.constants.financial import (
     WACC_RF_FALLBACK,
 )
 from mebuki.utils.cache import CacheManager
+from mebuki.utils.fiscal_year import parse_date_string
 from mebuki.utils.master_types import StockSearchResult
 from mebuki.utils.output_serializer import serialize_metrics_result
 
@@ -119,6 +120,42 @@ def _has_fallback_mof_metrics(cached: dict[str, Any]) -> bool:
         if isinstance(cost_of_equity, float) and cost_of_equity == fallback_cost_of_equity:
             return True
     return False
+
+
+def _latest_doc_id_from_analysis_cache(cached: dict[str, Any]) -> str | None:
+    """分析キャッシュから最新年度の DocID を取り出す。"""
+    if cached.get("_cache_version") != _CACHE_VERSION:
+        return None
+    metrics = cached.get("metrics")
+    if not isinstance(metrics, dict):
+        return None
+    years = metrics.get("years")
+    if not isinstance(years, list):
+        return None
+
+    fallback_doc_id: str | None = None
+    latest_doc_id: str | None = None
+    latest_date: datetime | None = None
+
+    for year in years:
+        if not isinstance(year, dict):
+            continue
+        calculated = year.get("CalculatedData")
+        if not isinstance(calculated, dict):
+            continue
+        doc_id = calculated.get("DocID")
+        if not isinstance(doc_id, str) or not doc_id:
+            continue
+        if fallback_doc_id is None:
+            fallback_doc_id = doc_id
+
+        fy_end = year.get("fy_end")
+        parsed = parse_date_string(fy_end) if isinstance(fy_end, str) else None
+        if parsed is not None and (latest_date is None or parsed > latest_date):
+            latest_date = parsed
+            latest_doc_id = doc_id
+
+    return latest_doc_id or fallback_doc_id
 
 
 class DataService:
@@ -232,11 +269,29 @@ class DataService:
     ) -> dict[str, Any]:
         """EDINET書類からセクションを抽出"""
         self._sync_child_services()
-        return await self.filing_service.extract_filing_content(
-            code=code,
-            doc_id=doc_id,
-            sections=sections,
-        )
+        cached_doc_id = self._cached_analysis_doc_id(code) if doc_id is None else None
+        resolved_doc_id = doc_id or cached_doc_id
+        try:
+            return await self.filing_service.extract_filing_content(
+                code=code,
+                doc_id=resolved_doc_id,
+                sections=sections,
+            )
+        except ValueError:
+            if cached_doc_id is None:
+                raise
+            return await self.filing_service.extract_filing_content(
+                code=code,
+                doc_id=None,
+                sections=sections,
+            )
+
+    def _cached_analysis_doc_id(self, code: str) -> str | None:
+        """有効な分析キャッシュに保存された最新 DocID を返す。"""
+        cached = self.cache_manager.get(f"individual_analysis_{code}")
+        if not isinstance(cached, dict):
+            return None
+        return _latest_doc_id_from_analysis_cache(cached)
 
     async def get_raw_analysis_data(
         self,

@@ -437,6 +437,100 @@ class TestGetRawAnalysisData:
 
 
 # ──────────────────────────────────────────────────────────────
+# extract_filing_content
+# ──────────────────────────────────────────────────────────────
+
+class TestExtractFilingContent:
+    def _make_cached(self, code: str) -> dict:
+        from mebuki import __version__
+        cache_version = ".".join(__version__.split(".")[:2])
+        return {
+            "_cache_version": cache_version,
+            "code": code,
+            "metrics": {
+                "years": [
+                    {
+                        "fy_end": "2024-03-31",
+                        "CalculatedData": {"DocID": "S100NEW"},
+                    },
+                    {
+                        "fy_end": "2023-03-31",
+                        "CalculatedData": {"DocID": "S100OLD"},
+                    },
+                ],
+            },
+            "edinet_data": {},
+        }
+
+    @pytest.mark.asyncio
+    async def test_uses_latest_doc_id_from_analysis_cache_when_doc_id_omitted(self, svc):
+        svc.cache_manager.set("individual_analysis_72030", self._make_cached("72030"))
+        svc.filing_service.extract_filing_content = AsyncMock(return_value={"doc_id": "S100NEW", "sections": {}})
+
+        result = await svc.extract_filing_content("72030", sections=["mda"])
+
+        assert result["doc_id"] == "S100NEW"
+        svc.filing_service.extract_filing_content.assert_awaited_once_with(
+            code="72030",
+            doc_id="S100NEW",
+            sections=["mda"],
+        )
+
+    @pytest.mark.asyncio
+    async def test_explicit_doc_id_overrides_analysis_cache(self, svc):
+        svc.cache_manager.set("individual_analysis_72030", self._make_cached("72030"))
+        svc.filing_service.extract_filing_content = AsyncMock(return_value={"doc_id": "S100EXPLICIT", "sections": {}})
+
+        result = await svc.extract_filing_content("72030", doc_id="S100EXPLICIT")
+
+        assert result["doc_id"] == "S100EXPLICIT"
+        svc.filing_service.extract_filing_content.assert_awaited_once_with(
+            code="72030",
+            doc_id="S100EXPLICIT",
+            sections=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_ignores_version_mismatched_analysis_cache(self, svc):
+        cached = self._make_cached("72030")
+        cached["_cache_version"] = "0.0"
+        svc.cache_manager.set("individual_analysis_72030", cached)
+        svc.filing_service.extract_filing_content = AsyncMock(return_value={"doc_id": "S100SEARCH", "sections": {}})
+
+        await svc.extract_filing_content("72030")
+
+        svc.filing_service.extract_filing_content.assert_awaited_once_with(
+            code="72030",
+            doc_id=None,
+            sections=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_search_when_cached_doc_id_fails(self, svc):
+        svc.cache_manager.set("individual_analysis_72030", self._make_cached("72030"))
+        svc.filing_service.extract_filing_content = AsyncMock(
+            side_effect=[
+                ValueError("Document not found or download failed"),
+                {"doc_id": "S100SEARCH", "sections": {}},
+            ]
+        )
+
+        result = await svc.extract_filing_content("72030")
+
+        assert result["doc_id"] == "S100SEARCH"
+        assert svc.filing_service.extract_filing_content.await_args_list[0].kwargs == {
+            "code": "72030",
+            "doc_id": "S100NEW",
+            "sections": None,
+        }
+        assert svc.filing_service.extract_filing_content.await_args_list[1].kwargs == {
+            "code": "72030",
+            "doc_id": None,
+            "sections": None,
+        }
+
+
+# ──────────────────────────────────────────────────────────────
 # HalfYearDataService
 # ──────────────────────────────────────────────────────────────
 

@@ -21,8 +21,7 @@ from mebuki.utils.operating_profit_change import (
     apply_operating_profit_change_to_years,
 )
 from mebuki.utils.wacc import load_rf_rates, resolve_rf_for_date, calculate_wacc
-from mebuki.utils.metrics_types import CalculatedData, MetricSource, YearEntry
-from mebuki.utils.xbrl_result_types import OrderBookResult
+from mebuki.utils.metrics_types import CalculatedData, MetricSource, RawXbrlExtraction, YearEntry
 
 from .edinet_fetcher import EdinetFetcher
 
@@ -55,40 +54,198 @@ def _set_metric_source(
     sources[metric] = item
 
 
+def _metric_doc_id(result: dict[str, Any]) -> str | None:
+    doc_id = result.get("docID")
+    return doc_id if isinstance(doc_id, str) and doc_id else None
+
+
+def _to_millions_or_none(value: float | None) -> float | None:
+    return value / MILLION_YEN if value is not None else None
+
+
+def _raw_by_year(all_metrics: dict[str, dict[str, Any]]) -> dict[str, RawXbrlExtraction]:
+    """抽出器ごとの結果を年度別のXBRL生値へ正規化する。
+
+    この段階では金額を円単位のまま保持し、百万円変換や比率計算は
+    CalculatedData への反映段階に閉じ込める。
+    """
+    by_year: dict[str, RawXbrlExtraction] = {}
+
+    def raw_for(fy_end_key: str) -> RawXbrlExtraction:
+        if fy_end_key not in by_year:
+            by_year[fy_end_key] = {}
+        return by_year[fy_end_key]
+
+    for fy_end_key, doc_id in all_metrics.get("doc_ids", {}).items():
+        if isinstance(doc_id, str) and doc_id:
+            raw_for(fy_end_key)["doc_id"] = doc_id
+
+    for fy_end_key, gp in all_metrics.get("gp", {}).items():
+        raw = raw_for(fy_end_key)
+        if (doc_id := _metric_doc_id(gp)) is not None:
+            raw["doc_id"] = doc_id
+        raw["gross_profit"] = gp.get("current")
+        raw["gross_profit_method"] = str(gp.get("method", "unknown"))
+        raw["gross_profit_label"] = "業務粗利益" if gp.get("method") == "business_gross_profit" else None
+
+    for fy_end_key, op in all_metrics.get("op", {}).items():
+        raw = raw_for(fy_end_key)
+        if (doc_id := _metric_doc_id(op)) is not None:
+            raw["doc_id"] = doc_id
+        raw["operating_profit"] = op.get("current")
+        raw["operating_profit_method"] = str(op.get("method", "unknown"))
+        raw["operating_profit_label"] = str(op.get("label", "営業利益"))
+        if op.get("current_sales") is not None:
+            raw["sales"] = op.get("current_sales")
+            raw["sales_label"] = "経常収益"
+
+    for fy_end_key, nr in all_metrics.get("nr", {}).items():
+        if not nr.get("found"):
+            continue
+        raw = raw_for(fy_end_key)
+        if (doc_id := _metric_doc_id(nr)) is not None:
+            raw["doc_id"] = doc_id
+        raw["net_revenue"] = nr.get("net_revenue")
+        raw["business_profit"] = nr.get("business_profit")
+
+    for fy_end_key, ibd in all_metrics.get("ibd", {}).items():
+        raw = raw_for(fy_end_key)
+        if (doc_id := _metric_doc_id(ibd)) is not None:
+            raw["doc_id"] = doc_id
+        raw["interest_bearing_debt"] = ibd.get("current")
+        raw["ibd_components"] = [
+            {
+                "label": c["label"],
+                "current": c.get("current"),
+                "prior": c.get("prior"),
+            }
+            for c in ibd.get("components", [])
+        ]
+        raw["ibd_method"] = str(ibd.get("method", "unknown"))
+        raw["ibd_accounting_standard"] = str(ibd.get("accounting_standard", "unknown"))
+
+    for fy_end_key, bs in all_metrics.get("bs", {}).items():
+        raw = raw_for(fy_end_key)
+        if (doc_id := _metric_doc_id(bs)) is not None:
+            raw["doc_id"] = doc_id
+        raw["current_assets"] = bs.get("current_assets")
+        raw["non_current_assets"] = bs.get("non_current_assets")
+        raw["current_liabilities"] = bs.get("current_liabilities")
+        raw["non_current_liabilities"] = bs.get("non_current_liabilities")
+        raw["net_assets"] = bs.get("net_assets")
+        raw["balance_sheet_components"] = [
+            {
+                "label": c["label"],
+                "current": c.get("current"),
+                "prior": c.get("prior"),
+            }
+            for c in bs.get("components", [])
+        ]
+        raw["balance_sheet_method"] = str(bs.get("method", "unknown"))
+        raw["balance_sheet_accounting_standard"] = str(bs.get("accounting_standard", "unknown"))
+
+    for fy_end_key, ie in all_metrics.get("ie", {}).items():
+        raw = raw_for(fy_end_key)
+        if (doc_id := _metric_doc_id(ie)) is not None:
+            raw["doc_id"] = doc_id
+        raw["interest_expense"] = ie.get("current")
+        raw["interest_expense_method"] = str(ie.get("method", "unknown"))
+
+    for fy_end_key, tax in all_metrics.get("tax", {}).items():
+        if tax.get("method") not in ("computed", "usgaap_html"):
+            continue
+        raw = raw_for(fy_end_key)
+        if (doc_id := _metric_doc_id(tax)) is not None:
+            raw["doc_id"] = doc_id
+        raw["pretax_income"] = tax.get("pretax_income")
+        raw["income_tax"] = tax.get("income_tax")
+        raw["effective_tax_rate"] = tax.get("effective_tax_rate")
+        raw["tax_method"] = str(tax.get("method", "unknown"))
+
+    for fy_end_key, emp in all_metrics.get("emp", {}).items():
+        if emp.get("current") is None:
+            continue
+        raw = raw_for(fy_end_key)
+        if (doc_id := _metric_doc_id(emp)) is not None:
+            raw["doc_id"] = doc_id
+        raw["employees"] = int(emp["current"])
+        raw["employees_method"] = str(emp.get("method", "unknown"))
+        raw["employees_scope"] = str(emp.get("scope", "unknown"))
+
+    for fy_end_key, da in all_metrics.get("da", {}).items():
+        raw = raw_for(fy_end_key)
+        if (doc_id := _metric_doc_id(da)) is not None:
+            raw["doc_id"] = doc_id
+        raw["depreciation_amortization"] = da.get("current")
+        raw["depreciation_method"] = str(da.get("method", "unknown"))
+
+    for fy_end_key, ob in all_metrics.get("ob", {}).items():
+        raw = raw_for(fy_end_key)
+        if (doc_id := _metric_doc_id(ob)) is not None:
+            raw["doc_id"] = doc_id
+        raw["order_intake"] = ob.get("order_intake")
+        raw["order_backlog"] = ob.get("order_backlog")
+        raw["order_book_method"] = str(ob.get("method", "unknown"))
+
+    return by_year
+
+
+def _ensure_raw_by_year(
+    metric_key: str,
+    data: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
+    doc_id_by_year: dict[str, str] | None = None,
+) -> dict[str, RawXbrlExtraction]:
+    """旧形式の抽出器結果を受け取った場合も RawXbrlExtraction に揃える。"""
+    if any(
+        "interest_bearing_debt" in item
+        or "gross_profit" in item
+        or "balance_sheet_method" in item
+        or "doc_id" in item
+        for item in data.values()
+    ):
+        return cast(dict[str, RawXbrlExtraction], data)
+    payload: dict[str, dict[str, Any]] = {metric_key: cast(dict[str, dict[str, Any]], data)}
+    if doc_id_by_year is not None:
+        payload["doc_ids"] = doc_id_by_year
+    return _raw_by_year(payload)
+
+
 def _apply_ibd(
     years: list[YearEntry],
-    ibd_by_year: dict[str, dict[str, Any]],
-    doc_id_by_year: dict[str, str],
+    raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
+    doc_id_by_year: dict[str, str] | None = None,
 ) -> None:
+    raw_by_year = _ensure_raw_by_year("ibd", raw_by_year, doc_id_by_year)
     for year in years:
         fy_end_key = _fy_end_key(year)
-        doc_id = doc_id_by_year.get(fy_end_key)
+        raw = raw_by_year.get(fy_end_key, {})
+        doc_id = raw.get("doc_id")
         cd = year["CalculatedData"]
         if doc_id:
             cd["DocID"] = doc_id
             _set_metric_source(cd, "DocID", source="edinet", unit="id", doc_id=doc_id)
-        ibd = ibd_by_year.get(fy_end_key)
-        if not ibd or ibd.get("current") is None:
+        ibd_value = raw.get("interest_bearing_debt")
+        if ibd_value is None:
             continue
-        ibd_m = ibd["current"] / MILLION_YEN
+        ibd_m = ibd_value / MILLION_YEN
         cd["InterestBearingDebt"] = ibd_m
         cd["IBDComponents"] = [
             {
-                "label": c["label"],
-                "current": c["current"] / MILLION_YEN if c["current"] is not None else None,
-                "prior": c["prior"] / MILLION_YEN if c["prior"] is not None else None,
+                "label": c.get("label", ""),
+                "current": _to_millions_or_none(c.get("current")),
+                "prior": _to_millions_or_none(c.get("prior")),
             }
-            for c in ibd.get("components", [])
+            for c in raw.get("ibd_components", [])
         ]
-        cd["IBDAccountingStandard"] = ibd.get("accounting_standard", "unknown")
+        cd["IBDAccountingStandard"] = raw.get("ibd_accounting_standard", "unknown")
         _set_metric_source(
             cd,
             "InterestBearingDebt",
             source="edinet",
             unit="million_yen",
-            method=ibd.get("method"),
+            method=raw.get("ibd_method"),
             doc_id=doc_id,
-            label=ibd.get("accounting_standard"),
+            label=raw.get("ibd_accounting_standard"),
         )
         np_ = cd.get("NP")
         eq = cd.get("Eq")
@@ -99,8 +256,9 @@ def _apply_ibd(
 
 def _apply_balance_sheet(
     years: list[YearEntry],
-    bs_by_year: dict[str, dict[str, Any]],
+    raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
 ) -> None:
+    raw_by_year = _ensure_raw_by_year("bs", raw_by_year)
     field_map = {
         "current_assets": "CurrentAssets",
         "non_current_assets": "NonCurrentAssets",
@@ -110,13 +268,13 @@ def _apply_balance_sheet(
     }
     for year in years:
         fy_end_key = _fy_end_key(year)
-        bs = bs_by_year.get(fy_end_key)
-        if not bs:
+        raw = raw_by_year.get(fy_end_key)
+        if not raw:
             continue
         cd = year["CalculatedData"]
         for source_key, target_key in field_map.items():
-            value = bs.get(source_key)
-            if source_key in bs:
+            value = raw.get(source_key)
+            if source_key in raw:
                 cd[target_key] = None
             if value is None:
                 continue
@@ -126,84 +284,93 @@ def _apply_balance_sheet(
                 target_key,
                 source="edinet",
                 unit="million_yen",
-                method=bs.get("method"),
-                doc_id=bs.get("docID"),
+                method=raw.get("balance_sheet_method"),
+                doc_id=raw.get("doc_id"),
             )
         cd["BalanceSheetComponents"] = [
             {
-                "label": c["label"],
-                "current": c["current"] / MILLION_YEN if c["current"] is not None else None,
-                "prior": c["prior"] / MILLION_YEN if c["prior"] is not None else None,
+                "label": c.get("label", ""),
+                "current": _to_millions_or_none(c.get("current")),
+                "prior": _to_millions_or_none(c.get("prior")),
             }
-            for c in bs.get("components", [])
+            for c in raw.get("balance_sheet_components", [])
         ]
-        cd["BalanceSheetAccountingStandard"] = bs.get("accounting_standard", "unknown")
+        cd["BalanceSheetAccountingStandard"] = raw.get("balance_sheet_accounting_standard", "unknown")
 
 
 def _apply_interest_expense(
     years: list[YearEntry],
-    ie_by_year: dict[str, dict[str, Any]],
+    raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
 ) -> None:
+    raw_by_year = _ensure_raw_by_year("ie", raw_by_year)
     for year in years:
         fy_end_key = _fy_end_key(year)
-        ie = ie_by_year.get(fy_end_key)
-        if ie and ie.get("current") is not None:
+        raw = raw_by_year.get(fy_end_key, {})
+        interest_expense = raw.get("interest_expense")
+        if interest_expense is not None:
             cd = year["CalculatedData"]
-            cd["InterestExpense"] = ie["current"] / MILLION_YEN
+            cd["InterestExpense"] = interest_expense / MILLION_YEN
             _set_metric_source(
                 cd,
                 "InterestExpense",
                 source="edinet",
                 unit="million_yen",
-                method=ie.get("method"),
-                doc_id=ie.get("docID"),
+                method=raw.get("interest_expense_method"),
+                doc_id=raw.get("doc_id"),
             )
 
 
 def _apply_tax(
     years: list[YearEntry],
-    tax_by_year: dict[str, dict[str, Any]],
+    raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
 ) -> None:
+    raw_by_year = _ensure_raw_by_year("tax", raw_by_year)
     for year in years:
         fy_end_key = _fy_end_key(year)
-        tax = tax_by_year.get(fy_end_key)
-        if not tax or tax.get("method") not in ("computed", "usgaap_html"):
+        raw = raw_by_year.get(fy_end_key)
+        if not raw or "tax_method" not in raw:
             continue
         cd = year["CalculatedData"]
-        if tax.get("pretax_income") is not None:
-            cd["PretaxIncome"] = tax["pretax_income"] / MILLION_YEN
-            _set_metric_source(cd, "PretaxIncome", source="edinet", unit="million_yen", method=tax.get("method"), doc_id=tax.get("docID"))
-        if tax.get("income_tax") is not None:
-            cd["IncomeTax"] = tax["income_tax"] / MILLION_YEN
-            _set_metric_source(cd, "IncomeTax", source="edinet", unit="million_yen", method=tax.get("method"), doc_id=tax.get("docID"))
-        if tax.get("effective_tax_rate") is not None:
-            cd["EffectiveTaxRate"] = tax["effective_tax_rate"] * PERCENT
-            _set_metric_source(cd, "EffectiveTaxRate", source="derived", unit="percent", method=tax.get("method"), doc_id=tax.get("docID"))
+        pretax_income = raw.get("pretax_income")
+        income_tax = raw.get("income_tax")
+        effective_tax_rate = raw.get("effective_tax_rate")
+        if pretax_income is not None:
+            cd["PretaxIncome"] = pretax_income / MILLION_YEN
+            _set_metric_source(cd, "PretaxIncome", source="edinet", unit="million_yen", method=raw.get("tax_method"), doc_id=raw.get("doc_id"))
+        if income_tax is not None:
+            cd["IncomeTax"] = income_tax / MILLION_YEN
+            _set_metric_source(cd, "IncomeTax", source="edinet", unit="million_yen", method=raw.get("tax_method"), doc_id=raw.get("doc_id"))
+        if effective_tax_rate is not None:
+            cd["EffectiveTaxRate"] = effective_tax_rate * PERCENT
+            _set_metric_source(cd, "EffectiveTaxRate", source="derived", unit="percent", method=raw.get("tax_method"), doc_id=raw.get("doc_id"))
 
 
 def _apply_gross_profit(
     years: list[YearEntry],
-    gp_by_year: dict[str, dict[str, Any]],
+    raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
 ) -> None:
+    raw_by_year = _ensure_raw_by_year("gp", raw_by_year)
     for year in years:
         fy_end_key = _fy_end_key(year)
-        gp = gp_by_year.get(fy_end_key)
-        if not gp or gp.get("current") is None:
+        raw = raw_by_year.get(fy_end_key, {})
+        gross_profit = raw.get("gross_profit")
+        if gross_profit is None:
             continue
-        gp_m = gp["current"] / MILLION_YEN
-        gp_method = gp.get("method", "unknown")
-        gp_label = "業務粗利益" if gp_method == "business_gross_profit" else None
+        gp_m = gross_profit / MILLION_YEN
+        gp_method = raw.get("gross_profit_method", "unknown")
+        gp_label = raw.get("gross_profit_label")
         # Sales の直後に挿入するため dict を再構築
         old_cd = year["CalculatedData"]
         new_cd: dict[str, Any] = {}
         for k, v in old_cd.items():
             new_cd[k] = v
             if k == "Sales":
+                sales = v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
                 new_cd["GrossProfit"] = gp_m
                 new_cd["GrossProfitMethod"] = gp_method
                 if gp_label is not None:
                     new_cd["GrossProfitLabel"] = gp_label
-                new_cd["GrossProfitMargin"] = gp_m / v * PERCENT if v else None
+                new_cd["GrossProfitMargin"] = gp_m / sales * PERCENT if sales else None
         if "GrossProfit" not in new_cd:
             new_cd["GrossProfit"] = gp_m
             new_cd["GrossProfitMethod"] = gp_method
@@ -218,7 +385,7 @@ def _apply_gross_profit(
             source="edinet",
             unit="million_yen",
             method=gp_method,
-            doc_id=gp.get("docID"),
+            doc_id=raw.get("doc_id"),
             label=gp_label,
         )
         _set_metric_source(cast_cd, "GrossProfitMargin", source="derived", unit="percent", method="GrossProfit / Sales")
@@ -227,28 +394,30 @@ def _apply_gross_profit(
 
 def _apply_operating_profit(
     years: list[YearEntry],
-    op_by_year: dict[str, dict[str, Any]],
+    raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
 ) -> None:
+    raw_by_year = _ensure_raw_by_year("op", raw_by_year)
     for year in years:
         fy_end_key = _fy_end_key(year)
-        op = op_by_year.get(fy_end_key)
-        if not op or op.get("current") is None:
+        raw = raw_by_year.get(fy_end_key, {})
+        operating_profit = raw.get("operating_profit")
+        if operating_profit is None:
             continue
         cd = year["CalculatedData"]
         op_m = cd.get("OP")
         if op_m is None:
-            op_m = op["current"] / MILLION_YEN
+            op_m = operating_profit / MILLION_YEN
             cd["OP"] = op_m
-        if op.get("label") == "経常利益":
+        if raw.get("operating_profit_label") == "経常利益":
             cd["OPLabel"] = "経常利益"
         _set_metric_source(
             cd,
             "OP",
             source="edinet",
             unit="million_yen",
-            method=op.get("method"),
-            doc_id=op.get("docID"),
-            label=op.get("label"),
+            method=raw.get("operating_profit_method"),
+            doc_id=raw.get("doc_id"),
+            label=raw.get("operating_profit_label"),
         )
         sales = cd.get("Sales")
         if sales:
@@ -258,32 +427,35 @@ def _apply_operating_profit(
 
 def _apply_net_revenue(
     years: list[YearEntry],
-    nr_by_year: dict[str, dict[str, Any]],
+    raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
 ) -> None:
+    raw_by_year = _ensure_raw_by_year("nr", raw_by_year)
     for year in years:
         fy_end_key = _fy_end_key(year)
-        nr = nr_by_year.get(fy_end_key)
-        if not nr or not nr.get("found"):
+        raw = raw_by_year.get(fy_end_key)
+        if not raw:
             continue
         cd = year["CalculatedData"]
         rd = year["RawData"]
-        if cd.get("Sales") is None and nr.get("net_revenue") is not None:
-            nr_m = nr["net_revenue"] / MILLION_YEN
+        net_revenue = raw.get("net_revenue")
+        business_profit = raw.get("business_profit")
+        if cd.get("Sales") is None and net_revenue is not None:
+            nr_m = net_revenue / MILLION_YEN
             cd["Sales"] = nr_m
-            rd["Sales"] = nr["net_revenue"]
+            rd["Sales"] = net_revenue
             cd["SalesLabel"] = "純収益"
-            _set_metric_source(cd, "Sales", source="edinet", unit="million_yen", method=nr.get("method"), doc_id=nr.get("docID"), label="純収益")
+            _set_metric_source(cd, "Sales", source="edinet", unit="million_yen", doc_id=raw.get("doc_id"), label="純収益")
             # GrossProfitMargin を Sales 確定後に再計算
             gp = cd.get("GrossProfit")
             if gp is not None:
                 cd["GrossProfitMargin"] = gp / nr_m * PERCENT
                 _set_metric_source(cd, "GrossProfitMargin", source="derived", unit="percent", method="GrossProfit / Sales")
-        if cd.get("OP") is None and nr.get("business_profit") is not None:
-            bp_m = nr["business_profit"] / MILLION_YEN
+        if cd.get("OP") is None and business_profit is not None:
+            bp_m = business_profit / MILLION_YEN
             cd["OP"] = bp_m
-            rd["OP"] = nr["business_profit"]
+            rd["OP"] = business_profit
             cd["OPLabel"] = "事業利益"
-            _set_metric_source(cd, "OP", source="edinet", unit="million_yen", method=nr.get("method"), doc_id=nr.get("docID"), label="事業利益")
+            _set_metric_source(cd, "OP", source="edinet", unit="million_yen", doc_id=raw.get("doc_id"), label="事業利益")
             sales = cd.get("Sales")
             if sales:
                 cd["OperatingMargin"] = bp_m / sales * PERCENT
@@ -292,48 +464,53 @@ def _apply_net_revenue(
 
 def _apply_employees(
     years: list[YearEntry],
-    emp_by_year: dict[str, dict[str, Any]],
+    raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
 ) -> None:
+    raw_by_year = _ensure_raw_by_year("emp", raw_by_year)
     for year in years:
         fy_end_key = _fy_end_key(year)
-        emp = emp_by_year.get(fy_end_key)
-        if emp and emp.get("current") is not None:
+        raw = raw_by_year.get(fy_end_key, {})
+        employees = raw.get("employees")
+        if employees is not None:
             cd = year["CalculatedData"]
-            cd["Employees"] = emp["current"]
-            _set_metric_source(cd, "Employees", source="edinet", unit="persons", method=emp.get("method"), doc_id=emp.get("docID"), label=emp.get("scope"))
+            cd["Employees"] = employees
+            _set_metric_source(cd, "Employees", source="edinet", unit="persons", method=raw.get("employees_method"), doc_id=raw.get("doc_id"), label=raw.get("employees_scope"))
 
 
 def _apply_depreciation(
     years: list[YearEntry],
-    da_by_year: dict[str, dict[str, Any]],
+    raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
 ) -> None:
+    raw_by_year = _ensure_raw_by_year("da", raw_by_year)
     for year in years:
         fy_end_key = _fy_end_key(year)
-        da = da_by_year.get(fy_end_key)
-        if da and da.get("current") is not None:
+        raw = raw_by_year.get(fy_end_key, {})
+        depreciation = raw.get("depreciation_amortization")
+        if depreciation is not None:
             cd = year["CalculatedData"]
-            cd["DepreciationAmortization"] = da["current"] / MILLION_YEN
+            cd["DepreciationAmortization"] = depreciation / MILLION_YEN
             _set_metric_source(
                 cd,
                 "DepreciationAmortization",
                 source="edinet",
                 unit="million_yen",
-                method=da.get("method"),
+                method=raw.get("depreciation_method"),
             )
 
 
 def _apply_order_book(
     years: list[YearEntry],
-    ob_by_year: dict[str, OrderBookResult],
+    raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
 ) -> None:
+    raw_by_year = _ensure_raw_by_year("ob", raw_by_year)
     for year in years:
         fy_end_key = _fy_end_key(year)
-        ob = ob_by_year.get(fy_end_key)
-        if not ob:
+        raw = raw_by_year.get(fy_end_key)
+        if not raw:
             continue
         cd = year["CalculatedData"]
-        order_intake = ob.get("order_intake")
-        order_backlog = ob.get("order_backlog")
+        order_intake = raw.get("order_intake")
+        order_backlog = raw.get("order_backlog")
         if order_intake is not None:
             cd["OrderIntake"] = order_intake / MILLION_YEN
             _set_metric_source(
@@ -341,8 +518,8 @@ def _apply_order_book(
                 "OrderIntake",
                 source="edinet",
                 unit="million_yen",
-                method=ob.get("method"),
-                doc_id=ob.get("docID"),
+                method=raw.get("order_book_method"),
+                doc_id=raw.get("doc_id"),
             )
         if order_backlog is not None:
             cd["OrderBacklog"] = order_backlog / MILLION_YEN
@@ -351,22 +528,22 @@ def _apply_order_book(
                 "OrderBacklog",
                 source="edinet",
                 unit="million_yen",
-                method=ob.get("method"),
-                doc_id=ob.get("docID"),
+                method=raw.get("order_book_method"),
+                doc_id=raw.get("doc_id"),
             )
 
 
-_METRIC_APPLIERS: list[Callable[[list[YearEntry], dict[str, dict[str, Any]]], None]] = [
-    lambda years, m: _apply_ibd(years, m.get("ibd", {}), m.get("doc_ids", {})),
-    lambda years, m: _apply_balance_sheet(years, m.get("bs", {})),
-    lambda years, m: _apply_interest_expense(years, m.get("ie", {})),
-    lambda years, m: _apply_tax(years, m.get("tax", {})),
-    lambda years, m: _apply_gross_profit(years, m.get("gp", {})),
-    lambda years, m: _apply_operating_profit(years, m.get("op", {})),
-    lambda years, m: _apply_net_revenue(years, m.get("nr", {})),
-    lambda years, m: _apply_employees(years, m.get("emp", {})),
-    lambda years, m: _apply_depreciation(years, m.get("da", {})),
-    lambda years, m: _apply_order_book(years, m.get("ob", {})),
+_METRIC_APPLIERS: list[Callable[[list[YearEntry], dict[str, RawXbrlExtraction]], None]] = [
+    _apply_ibd,
+    _apply_balance_sheet,
+    _apply_interest_expense,
+    _apply_tax,
+    _apply_gross_profit,
+    _apply_operating_profit,
+    _apply_net_revenue,
+    _apply_employees,
+    _apply_depreciation,
+    _apply_order_book,
 ]
 
 
@@ -487,8 +664,9 @@ class IndividualAnalyzer:
 
         years: list[YearEntry] = metrics.get("years", [])
 
+        raw_xbrl_by_year = _raw_by_year(all_metrics)
         for apply_fn in _METRIC_APPLIERS:
-            apply_fn(years, all_metrics)
+            apply_fn(years, raw_xbrl_by_year)
 
         apply_operating_profit_change_from_xbrl(years, all_metrics.get("gp", {}), all_metrics.get("op", {}))
         apply_operating_profit_change_to_years(years)
