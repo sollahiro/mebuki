@@ -199,7 +199,7 @@ def cmd_mcp(args, parser):
                 "command": executable,
                 "args": cmd_args,
                 "env": {
-                    "MEBUKI_USER_DATA_PATH": str(settings_store.user_data_path)
+                    "BLUE_TICKER_USER_DATA_PATH": str(settings_store.user_data_path)
                 }
             }
 
@@ -253,7 +253,7 @@ def cmd_mcp(args, parser):
                 "cmd": executable,
                 "args": cmd_args,
                 "envs": {
-                    "MEBUKI_USER_DATA_PATH": str(settings_store.user_data_path)
+                    "BLUE_TICKER_USER_DATA_PATH": str(settings_store.user_data_path)
                 },
                 "timeout": 300
             }
@@ -290,7 +290,7 @@ def cmd_mcp(args, parser):
                 "command": executable,
                 "args": cmd_args,
                 "env": {
-                    "MEBUKI_USER_DATA_PATH": str(settings_store.user_data_path)
+                    "BLUE_TICKER_USER_DATA_PATH": str(settings_store.user_data_path)
                 }
             }
 

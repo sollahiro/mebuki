@@ -114,7 +114,11 @@ class _CachedXbrlClient:
 
 
 def _smoke_cache_dir() -> Path:
-    return Path(os.environ.get("MEBUKI_EDINET_SMOKE_CACHE_DIR", str(_DEFAULT_SMOKE_CACHE_DIR)))
+    return Path(
+        os.environ.get("BLUE_TICKER_EDINET_SMOKE_CACHE_DIR")
+        or os.environ.get("MEBUKI_EDINET_SMOKE_CACHE_DIR")
+        or str(_DEFAULT_SMOKE_CACHE_DIR)
+    )
 
 
 def _load_search_cache_documents(edinet_cache_dir: Path) -> list[dict[str, Any]]:

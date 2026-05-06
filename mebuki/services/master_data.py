@@ -12,6 +12,10 @@ from mebuki.utils.master_types import MasterStock, SectorSummary, StockSearchRes
 
 logger = logging.getLogger(__name__)
 
+ASSETS_PATH_ENV = "BLUE_TICKER_ASSETS_PATH"
+LEGACY_ASSETS_PATH_ENV = "MEBUKI_ASSETS_PATH"
+
+
 class MasterDataManager:
     """銘柄マスタ（CSV）の読み込み、保持、検索を行うクラス"""
     
@@ -53,7 +57,7 @@ class MasterDataManager:
               data_j.csv という名前で assets/ に配置する）
         """
         # 1. パスの決定
-        assets_dir = os.environ.get("MEBUKI_ASSETS_PATH")
+        assets_dir = os.environ.get(ASSETS_PATH_ENV) or os.environ.get(LEGACY_ASSETS_PATH_ENV)
         if assets_dir:
             csv_path = Path(assets_dir) / "data_j.csv"
         else:

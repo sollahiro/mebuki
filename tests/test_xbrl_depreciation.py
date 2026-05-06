@@ -188,7 +188,7 @@ class TestExtractDepreciationUSGAAP(unittest.TestCase):
     def test_fujifilm_real_data(self):
         """富士フイルム FY2025 実データ: 当期 163,567百万円 / 前期 150,014百万円。"""
         real_dir = Path(
-            "/Users/shutosorahiro/.config/mebuki/analysis_cache/edinet"
+            "/Users/shutosorahiro/.config/blue-ticker/analysis_cache/edinet"
             "/S100W3XJ_xbrl/XBRL/PublicDoc"
         )
         if not real_dir.exists():

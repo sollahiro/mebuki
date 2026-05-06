@@ -2,16 +2,15 @@
 OS キーチェーン / 機密情報ストア（keyring ライブラリ不要）
 
 - macOS : security(1) コマンド経由でシステムキーチェーンを使用
-- その他 : ~/.config/mebuki/secrets.json（パーミッション 0600）で保管
+- その他 : BLUE TICKER のユーザーデータディレクトリに secrets.json（パーミッション 0600）で保管
 """
-from __future__ import annotations
 
 import json
 import logging
-import os
 import platform
 import subprocess
 from pathlib import Path
+from mebuki.infrastructure.user_paths import candidate_secret_paths, default_user_data_path
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +29,14 @@ def _mac_set(service: str, key: str, value: str) -> None:
     subprocess.run(
         ["security", "add-generic-password", "-s", account, "-a", service, "-w", value],
         check=True,
+        capture_output=True,
+    )
+
+
+def _mac_delete(service: str, key: str) -> None:
+    account = f"{service}.{key}"
+    subprocess.run(
+        ["security", "delete-generic-password", "-s", account, "-a", service],
         capture_output=True,
     )
 
@@ -79,8 +86,7 @@ def _mac_get(service: str, key: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 def _secrets_path() -> Path:
-    base = Path(os.environ.get("MEBUKI_USER_DATA_PATH", str(Path.home() / ".config" / "mebuki")))
-    return base / "secrets.json"
+    return default_user_data_path() / "secrets.json"
 
 
 def _file_set(key: str, value: str) -> None:
@@ -100,15 +106,18 @@ def _file_set(key: str, value: str) -> None:
 
 
 def _file_get(key: str) -> str | None:
-    path = _secrets_path()
-    if not path.exists():
-        return None
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data.get(key) or None
-    except Exception:
-        return None
+    for path in candidate_secret_paths():
+        if not path.exists():
+            continue
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            value = data.get(key)
+            if value:
+                return value
+        except Exception:
+            continue
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -128,3 +137,9 @@ def get_password(service: str, key: str) -> str | None:
     if platform.system() == "Darwin":
         return _mac_get(service, key)
     return _file_get(key)
+
+
+def delete_password(service: str, key: str) -> None:
+    """APIキーを OS キーチェーンから削除する。非 macOS のファイル保存では何もしない。"""
+    if platform.system() == "Darwin":
+        _mac_delete(service, key)

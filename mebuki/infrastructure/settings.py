@@ -1,10 +1,13 @@
-import os
 import logging
 from pathlib import Path
 from mebuki.infrastructure import keystore
+from mebuki.infrastructure.user_paths import default_user_data_path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+KEYCHAIN_SERVICE = "blue-ticker"
+LEGACY_KEYCHAIN_SERVICE = "mebuki"
 
 
 
@@ -19,10 +22,7 @@ class SettingsStore:
     
     def _get_default_user_data_path(self) -> Path:
         """プラットフォームに応じたデフォルトのユーザーデータパスを返します。"""
-        if os.environ.get("MEBUKI_USER_DATA_PATH"):
-            return Path(os.environ["MEBUKI_USER_DATA_PATH"])
-        
-        return Path.home() / ".config" / "mebuki"
+        return default_user_data_path()
 
     def __init__(self):
         # ユーザーデータパスの決定
@@ -123,7 +123,7 @@ class SettingsStore:
         for key in ["edinetApiKey"]:
             if settings.get(key):
                 try:
-                    keystore.set_password("mebuki", key, settings[key])
+                    keystore.set_password(KEYCHAIN_SERVICE, key, settings[key])
                     # メモリ上の値は空にして、取得時にキーチェーンを参照させる
                     self._settings[key] = ""
                 except Exception as e:
@@ -148,12 +148,9 @@ class SettingsStore:
         """
         # APIキーの場合はキーチェーンから取得を試みる
         if key in ["edinetApiKey"]:
-            try:
-                val = keystore.get_password("mebuki", key)
-                if val:
-                    return val
-            except Exception as e:
-                logger.debug(f"Keychain access error for {key}: {e}")
+            val = self._get_secret(key)
+            if val:
+                return val
                 
         return self._settings.get(key, default)
     
@@ -168,12 +165,9 @@ class SettingsStore:
 
         # キーチェーンから値を上書き
         for key in ["edinetApiKey"]:
-            try:
-                val = keystore.get_password("mebuki", key)
-                if val:
-                    settings[key] = val
-            except Exception as e:
-                logger.debug(f"Keychain access error for {key}: {e}")
+            val = self._get_secret(key)
+            if val:
+                settings[key] = val
 
         return settings
     
@@ -200,13 +194,31 @@ class SettingsStore:
     @property
     def edinet_api_key(self) -> str | None:
         """EDINET APIキーを取得"""
+        value = self._get_secret("edinetApiKey")
+        if value:
+            return value
+        return self._settings.get("edinetApiKey")
+
+    def _get_secret(self, key: str) -> str | None:
         try:
-            value = keystore.get_password("mebuki", "edinetApiKey")
+            value = keystore.get_password(KEYCHAIN_SERVICE, key)
             if value:
                 return value
         except Exception as e:
-            logger.debug(f"Keychain access error for edinetApiKey: {e}")
-        return self._settings.get("edinetApiKey")
+            logger.debug(f"Keychain access error for {key}: {e}")
+
+        try:
+            legacy_value = keystore.get_password(LEGACY_KEYCHAIN_SERVICE, key)
+            if legacy_value:
+                try:
+                    keystore.set_password(KEYCHAIN_SERVICE, key, legacy_value)
+                    keystore.delete_password(LEGACY_KEYCHAIN_SERVICE, key)
+                except Exception as e:
+                    logger.debug(f"Failed to migrate legacy keychain value for {key}: {e}")
+                return legacy_value
+        except Exception as e:
+            logger.debug(f"Legacy keychain access error for {key}: {e}")
+        return None
     
     @property
     def analysis_years(self) -> int | None:
