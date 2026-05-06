@@ -45,6 +45,11 @@ class EdinetAPIClient:
         self._session = None
         self._session_loop = None
 
+    def set_cache_dir(self, cache_dir: str | Path) -> None:
+        """EDINET API由来キャッシュの保存先を差し替える。"""
+        self.cache_store = EdinetCacheStore(cache_dir)
+        self.cache_dir = self.cache_store.cache_dir
+
     async def _get_session(self) -> aiohttp.ClientSession:
         """セッションを遅延作成して返す"""
         current_loop = asyncio.get_running_loop()
@@ -317,7 +322,7 @@ class EdinetAPIClient:
             return None
 
         if save_dir is None:
-            save_dir = self.cache_dir
+            save_dir = self.cache_store.xbrl_root_dir
         save_dir = Path(save_dir)
         save_dir.mkdir(parents=True, exist_ok=True)
 

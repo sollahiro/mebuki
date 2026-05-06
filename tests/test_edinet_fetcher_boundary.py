@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from mebuki import __version__
 from mebuki.services.edinet_fetcher import EdinetFetcher
 from mebuki.utils.cache import CacheManager
 
@@ -85,7 +86,7 @@ async def test_get_annual_docs_reads_from_persistent_cache(tmp_path) -> None:
     cache_manager.set(
         f"edinet_docs_{code}_{max_years}",
         {
-            "_cache_version": "edinet-docs-v2",
+            "_cache_version": __version__,
             "docs": [{"docID": "S100CACHED"}],
         },
     )
@@ -180,7 +181,7 @@ async def test_get_half_year_docs_reads_from_persistent_cache(tmp_path) -> None:
     cache_manager.set(
         f"edinet_docs_{code}_{max_years}_2Q",
         {
-            "_cache_version": "edinet-docs-v2",
+            "_cache_version": __version__,
             "docs": [{"docID": "S100HALFCACHED"}],
         },
     )

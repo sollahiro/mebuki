@@ -83,7 +83,7 @@ def load_rf_rates(cache_dir: str) -> dict[str, float]:
     from mebuki.utils.cache import CacheManager
     from mebuki.constants.api import MOF_JGB_ALL_CSV_URL, MOF_JGB_CURRENT_CSV_URL
 
-    _CACHE_VERSION = ".".join(__version__.split(".")[:2])
+    _CACHE_VERSION = __version__
     cache = CacheManager(cache_dir=cache_dir, ttl_days=_MOF_JGB_CACHE_TTL_DAYS)
     cached = cache.get(_MOF_JGB_CACHE_KEY)
     if cached and cached.get("_cache_version") == _CACHE_VERSION:

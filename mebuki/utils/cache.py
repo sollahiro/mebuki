@@ -11,6 +11,8 @@ from typing import Any
 from pathlib import Path
 import shutil
 
+from mebuki.utils.cache_paths import derived_cache_dir
+
 logger = logging.getLogger(__name__)
 
 
@@ -44,19 +46,42 @@ class CacheManager:
         self._metadata_cache: dict[str, str] | None = None
         self.ttl_days = ttl_days
         self.cache_dir = Path(cache_dir)
+        self.data_dir = derived_cache_dir(self.cache_dir)
         self.enabled = enabled
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"CacheManager initialized. Dir: {self.cache_dir.absolute()} (enabled={self.enabled})")
+        logger.info(f"CacheManager initialized. Dir: {self.data_dir.absolute()} (enabled={self.enabled})")
+
+    def set_cache_dir(self, cache_dir: str | Path) -> None:
+        """キャッシュルートを差し替え、derived 配下を管理対象にする。"""
+        self.cache_dir = Path(cache_dir)
+        self.data_dir = derived_cache_dir(self.cache_dir)
+        self._metadata_cache = None
     
     def _get_cache_file_path(self, key: str) -> Path:
         """キャッシュファイルのパスを取得"""
         # キーから安全なファイル名を生成（スペースやその他の特殊文字も置換）
         safe_key = key.replace("/", "_").replace("\\", "_").replace(" ", "_")
+        return self._cache_category_dir(key) / f"{safe_key}.json"
+
+    def _get_legacy_cache_file_path(self, key: str) -> Path:
+        safe_key = key.replace("/", "_").replace("\\", "_").replace(" ", "_")
         return self.cache_dir / f"{safe_key}.json"
+
+    def _cache_category_dir(self, key: str) -> Path:
+        if key.startswith("individual_analysis_"):
+            return self.data_dir / "analysis"
+        if key.startswith("half_year_periods_"):
+            return self.data_dir / "half_year"
+        if key.startswith("edinet_docs_"):
+            return self.data_dir / "document_discovery"
+        if key.startswith("xbrl_parsed_"):
+            return self.data_dir / "xbrl_numeric_index"
+        if key.startswith("mof_"):
+            return self.data_dir / "mof"
+        return self.data_dir / "misc"
     
     def _get_metadata_file_path(self) -> Path:
         """メタデータファイルのパスを取得"""
-        return self.cache_dir / "metadata.json"
+        return self.data_dir / "metadata.json"
     
     def _load_metadata(self) -> dict[str, str]:
         """メタデータを読み込み（一度読んだらメモリキャッシュ）"""
@@ -77,6 +102,7 @@ class CacheManager:
     def _save_metadata(self, metadata: dict[str, str]) -> None:
         """メタデータを保存し、メモリキャッシュも更新"""
         metadata_path = self._get_metadata_file_path()
+        metadata_path.parent.mkdir(parents=True, exist_ok=True)
         with open(metadata_path, "w", encoding="utf-8") as f:
             json.dump(metadata, f, ensure_ascii=False, indent=2)
         self._metadata_cache = metadata
@@ -96,7 +122,10 @@ class CacheManager:
 
         cache_file = self._get_cache_file_path(key)
         if not cache_file.exists():
-            return None
+            legacy_cache_file = self._get_legacy_cache_file_path(key)
+            if not legacy_cache_file.exists():
+                return None
+            cache_file = legacy_cache_file
 
         metadata = self._load_metadata()
         cache_date = metadata.get(key)
@@ -131,6 +160,7 @@ class CacheManager:
             return
         
         cache_file = self._get_cache_file_path(key)
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
         
         # データを保存
         try:
@@ -168,6 +198,9 @@ class CacheManager:
             cache_file = self._get_cache_file_path(key)
             if cache_file.exists():
                 cache_file.unlink()
+            legacy_cache_file = self._get_legacy_cache_file_path(key)
+            if legacy_cache_file.exists():
+                legacy_cache_file.unlink()
             
             # メタデータからも削除
             metadata = self._load_metadata()
@@ -176,22 +209,14 @@ class CacheManager:
                 self._save_metadata(metadata)
         else:
             # 全キャッシュをクリア
-            for cache_file in self.cache_dir.glob("*.json"):
-                if cache_file.name != "metadata.json":
-                    cache_file.unlink()
-            for cache_dir in self.cache_dir.glob("*"):
-                if cache_dir.is_dir():
-                    shutil.rmtree(cache_dir)
+            if self.data_dir.exists():
+                shutil.rmtree(self.data_dir)
 
             # メタデータもクリア
             metadata_path = self._get_metadata_file_path()
             if metadata_path.exists():
                 metadata_path.unlink()
             self._metadata_cache = None
-
-
-
-
 
 
 

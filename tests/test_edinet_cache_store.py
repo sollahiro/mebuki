@@ -29,6 +29,10 @@ def _today_str() -> str:
     return datetime.now().strftime("%Y-%m-%d")
 
 
+def _search_cache_path(store: EdinetCacheStore, filename: str) -> Path:
+    return store.documents_by_date_dir / filename
+
+
 def test_load_search_cache_returns_fresh_empty_result(tmp_path):
     store = EdinetCacheStore(
         tmp_path,
@@ -49,7 +53,7 @@ def test_load_search_cache_expires_empty_result_quickly(tmp_path):
     )
     filename = store.search_cache_key(_today_str())
     store.save_search_cache(filename, [])
-    _age(tmp_path / filename, days=1)
+    _age(_search_cache_path(store, filename), days=1)
 
     assert store.load_search_cache(filename) is None
 
@@ -63,7 +67,7 @@ def test_load_search_cache_keeps_hit_result_longer_than_empty_result(tmp_path):
     filename = store.search_cache_key(_today_str())
     documents = [{"docID": "S100TEST", "docTypeCode": "120"}]
     store.save_search_cache(filename, documents)
-    _age(tmp_path / filename, days=1)
+    _age(_search_cache_path(store, filename), days=1)
 
     assert store.load_search_cache(filename) == documents
 
@@ -76,7 +80,7 @@ def test_load_search_cache_expires_old_hit_result(tmp_path):
     )
     filename = store.search_cache_key(_today_str())
     store.save_search_cache(filename, [{"docID": "S100TEST"}])
-    _age(tmp_path / filename, days=30)
+    _age(_search_cache_path(store, filename), days=30)
 
     assert store.load_search_cache(filename) is None
 
@@ -88,7 +92,8 @@ def test_load_search_cache_rejects_non_list_payload(tmp_path):
         search_hit_ttl_days=30,
     )
     filename = store.search_cache_key("2024-06-01")
-    (tmp_path / filename).write_text(json.dumps({"results": []}), encoding="utf-8")
+    _search_cache_path(store, filename).parent.mkdir(parents=True, exist_ok=True)
+    _search_cache_path(store, filename).write_text(json.dumps({"results": []}), encoding="utf-8")
 
     assert store.load_search_cache(filename) is None
 
@@ -103,7 +108,7 @@ def test_load_search_cache_keeps_past_date_result_longer(tmp_path):
     filename = store.search_cache_key("2024-06-01")
     documents = [{"docID": "S100TEST", "docTypeCode": "120"}]
     store.save_search_cache(filename, documents)
-    _age(tmp_path / filename, days=365)
+    _age(_search_cache_path(store, filename), days=365)
 
     assert store.load_search_cache(filename) == documents
 

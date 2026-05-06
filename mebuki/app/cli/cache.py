@@ -2,12 +2,12 @@ import json
 import sys
 import asyncio
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from mebuki.api.edinet_client import EdinetAPIClient
 from mebuki.constants.api import EDINET_WARMUP_DEFAULT_YEARS
 from mebuki.infrastructure.settings import settings_store
+from mebuki.utils.cache_paths import edinet_cache_dir
 from mebuki.services.cache_pruner import CachePruner
 from mebuki.services.edinet_smoke_cache import (
     prepare_edinet_smoke_cache,
@@ -19,7 +19,7 @@ async def _prepare_smoke_cache_async(api_key: str, cache_dir: str, codes: list[s
     companies = smoke_companies_from_codes(codes)
     client = EdinetAPIClient(
         api_key=api_key,
-        cache_dir=str(Path(cache_dir) / "edinet"),
+        cache_dir=str(edinet_cache_dir(cache_dir)),
     )
     try:
         return await prepare_edinet_smoke_cache(
@@ -35,7 +35,7 @@ async def warmup_edinet_index_async(api_key: str, cache_dir: str, years: int) ->
     """直近 years 年分の EDINET 年次インデックスを準備する。"""
     client = EdinetAPIClient(
         api_key=api_key,
-        cache_dir=str(Path(cache_dir) / "edinet"),
+        cache_dir=str(edinet_cache_dir(cache_dir)),
     )
     current_year = datetime.now().year
     target_years = [current_year - offset for offset in range(years)]

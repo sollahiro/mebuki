@@ -8,7 +8,6 @@ EdinetFetcher を中心に財務データとEDINET補完指標を組み立てま
 import logging
 import asyncio
 from typing import Any, cast
-from pathlib import Path
 from collections.abc import Callable
 
 from mebuki.api.edinet_client import EdinetAPIClient
@@ -16,6 +15,7 @@ from mebuki.infrastructure.settings import settings_store
 from mebuki.constants.financial import PERCENT, MILLION_YEN
 from mebuki.analysis.calculator import calculate_metrics_flexible
 from mebuki.utils.cache import CacheManager
+from mebuki.utils.cache_paths import edinet_cache_dir
 from mebuki.utils.operating_profit_change import (
     apply_operating_profit_change_from_xbrl,
     apply_operating_profit_change_to_years,
@@ -589,10 +589,9 @@ class IndividualAnalyzer:
             self.edinet_client = edinet_client
         else:
             try:
-                edinet_cache_dir = Path(settings_store.cache_dir) / "edinet"
                 self.edinet_client = EdinetAPIClient(
                     api_key=settings_store.edinet_api_key,
-                    cache_dir=str(edinet_cache_dir),
+                    cache_dir=str(edinet_cache_dir(settings_store.cache_dir)),
                 )
             except Exception as e:
                 logger.warning(f"EDINETクライアントの初期化に失敗しました: {e}")

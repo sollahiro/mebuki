@@ -53,15 +53,15 @@ flowchart TD
 | データ | 取得元 | キャッシュ | 現状評価 |
 |---|---|---|---|
 | 銘柄基本情報 | local master | 個別分析結果に含まれる | 実用上OK |
-| 財務サマリー | EDINET XBRL/HTML | `individual_analysis_{code}` / `half_year_periods_{code}_{years}` | 指標再計算まで含むキャッシュのため便利だが、補完ロジック更新時は古い結果が残る |
-| EDINET日別検索 | EDINET `/documents.json?date=...` | `analysis_cache/edinet/search_YYYY-MM-DD.json` | `EdinetCacheStore` が管理。空結果1日、直近ヒット30日、過去日3650日のTTL |
-| EDINET書類インデックス | EDINET `/documents.json?date=...` | `analysis_cache/edinet/doc_index_YYYY.json` | 年次レンジ検索用。`_cache_version` と `built_through` で有効性を確認 |
-| EDINET XBRL | EDINET `/documents/{docID}?type=1` | `analysis_cache/edinet/{docID}_xbrl/` | `EdinetCacheStore` が管理。2GB上限を超えるとmtime LRUで古い展開ディレクトリを削除 |
-| 財務省金利 | MOF `jgbcm_all.csv`, `jgbcm.csv` | `mof_rf_rates` 1日TTL | 個別分析キャッシュ内WACCは更新されない。最新金利を反映する場合は `--no-cache` / `use_cache=False` |
+| 財務サマリー | EDINET XBRL/HTML | `analysis_cache/derived/analysis/individual_analysis_{code}.json` / `analysis_cache/derived/half_year/half_year_periods_{code}_{years}.json` | 指標再計算まで含むキャッシュのため便利だが、補完ロジック更新時は古い結果が残る |
+| EDINET日別検索 | EDINET `/documents.json?date=...` | `analysis_cache/external/edinet/documents_by_date/search_YYYY-MM-DD.json` | `EdinetCacheStore` が管理。空結果1日、直近ヒット30日、過去日3650日のTTL |
+| EDINET書類インデックス | EDINET `/documents.json?date=...` | `analysis_cache/external/edinet/document_indexes/doc_index_YYYY.json` | 年次レンジ検索用。`_cache_version` と `built_through` で有効性を確認 |
+| EDINET XBRL | EDINET `/documents/{docID}?type=1` | `analysis_cache/external/edinet/xbrl/{docID}_xbrl/` | `EdinetCacheStore` が管理。2GB上限を超えるとmtime LRUで古い展開ディレクトリを削除 |
+| 財務省金利 | MOF `jgbcm_all.csv`, `jgbcm.csv` | `analysis_cache/derived/mof/mof_rf_rates.json` 1日TTL | 個別分析キャッシュ内WACCは更新されない。最新金利を反映する場合は `--no-cache` / `use_cache=False` |
 
 ### キャッシュ上の課題
 
-- `CacheManager` 管理下のJSONと、EDINET配下のファイルキャッシュは役割が分かれている。EDINETの日別検索、年次インデックス、XBRL展開は `EdinetCacheStore` が管理する。
+- `external/` は外部取得物、`derived/` は mebuki 生成物として責務を分ける。EDINETの日別検索、年次インデックス、XBRL展開は `EdinetCacheStore` が管理する。
 - EDINET検索キャッシュはTTLを持ち、XBRL展開ディレクトリは容量上限とmtime LRU削除を持つ。
 - EDINET書類リストとXBRL parse結果は `CacheManager` 経由でも独立キャッシュする。最終分析キャッシュのバージョンを上げても、再取得・再parseを抑えやすい。
 - `individual_analysis_*` は最終成果物を保持するため、WACCなど取得時点の外部値を含む。最新値が必要な場合は `use_cache=False` / `--no-cache` で再計算する。

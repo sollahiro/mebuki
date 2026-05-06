@@ -5,7 +5,6 @@
 
 import logging
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from mebuki import __version__
@@ -18,11 +17,12 @@ from mebuki.constants.financial import (
     WACC_RF_FALLBACK,
 )
 from mebuki.utils.cache import CacheManager
+from mebuki.utils.cache_paths import edinet_cache_dir
 from mebuki.utils.fiscal_year import parse_date_string
 from mebuki.utils.master_types import StockSearchResult
 from mebuki.utils.output_serializer import serialize_metrics_result
 
-_CACHE_VERSION = ".".join(__version__.split(".")[:2])
+_CACHE_VERSION = __version__
 
 from .analyzer import IndividualAnalyzer
 from .company_info_service import CompanyInfoService
@@ -162,7 +162,7 @@ class DataService:
     """財務データおよび有報データの取得を行うクラス"""
 
     def __init__(self) -> None:
-        edinet_cache = Path(settings_store.cache_dir) / "edinet"
+        edinet_cache = edinet_cache_dir(settings_store.cache_dir)
         self.edinet_client = EdinetAPIClient(
             api_key=settings_store.edinet_api_key,
             cache_dir=str(edinet_cache),
@@ -192,10 +192,10 @@ class DataService:
         """設定変更時に呼び出され、APIクライアントなどの設定を更新します。"""
         logger.info("再初期化中: APIクライアントの設定を更新します")
         self.edinet_client.update_api_key(settings_store.edinet_api_key)
+        self.edinet_client.set_cache_dir(edinet_cache_dir(settings_store.cache_dir))
 
-        self.cache_manager.cache_dir = Path(settings_store.cache_dir)
+        self.cache_manager.set_cache_dir(settings_store.cache_dir)
         self.cache_manager.enabled = settings_store.cache_enabled
-        self.cache_manager.cache_dir.mkdir(parents=True, exist_ok=True)
         self.filing_service = FilingService(self.edinet_client)
         self.half_year_data_service = HalfYearDataService(
             self.edinet_client,

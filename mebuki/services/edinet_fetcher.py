@@ -38,7 +38,7 @@ from mebuki.utils.xbrl_result_types import GrossProfitResult, HalfYearEdinetEntr
 
 logger = logging.getLogger(__name__)
 
-_EDINET_DOCS_CACHE_VERSION = "edinet-docs-v2"
+_EDINET_DOCS_CACHE_VERSION = __version__
 
 
 def _infer_fy_start(fy_end: str) -> str:
@@ -65,7 +65,7 @@ def _infer_fy_end_from_period_start(period_start: str) -> str:
         return ""
 
 
-_XBRL_PARSE_CACHE_VERSION = ".".join(__version__.split(".")[:2]) + ":xbrl-parse"
+_XBRL_PARSE_CACHE_VERSION = f"{__version__}:xbrl-parse"
 
 _PreParsedMap: TypeAlias = dict[str, tuple[Path, XbrlTagElements]]
 _MetricByYear: TypeAlias = dict[str, dict[str, Any]]

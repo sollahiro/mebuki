@@ -24,7 +24,7 @@ from .edinet_fetcher import EdinetFetcher
 
 logger = logging.getLogger(__name__)
 
-_CACHE_VERSION = ".".join(__version__.split(".")[:2])
+_CACHE_VERSION = __version__
 
 
 def _fy_end_key(value: object) -> str:

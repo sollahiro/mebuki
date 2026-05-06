@@ -38,7 +38,9 @@ class EdinetCacheStore:
         max_xbrl_bytes: int | None = EDINET_XBRL_MAX_BYTES,
     ):
         self.cache_dir = Path(cache_dir)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.documents_by_date_dir = self.cache_dir / "documents_by_date"
+        self.document_indexes_dir = self.cache_dir / "document_indexes"
+        self.xbrl_root_dir = self.cache_dir / "xbrl"
         self.search_empty_ttl_days = search_empty_ttl_days
         self.search_hit_ttl_days = search_hit_ttl_days
         self.search_past_ttl_days = search_past_ttl_days
@@ -54,7 +56,10 @@ class EdinetCacheStore:
 
     def load_search_cache(self, filename: str) -> list[dict[str, Any]] | None:
         """日別検索結果をキャッシュから読み込む。"""
-        cache_path = self.cache_dir / filename
+        cache_path = self.documents_by_date_dir / filename
+        if not cache_path.exists():
+            legacy_path = self.cache_dir / filename
+            cache_path = legacy_path
         if not cache_path.exists():
             return None
         try:
@@ -71,8 +76,9 @@ class EdinetCacheStore:
 
     def save_search_cache(self, filename: str, data: list[dict[str, Any]]) -> None:
         """日別検索結果をキャッシュに保存する。"""
-        cache_path = self.cache_dir / filename
+        cache_path = self.documents_by_date_dir / filename
         try:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
             cache_path.write_text(
                 json.dumps(data, ensure_ascii=False, indent=2),
                 encoding="utf-8",
@@ -87,7 +93,10 @@ class EdinetCacheStore:
         required_through: str | None = None,
     ) -> list[dict[str, Any]] | None:
         """年次書類インデックスをキャッシュから読み込む。"""
-        cache_path = self.cache_dir / self.document_index_cache_key(year)
+        cache_path = self.document_indexes_dir / self.document_index_cache_key(year)
+        if not cache_path.exists():
+            legacy_path = self.cache_dir / self.document_index_cache_key(year)
+            cache_path = legacy_path
         if not cache_path.exists():
             return None
         try:
@@ -121,7 +130,7 @@ class EdinetCacheStore:
         built_through: str,
     ) -> None:
         """年次書類インデックスを保存する。"""
-        cache_path = self.cache_dir / self.document_index_cache_key(year)
+        cache_path = self.document_indexes_dir / self.document_index_cache_key(year)
         payload = {
             "_cache_version": EDINET_DOCUMENT_INDEX_VERSION,
             "year": year,
@@ -129,6 +138,7 @@ class EdinetCacheStore:
             "documents": documents,
         }
         try:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
             cache_path.write_text(
                 json.dumps(payload, ensure_ascii=False, indent=2),
                 encoding="utf-8",
@@ -138,7 +148,7 @@ class EdinetCacheStore:
 
     def xbrl_dir(self, doc_id: str, save_dir: str | Path | None = None) -> Path:
         """XBRL 展開ディレクトリのパスを返す。"""
-        root = Path(save_dir) if save_dir is not None else self.cache_dir
+        root = Path(save_dir) if save_dir is not None else self.xbrl_root_dir
         return root / f"{doc_id}_xbrl"
 
     def has_xbrl_dir(self, doc_id: str, save_dir: str | Path | None = None) -> bool:
@@ -159,7 +169,7 @@ class EdinetCacheStore:
         save_dir: str | Path | None = None,
     ) -> Path:
         """XBRL zip を一時保存して安全に展開し、展開ディレクトリを返す。"""
-        root = Path(save_dir) if save_dir is not None else self.cache_dir
+        root = Path(save_dir) if save_dir is not None else self.xbrl_root_dir
         root.mkdir(parents=True, exist_ok=True)
         dest = self.xbrl_dir(doc_id, root)
         zip_path = root / f"{doc_id}.zip"

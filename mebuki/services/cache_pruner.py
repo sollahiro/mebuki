@@ -12,6 +12,7 @@ from pathlib import Path
 
 from mebuki.constants.api import EDINET_DOCUMENT_INDEX_KEEP_YEARS
 from mebuki.utils.cache import CacheManager
+from mebuki.utils.cache_paths import derived_cache_dir, edinet_cache_dir, external_cache_dir
 
 
 @dataclass(frozen=True)
@@ -81,7 +82,9 @@ class CachePruner:
 
     def __init__(self, cache_dir: str | Path):
         self.cache_dir = Path(cache_dir)
-        self.edinet_dir = self.cache_dir / "edinet"
+        self.external_dir = external_cache_dir(self.cache_dir)
+        self.edinet_dir = edinet_cache_dir(self.cache_dir)
+        self.derived_dir = derived_cache_dir(self.cache_dir)
         self.cache_manager = CacheManager(cache_dir=str(self.cache_dir))
 
     def prune(
@@ -118,11 +121,8 @@ class CachePruner:
         files = [path for path in self.cache_dir.rglob("*") if path.is_file()]
         dirs = [path for path in self.cache_dir.rglob("*") if path.is_dir()]
         metadata_keys = self.cache_manager.keys()
-        root_json_files = [
-            path
-            for path in self.cache_dir.glob("*.json")
-            if path.name != "metadata.json"
-        ]
+        root_json_files = _legacy_root_json_files(self.cache_dir)
+        derived_json_files = _derived_json_files(self.derived_dir)
         known_root_prefixes = (
             "individual_analysis_",
             "half_year_periods_",
@@ -130,17 +130,17 @@ class CachePruner:
             "xbrl_parsed_",
             "mof_",
         )
-        edinet_search_files = list(self.edinet_dir.glob("search_*.json"))
-        edinet_doc_index_files = list(self.edinet_dir.glob("doc_index_*.json"))
-        edinet_xbrl_dirs = [path for path in self.edinet_dir.glob("*_xbrl") if path.is_dir()]
-        edinet_docs_cache_files = [path for path in root_json_files if path.stem.startswith("edinet_docs_")]
-        xbrl_parse_cache_files = [path for path in root_json_files if path.stem.startswith("xbrl_parsed_")]
-        individual_analysis_files = [path for path in root_json_files if path.stem.startswith("individual_analysis_")]
-        half_year_analysis_files = [path for path in root_json_files if path.stem.startswith("half_year_periods_")]
-        mof_cache_files = [path for path in root_json_files if path.stem.startswith("mof_")]
+        edinet_search_files = _edinet_search_files(self.edinet_dir)
+        edinet_doc_index_files = _edinet_doc_index_files(self.edinet_dir)
+        edinet_xbrl_dirs = _edinet_xbrl_dirs(self.edinet_dir)
+        edinet_docs_cache_files = _category_files(self.derived_dir / "document_discovery", root_json_files, "edinet_docs_")
+        xbrl_parse_cache_files = _category_files(self.derived_dir / "xbrl_numeric_index", root_json_files, "xbrl_parsed_")
+        individual_analysis_files = _category_files(self.derived_dir / "analysis", root_json_files, "individual_analysis_")
+        half_year_analysis_files = _category_files(self.derived_dir / "half_year", root_json_files, "half_year_periods_")
+        mof_cache_files = _category_files(self.derived_dir / "mof", root_json_files, "mof_")
         unknown_root_json_files = [
             path
-            for path in root_json_files
+            for path in root_json_files + [p for p in derived_json_files if p.parent.name == "misc"]
             if not path.stem.startswith(known_root_prefixes)
         ]
 
@@ -173,11 +173,8 @@ class CachePruner:
     def audit(self) -> CacheAudit:
         """キャッシュカテゴリ別のファイル一覧を返す。削除は行わない。"""
         metadata_keys = self.cache_manager.keys()
-        root_json_files = [
-            path
-            for path in self.cache_dir.glob("*.json")
-            if path.name != "metadata.json"
-        ]
+        root_json_files = _legacy_root_json_files(self.cache_dir)
+        derived_json_files = _derived_json_files(self.derived_dir)
         known_root_prefixes = (
             "individual_analysis_",
             "half_year_periods_",
@@ -185,28 +182,28 @@ class CachePruner:
             "xbrl_parsed_",
             "mof_",
         )
-        existing_cache_stems = {path.stem for path in root_json_files}
+        existing_cache_stems = {path.stem for path in root_json_files + derived_json_files}
         return CacheAudit(
             cache_dir=str(self.cache_dir),
             unknown_root_json_files=_names([
-                path for path in root_json_files
+                path for path in root_json_files + [p for p in derived_json_files if p.parent.name == "misc"]
                 if not path.stem.startswith(known_root_prefixes)
             ]),
             orphan_metadata_keys=sorted(key for key in metadata_keys if key not in existing_cache_stems),
-            edinet_search_files=_names(self.edinet_dir.glob("search_*.json")),
-            edinet_doc_index_files=_names(self.edinet_dir.glob("doc_index_*.json")),
-            edinet_xbrl_dirs=_names(path for path in self.edinet_dir.glob("*_xbrl") if path.is_dir()),
-            edinet_docs_cache_files=_names(path for path in root_json_files if path.stem.startswith("edinet_docs_")),
-            xbrl_parse_cache_files=_names(path for path in root_json_files if path.stem.startswith("xbrl_parsed_")),
-            individual_analysis_files=_names(path for path in root_json_files if path.stem.startswith("individual_analysis_")),
-            half_year_analysis_files=_names(path for path in root_json_files if path.stem.startswith("half_year_periods_")),
-            mof_cache_files=_names(path for path in root_json_files if path.stem.startswith("mof_")),
+            edinet_search_files=_names(_edinet_search_files(self.edinet_dir)),
+            edinet_doc_index_files=_names(_edinet_doc_index_files(self.edinet_dir)),
+            edinet_xbrl_dirs=_names(_edinet_xbrl_dirs(self.edinet_dir)),
+            edinet_docs_cache_files=_names(_category_files(self.derived_dir / "document_discovery", root_json_files, "edinet_docs_")),
+            xbrl_parse_cache_files=_names(_category_files(self.derived_dir / "xbrl_numeric_index", root_json_files, "xbrl_parsed_")),
+            individual_analysis_files=_names(_category_files(self.derived_dir / "analysis", root_json_files, "individual_analysis_")),
+            half_year_analysis_files=_names(_category_files(self.derived_dir / "half_year", root_json_files, "half_year_periods_")),
+            mof_cache_files=_names(_category_files(self.derived_dir / "mof", root_json_files, "mof_")),
         )
 
     def _prune_edinet_search(self, *, days: int, dry_run: bool) -> PruneSummary:
         files = [
             path
-            for path in self.edinet_dir.glob("search_*.json")
+            for path in _edinet_search_files(self.edinet_dir)
             if self._age_days(path) >= days
         ]
         freed = sum(path.stat().st_size for path in files if path.exists())
@@ -224,7 +221,7 @@ class CachePruner:
     def _prune_edinet_xbrl(self, *, days: int, dry_run: bool) -> PruneSummary:
         dirs = [
             path
-            for path in self.edinet_dir.glob("*_xbrl")
+            for path in _edinet_xbrl_dirs(self.edinet_dir)
             if path.is_dir() and self._age_days(path) >= days
         ]
         freed = sum(self._path_size(path) for path in dirs)
@@ -246,7 +243,7 @@ class CachePruner:
             threshold_year = datetime.now().year - keep_years + 1
         files = [
             path
-            for path in self.edinet_dir.glob("doc_index_*.json")
+            for path in _edinet_doc_index_files(self.edinet_dir)
             if (year := _doc_index_year(path)) is not None and year < threshold_year
         ]
         freed = sum(path.stat().st_size for path in files if path.exists())
@@ -294,3 +291,51 @@ def _doc_index_year(path: Path) -> int | None:
 
 def _names(paths: Iterable[Path]) -> list[str]:
     return sorted(path.name for path in paths)
+
+
+def _legacy_root_json_files(cache_dir: Path) -> list[Path]:
+    return [
+        path
+        for path in cache_dir.glob("*.json")
+        if path.name != "metadata.json"
+    ]
+
+
+def _derived_json_files(derived_dir: Path) -> list[Path]:
+    if not derived_dir.exists():
+        return []
+    return [
+        path
+        for path in derived_dir.rglob("*.json")
+        if path.name != "metadata.json"
+    ]
+
+
+def _category_files(category_dir: Path, legacy_files: list[Path], prefix: str) -> list[Path]:
+    files = list(category_dir.glob(f"{prefix}*.json")) if category_dir.exists() else []
+    files.extend(path for path in legacy_files if path.stem.startswith(prefix))
+    return files
+
+
+def _edinet_search_files(edinet_dir: Path) -> list[Path]:
+    legacy_edinet_dir = edinet_dir.parent.parent / "edinet"
+    files = list((edinet_dir / "documents_by_date").glob("search_*.json"))
+    files.extend(edinet_dir.glob("search_*.json"))
+    files.extend(legacy_edinet_dir.glob("search_*.json"))
+    return files
+
+
+def _edinet_doc_index_files(edinet_dir: Path) -> list[Path]:
+    legacy_edinet_dir = edinet_dir.parent.parent / "edinet"
+    files = list((edinet_dir / "document_indexes").glob("doc_index_*.json"))
+    files.extend(edinet_dir.glob("doc_index_*.json"))
+    files.extend(legacy_edinet_dir.glob("doc_index_*.json"))
+    return files
+
+
+def _edinet_xbrl_dirs(edinet_dir: Path) -> list[Path]:
+    legacy_edinet_dir = edinet_dir.parent.parent / "edinet"
+    dirs = [path for path in (edinet_dir / "xbrl").glob("*_xbrl") if path.is_dir()]
+    dirs.extend(path for path in edinet_dir.glob("*_xbrl") if path.is_dir())
+    dirs.extend(path for path in legacy_edinet_dir.glob("*_xbrl") if path.is_dir())
+    return dirs

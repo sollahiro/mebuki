@@ -1,15 +1,41 @@
 # キャッシュ設計規約
 
-キャッシュの読み書きは `CacheManager`（`mebuki/utils/cache.py`）を使う。直接ファイルI/Oは行わない。
+mebuki 生成キャッシュの読み書きは `CacheManager`（`mebuki/utils/cache.py`）を使う。直接ファイルI/Oは行わない。
+
+EDINET API 由来キャッシュ（日別書類一覧、年次書類インデックス、XBRL 展開ディレクトリ）は `EdinetCacheStore`（`mebuki/api/edinet_cache_store.py`）を使う。
+
+## 責務別ディレクトリ
+
+キャッシュは取得物と生成物で分ける。
+
+```text
+analysis_cache/
+  external/
+    edinet/
+      documents_by_date/
+      document_indexes/
+      xbrl/
+  derived/
+    document_discovery/
+    xbrl_numeric_index/
+    analysis/
+    half_year/
+    mof/
+```
+
+- `external/`: 外部API・外部資料から取得した生データまたは取得物
+- `derived/`: mebuki が探索・パース・計算して作った中間結果または分析結果
 
 ## バージョン埋め込み
 
-キャッシュには必ず `_cache_version` フィールドを埋め込み、読み込み時に照合する。
+derived キャッシュには必ず `_cache_version` フィールドを埋め込み、読み込み時に `__version__` 全体と照合する。
+
+external キャッシュは原則としてグローバルバージョンに連動させない。TTL、取得日、または外部API用の個別バージョンで管理する。
 
 ```python
 from mebuki import __version__
 
-_CACHE_VERSION = ".".join(__version__.split(".")[:2])  # 例: "2.15"
+_CACHE_VERSION = __version__  # 例: "26.5.0"
 
 # 保存
 self.cache_manager.set(cache_key, {
@@ -34,7 +60,9 @@ if cached and cached.get("_cache_version") == _CACHE_VERSION:
 # ✅ 良い例
 f"individual_analysis_{code}"
 f"half_year_periods_{code}_{years}"
-"earnings_calendar_store"
+f"edinet_docs_{code}_{years}"
+f"xbrl_parsed_{doc_id}"
+"mof_rf_rates"
 
 # ❌ 避ける（衝突リスク）
 f"{code}"

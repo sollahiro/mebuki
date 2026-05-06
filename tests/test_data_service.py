@@ -95,7 +95,7 @@ class TestFetchStockBasicInfo:
 class TestGetRawAnalysisData:
     def _make_cached(self, code: str) -> dict:
         from mebuki import __version__
-        cache_version = ".".join(__version__.split(".")[:2])
+        cache_version = __version__
         return {
             "_cache_version": cache_version,
             "code": code,
@@ -443,7 +443,7 @@ class TestGetRawAnalysisData:
 class TestExtractFilingContent:
     def _make_cached(self, code: str) -> dict:
         from mebuki import __version__
-        cache_version = ".".join(__version__.split(".")[:2])
+        cache_version = __version__
         return {
             "_cache_version": cache_version,
             "code": code,
@@ -572,7 +572,7 @@ class TestHalfYearDataService:
     @pytest.mark.asyncio
     async def test_cache_hit_skips_fetch(self, tmp_path):
         from mebuki import __version__
-        cache_version = ".".join(__version__.split(".")[:2])
+        cache_version = __version__
         service = self._make_service(tmp_path)
         cached_periods = [{"label": "24H1", "half": "H1", "fy_end": "2024-03-31", "data": {"Sales": 45.0}}]
         service.cache_manager.set("half_year_periods_72030_3", {
