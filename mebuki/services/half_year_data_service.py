@@ -9,6 +9,7 @@ from typing import Any
 
 from mebuki import __version__
 from mebuki.api.edinet_client import EdinetAPIClient
+from mebuki.constants.api import EDINET_DOC_DISCOVERY_BUFFER, EDINET_DOC_DISCOVERY_LIMIT
 from mebuki.constants.financial import MILLION_YEN
 from mebuki.utils.cache import CacheManager
 from mebuki.utils.converters import to_float
@@ -210,6 +211,33 @@ def _apply_fy_only_edinet_data(
         _set_metric_source(data, "ROIC", source="derived", unit="percent", method="NP / (NetAssets + InterestBearingDebt)")
 
 
+def _trim_half_year_periods(
+    periods: list[dict[str, Any]],
+    years: int,
+) -> list[dict[str, Any]]:
+    """完結 H1+H2 ペア N 組 + 当期 H1（FY 未公開）に trim する。
+
+    periods は古い順を前提とする。
+    完結ペア = 同じ fy_end に H1 と H2 の両方がある年度。
+    当期 H1 = H1 はあるが H2 が存在しない最新fy_end（ペア数を圧迫しない）。
+    """
+    h2_ends = {p["fy_end"] for p in periods if p.get("half") == "H2"}
+    h1_ends = {p["fy_end"] for p in periods if p.get("half") == "H1"}
+    current_h1_ends = h1_ends - h2_ends  # H1 はあるが H2 がない = 当期進行中
+
+    # 完結ペアを新しい順に N 件選択
+    complete_sorted = sorted(h2_ends, reverse=True)[:years]
+    selected = set(complete_sorted)
+
+    result = [p for p in periods if p["fy_end"] in selected]
+    # 当期 H1 を末尾に追加（最新 1 件のみ）
+    for p in reversed(periods):
+        if p["fy_end"] in current_h1_ends and p.get("half") == "H1":
+            result.append(p)
+            break
+    return result
+
+
 class HalfYearDataService:
     """H1/H2 の半期財務データ構築と EDINET 補完を担当するサービス"""
 
@@ -225,43 +253,58 @@ class HalfYearDataService:
         include_debug_fields: bool = False,
     ) -> list[dict[str, Any]]:
         """H1/H2 の半期財務データを返す。"""
-        cache_key = f"half_year_periods_{code}_{years}"
+        cache_key = f"half_year_periods_{code}"
         if use_cache:
             cached = self.cache_manager.get(cache_key)
             if cached and cached.get("_cache_version") == _CACHE_VERSION:
-                return serialize_half_year_periods(cached["periods"], include_debug_fields=include_debug_fields)
+                trimmed = _trim_half_year_periods(cached["periods"], years)
+                return serialize_half_year_periods(trimmed, include_debug_fields=include_debug_fields)
 
+        fetch_years = years + EDINET_DOC_DISCOVERY_BUFFER
         edinet_fetcher = EdinetFetcher(
             self.edinet_client,
             cache_manager=self.cache_manager,
         )
         try:
             fy_records, q2_records = await asyncio.gather(
-                edinet_fetcher.build_xbrl_annual_records(code, years),
-                edinet_fetcher.build_xbrl_half_year_records(code, years + 1),
+                edinet_fetcher.build_xbrl_annual_records(code, fetch_years),
+                edinet_fetcher.build_xbrl_half_year_records(code, fetch_years),
             )
             financial_data = fy_records + q2_records
         except Exception as e:
             logger.warning(f"[HALF] {code}: EDINET-only財務データ構築スキップ - {e}")
             return []
 
-        base_periods = build_half_year_periods(financial_data, years=years)
+        # 全量生成（LIMIT 件）してキャッシュ保存、返却時に trim
+        base_periods = build_half_year_periods(financial_data, years=EDINET_DOC_DISCOVERY_LIMIT)
         if not base_periods:
             return base_periods
+
+        # 完結ペアの fy_end セットを補完抽出の範囲として使う
+        selected_fy_ends = {p["fy_end"] for p in base_periods if p.get("half") == "H2"}
 
         # EDINET からの補完（GrossProfit + CFO/CFI for H1）
         # 表示中の FY 数だけ 2Q EDINET を取得（26H1 等の extra 分も含む）
         unique_fy_ends = len(set(p["fy_end"] for p in base_periods))
         try:
-            half_edinet, fy_gp, ibd_by_year, fy_op = await asyncio.gather(
+            half_edinet, fy_gp_all, ibd_all, fy_op_all = await asyncio.gather(
                 edinet_fetcher.extract_half_year_edinet_data(code, financial_data, max_years=unique_fy_ends),
-                edinet_fetcher.extract_gross_profit_by_year(code, financial_data, max_years=years),
-                edinet_fetcher.extract_ibd_by_year(code, financial_data, max_years=years),
-                edinet_fetcher.extract_operating_profit_by_year(code, financial_data, max_years=years),
+                edinet_fetcher.extract_gross_profit_by_year(code, financial_data, max_years=EDINET_DOC_DISCOVERY_LIMIT),
+                edinet_fetcher.extract_ibd_by_year(code, financial_data, max_years=EDINET_DOC_DISCOVERY_LIMIT),
+                edinet_fetcher.extract_operating_profit_by_year(code, financial_data, max_years=EDINET_DOC_DISCOVERY_LIMIT),
             )
+            # 選択済み年度のみにフィルタ
+            fy_gp = {k: v for k, v in fy_gp_all.items() if k in selected_fy_ends}
+            ibd_by_year = {k: v for k, v in ibd_all.items() if k in selected_fy_ends}
+            fy_op = {k: v for k, v in fy_op_all.items() if k in selected_fy_ends}
         except Exception as e:
             logger.warning(f"[HALF] {code}: EDINET補完スキップ - {e}")
-            return serialize_half_year_periods(base_periods, include_debug_fields=include_debug_fields)
+            self.cache_manager.set(cache_key, {
+                "_cache_version": _CACHE_VERSION,
+                "periods": base_periods,
+            })
+            trimmed = _trim_half_year_periods(base_periods, years)
+            return serialize_half_year_periods(trimmed, include_debug_fields=include_debug_fields)
 
         fy_gp_by_end: dict[str, GrossProfitResult] = {}
         for fy_end, result in fy_gp.items():
@@ -340,4 +383,5 @@ class HalfYearDataService:
             "_cache_version": _CACHE_VERSION,
             "periods": base_periods,
         })
-        return serialize_half_year_periods(base_periods, include_debug_fields=include_debug_fields)
+        trimmed = _trim_half_year_periods(base_periods, years)
+        return serialize_half_year_periods(trimmed, include_debug_fields=include_debug_fields)

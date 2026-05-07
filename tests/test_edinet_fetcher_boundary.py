@@ -39,7 +39,8 @@ async def test_get_annual_docs_falls_back_to_edinet_discovery_without_doc_ids() 
     )
 
     assert docs == [{"docID": "S100TEST"}]
-    fetcher._search_edinet_annual_docs.assert_awaited_once_with("72030", 1)
+    # save_count = max(EDINET_DOC_DISCOVERY_LIMIT=10, max_years=1) = 10
+    fetcher._search_edinet_annual_docs.assert_awaited_once_with("72030", 10)
 
 
 @pytest.mark.asyncio
@@ -75,7 +76,8 @@ async def test_get_half_year_docs_calls_discovery_once_on_repeated_calls() -> No
 
     assert first == [{"docID": "S100HALF"}]
     assert second == [{"docID": "S100HALF"}]
-    fetcher._search_edinet_half_docs.assert_awaited_once_with("72030", 1)
+    # save_count = max(10, 1) = 10
+    fetcher._search_edinet_half_docs.assert_awaited_once_with("72030", 10)
 
 
 @pytest.mark.asyncio
@@ -84,7 +86,7 @@ async def test_get_annual_docs_reads_from_persistent_cache(tmp_path) -> None:
     max_years = 1
     cache_manager = CacheManager(cache_dir=str(tmp_path))
     cache_manager.set(
-        f"edinet_docs_{code}_{max_years}",
+        f"edinet_docs_{code}",
         {
             "_cache_version": __version__,
             "docs": [{"docID": "S100CACHED"}],
@@ -117,8 +119,8 @@ async def test_get_annual_docs_saves_to_persistent_cache_after_api_call(tmp_path
         [_financial_record("2023-04-01", "2024-03-31", "2024-06-01")],
         1,
     )
-    cached = cache_manager.get("edinet_docs_72030_1")
-
+    # キャッシュキーは max_years 非依存の固定キー
+    cached = cache_manager.get("edinet_docs_72030")
     assert docs == [{"docID": "S100TEST"}]
     assert isinstance(cached, dict)
     assert cached["docs"] == [{"docID": "S100TEST"}]
@@ -145,7 +147,8 @@ async def test_get_annual_docs_ignores_q2_records_for_year_selection() -> None:
     )
 
     assert docs == [{"docID": "S100ANNUAL"}]
-    fetcher._search_edinet_annual_docs.assert_awaited_once_with("59320", 5)
+    # save_count = max(10, 5) = 10
+    fetcher._search_edinet_annual_docs.assert_awaited_once_with("59320", 10)
 
 
 @pytest.mark.asyncio
@@ -179,7 +182,7 @@ async def test_get_half_year_docs_reads_from_persistent_cache(tmp_path) -> None:
     max_years = 1
     cache_manager = CacheManager(cache_dir=str(tmp_path))
     cache_manager.set(
-        f"edinet_docs_{code}_{max_years}_2Q",
+        f"edinet_docs_{code}_2Q",
         {
             "_cache_version": __version__,
             "docs": [{"docID": "S100HALFCACHED"}],
@@ -245,7 +248,8 @@ async def test_get_half_year_docs_returns_empty_when_no_q2_records() -> None:
     )
 
     assert docs == []
-    fetcher._search_edinet_half_docs.assert_awaited_once_with("72030", 2)
+    # save_count = max(10, 2) = 10
+    fetcher._search_edinet_half_docs.assert_awaited_once_with("72030", 10)
 
 
 @pytest.mark.asyncio

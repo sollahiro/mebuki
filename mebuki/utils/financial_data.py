@@ -65,6 +65,22 @@ def _latest_by_fy_end(
     return sorted(records.keys(), reverse=True)[:limit]
 
 
+def _latest_complete_pairs(
+    fy_by_end: dict[str, dict[str, Any]],
+    q2_by_end: dict[str, dict[str, Any]],
+    n: int,
+) -> list[str]:
+    """FY と 2Q の両方が存在する年度を最新 N 件選ぶ。
+
+    N 件に満たない場合は取得できた分だけ返す（FY-only は選択しない）。
+    """
+    complete = sorted(
+        (fy_end for fy_end in fy_by_end if fy_end in q2_by_end),
+        reverse=True,
+    )
+    return complete[:n]
+
+
 def _latest_q2_only_ends(
     q2_by_end: dict[str, dict[str, Any]],
     newest_fy: str,
@@ -222,8 +238,8 @@ def build_half_year_periods(
         elif per_type == "2Q":
             _upsert_latest_record(q2_by_end, fy_end, record)
 
-    # FY レコードが存在する期間を最新 years 件取得
-    fy_ends_with_fy = _latest_by_fy_end(fy_by_end, years)
+    # FY+2Q 両方揃う完結ペアを最新 years 件選択
+    fy_ends_with_fy = _latest_complete_pairs(fy_by_end, q2_by_end, years)
 
     # FY 未開示だが 2Q が存在する最新期間を追加（例: 当期 FY 開示前の H1）
     newest_fy = fy_ends_with_fy[0] if fy_ends_with_fy else ""

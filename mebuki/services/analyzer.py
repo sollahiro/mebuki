@@ -654,8 +654,9 @@ class IndividualAnalyzer:
                 return {}
 
         if not annual_data:
+            from mebuki.constants.api import EDINET_DOC_DISCOVERY_BUFFER
             fallback_years = analysis_years or max_documents
-            annual_data = await self._edinet_fetcher.build_xbrl_annual_records(code, fallback_years)
+            annual_data = await self._edinet_fetcher.build_xbrl_annual_records(code, fallback_years + EDINET_DOC_DISCOVERY_BUFFER)
             if not annual_data:
                 return {}
             financial_data = annual_data

@@ -15,6 +15,7 @@ from typing import Any, TypeAlias
 
 from mebuki import __version__
 from mebuki.api.edinet_client import EdinetAPIClient
+from mebuki.constants.api import EDINET_DOC_DISCOVERY_LIMIT
 from mebuki.analysis.balance_sheet import extract_balance_sheet
 from mebuki.analysis.cash_flow import extract_cash_flow
 from mebuki.analysis.depreciation import extract_depreciation
@@ -70,7 +71,7 @@ _XBRL_PARSE_CACHE_VERSION = f"{__version__}:xbrl-parse"
 _PreParsedMap: TypeAlias = dict[str, tuple[Path, XbrlTagElements]]
 _MetricByYear: TypeAlias = dict[str, dict[str, Any]]
 _AllMetrics: TypeAlias = dict[str, dict[str, Any]]
-_DocCacheKey: TypeAlias = tuple[str, int] | tuple[str, int, str]
+_DocCacheKey: TypeAlias = tuple[str, int] | tuple[str, int, str] | tuple[str, str]
 
 
 def _fy_end_key(value: object) -> str:
@@ -180,47 +181,54 @@ class EdinetFetcher:
         code: str,
         financial_data: list[dict[str, Any]],
         max_years: int,
-    ) -> list:
+    ) -> list[dict[str, Any]]:
         """検索済みEDINET書類をインスタンス内でキャッシュ。
 
-        同一 code+max_years を asyncio.gather で並列呼び出しした場合に
-        ネットワーク呼び出しを1回に集約する。
-        financial_data に _docID 付きXBRL由来レコードが含まれる場合は、
-        再検索せずにその docID から書類リストを復元する。
+        - キャッシュキー: edinet_docs_{code}（max_years 非依存）
+        - 保存数: max(EDINET_DOC_DISCOVERY_LIMIT, max_years)
+        - 返却: docs[:max_years] で slice
+        - キャッシュが max_years より短い場合は再取得して上書き
         """
-        key = (code, max_years)
-        persistent_key = f"edinet_docs_{code}_{max_years}"
-        if key not in self._doc_locks:
-            self._doc_locks[key] = asyncio.Lock()
-        async with self._doc_locks[key]:
-            if key not in self._doc_cache:
-                if self.cache_manager is not None:
-                    cached = self.cache_manager.get(persistent_key)
-                    if (
-                        isinstance(cached, dict)
-                        and cached.get("_cache_version") == _EDINET_DOCS_CACHE_VERSION
-                        and isinstance(cached.get("docs"), list)
-                    ):
-                        self._doc_cache[key] = cached["docs"]
-                        return self._doc_cache[key]
+        lock_key: tuple[str, str] = (code, "FY")
+        persistent_key = f"edinet_docs_{code}"
+        save_count = max(EDINET_DOC_DISCOVERY_LIMIT, max_years)
 
-                annual_records = [
-                    record for record in financial_data
-                    if record.get("CurPerType") == "FY"
-                ]
-                docs_from_records = _docs_from_xbrl_records(annual_records)
+        if lock_key not in self._doc_locks:
+            self._doc_locks[lock_key] = asyncio.Lock()
+        async with self._doc_locks[lock_key]:
+            # メモリキャッシュが十分な件数を持っていれば即返す
+            mem = self._doc_cache.get(lock_key)
+            if mem is not None and len(mem) >= max_years:
+                return mem[:max_years]
 
-                if docs_from_records:
-                    docs = docs_from_records[:max_years]
-                else:
-                    docs = await self._search_edinet_annual_docs(code, max_years)
-                self._doc_cache[key] = docs
-                if self.cache_manager is not None:
-                    self.cache_manager.set(
-                        persistent_key,
-                        {"_cache_version": _EDINET_DOCS_CACHE_VERSION, "docs": docs},
-                    )
-            return self._doc_cache[key]
+            # 永続キャッシュが十分な件数を持っていれば使う
+            if self.cache_manager is not None:
+                cached = self.cache_manager.get(persistent_key)
+                if (
+                    isinstance(cached, dict)
+                    and cached.get("_cache_version") == _EDINET_DOCS_CACHE_VERSION
+                    and isinstance(cached.get("docs"), list)
+                    and len(cached["docs"]) >= max_years
+                ):
+                    self._doc_cache[lock_key] = cached["docs"]
+                    return cached["docs"][:max_years]
+
+            # financial_data 由来の docs_from_records を試みる（max_years 以上あれば採用）
+            annual_records = [r for r in financial_data if r.get("CurPerType") == "FY"]
+            docs_from_records = _docs_from_xbrl_records(annual_records)
+
+            if docs_from_records and len(docs_from_records) >= max_years:
+                docs = docs_from_records[:save_count]
+            else:
+                docs = await self._search_edinet_annual_docs(code, save_count)
+
+            self._doc_cache[lock_key] = docs
+            if self.cache_manager is not None:
+                self.cache_manager.set(
+                    persistent_key,
+                    {"_cache_version": _EDINET_DOCS_CACHE_VERSION, "docs": docs},
+                )
+            return docs[:max_years]
 
     async def _search_edinet_annual_docs(
         self,
@@ -292,37 +300,56 @@ class EdinetFetcher:
         financial_data: list[dict[str, Any]],
         max_years: int,
     ) -> list[dict[str, Any]]:
-        key = (code, max_years, "2Q")
-        persistent_key = f"edinet_docs_{code}_{max_years}_2Q"
-        if key not in self._doc_locks:
-            self._doc_locks[key] = asyncio.Lock()
-        async with self._doc_locks[key]:
-            if key not in self._doc_cache:
-                if self.cache_manager is not None:
-                    cached = self.cache_manager.get(persistent_key)
-                    if (
-                        isinstance(cached, dict)
-                        and cached.get("_cache_version") == _EDINET_DOCS_CACHE_VERSION
-                        and isinstance(cached.get("docs"), list)
-                    ):
-                        self._doc_cache[key] = cached["docs"]
-                        return self._doc_cache[key]
+        """半期書類をキャッシュ経由で返す。
 
-                records = self._prepare_q2_records(financial_data, max_years)
-                docs_from_records = _docs_from_xbrl_records(records)
-                if not self.edinet_client:
-                    docs: list[dict[str, Any]] = []
-                elif docs_from_records:
-                    docs = docs_from_records[:max_years]
-                else:
-                    docs = await self._search_edinet_half_docs(code, max_years)
-                self._doc_cache[key] = docs
-                if self.cache_manager is not None:
-                    self.cache_manager.set(
-                        persistent_key,
-                        {"_cache_version": _EDINET_DOCS_CACHE_VERSION, "docs": docs},
-                    )
-            return self._doc_cache[key]
+        - キャッシュキー: edinet_docs_{code}_2Q（max_years 非依存）
+        - 保存数: max(EDINET_DOC_DISCOVERY_LIMIT, max_years)
+        - 返却: docs[:max_years] で slice
+        - キャッシュが max_years より短い場合は再取得して上書き
+        """
+        lock_key: tuple[str, str] = (code, "2Q")
+        persistent_key = f"edinet_docs_{code}_2Q"
+        save_count = max(EDINET_DOC_DISCOVERY_LIMIT, max_years)
+
+        if lock_key not in self._doc_locks:
+            self._doc_locks[lock_key] = asyncio.Lock()
+        async with self._doc_locks[lock_key]:
+            # メモリキャッシュが十分な件数を持っていれば即返す
+            mem = self._doc_cache.get(lock_key)
+            if mem is not None and len(mem) >= max_years:
+                return mem[:max_years]
+
+            # 永続キャッシュが十分な件数を持っていれば使う
+            if self.cache_manager is not None:
+                cached = self.cache_manager.get(persistent_key)
+                if (
+                    isinstance(cached, dict)
+                    and cached.get("_cache_version") == _EDINET_DOCS_CACHE_VERSION
+                    and isinstance(cached.get("docs"), list)
+                    and len(cached["docs"]) >= max_years
+                ):
+                    self._doc_cache[lock_key] = cached["docs"]
+                    return cached["docs"][:max_years]
+
+            if not self.edinet_client:
+                return []
+
+            # financial_data 由来の docs_from_records を試みる（max_years 以上あれば採用）
+            records = self._prepare_q2_records(financial_data, save_count)
+            docs_from_records = _docs_from_xbrl_records(records)
+
+            if docs_from_records and len(docs_from_records) >= max_years:
+                docs = docs_from_records[:save_count]
+            else:
+                docs = await self._search_edinet_half_docs(code, save_count)
+
+            self._doc_cache[lock_key] = docs
+            if self.cache_manager is not None:
+                self.cache_manager.set(
+                    persistent_key,
+                    {"_cache_version": _EDINET_DOCS_CACHE_VERSION, "docs": docs},
+                )
+            return docs[:max_years]
 
     async def fetch_latest_annual_report(
         self,
@@ -782,7 +809,7 @@ class EdinetFetcher:
             return []
 
         if docs is None:
-            docs = await self._search_edinet_annual_docs(code, max_years)
+            docs = await self._get_annual_docs(code, [], max_years)
         if not docs:
             return []
 
@@ -888,7 +915,7 @@ class EdinetFetcher:
             return []
 
         if docs is None:
-            docs = await self._search_edinet_half_docs(code, max_years)
+            docs = await self._get_half_year_docs(code, [], max_years)
         if not docs:
             return []
 
