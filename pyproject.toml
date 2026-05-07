@@ -1,6 +1,6 @@
 [project]
 name = "blue-ticker"
-version = "26.5.5"
+version = "26.5.6"
 description = "BLUE TICKER: 正確な情報収集に特化した日本株分析CLI/MCPツール"
 authors = [
     {name = "sollahiro", email = "sollahiro@gmail.com"}
@@ -10,12 +10,12 @@ requires-python = ">=3.11"
 dependencies = ["aiohttp (>=3.9.0,<4.0.0)", "beautifulsoup4 (>=4.14.3,<5.0.0)", "mcp (>=1.2.1)"]
 
 [project.scripts]
-ticker = "mebuki.app.cli:main"
-blt = "mebuki.app.cli:main"
+ticker = "blue_ticker.app.cli:main"
+blt = "blue_ticker.app.cli:main"
 
 [tool.poetry]
 packages = [
-    {include = "mebuki", from = "."}
+    {include = "blue_ticker", from = "."}
 ]
 
 [tool.pytest.ini_options]
