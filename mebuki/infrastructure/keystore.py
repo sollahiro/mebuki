@@ -33,14 +33,6 @@ def _mac_set(service: str, key: str, value: str) -> None:
     )
 
 
-def _mac_delete(service: str, key: str) -> None:
-    account = f"{service}.{key}"
-    subprocess.run(
-        ["security", "delete-generic-password", "-s", account, "-a", service],
-        capture_output=True,
-    )
-
-
 def _mac_get_legacy(service: str, key: str) -> str | None:
     """keyring ライブラリが使っていた旧形式（-s service -a key）で検索する。"""
     result = subprocess.run(
@@ -137,9 +129,3 @@ def get_password(service: str, key: str) -> str | None:
     if platform.system() == "Darwin":
         return _mac_get(service, key)
     return _file_get(key)
-
-
-def delete_password(service: str, key: str) -> None:
-    """APIキーを OS キーチェーンから削除する。非 macOS のファイル保存では何もしない。"""
-    if platform.system() == "Darwin":
-        _mac_delete(service, key)

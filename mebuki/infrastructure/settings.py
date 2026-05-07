@@ -7,7 +7,6 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 KEYCHAIN_SERVICE = "blue-ticker"
-LEGACY_KEYCHAIN_SERVICE = "mebuki"
 
 
 
@@ -207,17 +206,6 @@ class SettingsStore:
         except Exception as e:
             logger.debug(f"Keychain access error for {key}: {e}")
 
-        try:
-            legacy_value = keystore.get_password(LEGACY_KEYCHAIN_SERVICE, key)
-            if legacy_value:
-                try:
-                    keystore.set_password(KEYCHAIN_SERVICE, key, legacy_value)
-                    keystore.delete_password(LEGACY_KEYCHAIN_SERVICE, key)
-                except Exception as e:
-                    logger.debug(f"Failed to migrate legacy keychain value for {key}: {e}")
-                return legacy_value
-        except Exception as e:
-            logger.debug(f"Legacy keychain access error for {key}: {e}")
         return None
     
     @property
