@@ -6,13 +6,10 @@ OS キーチェーン / 機密情報ストア（keyring ライブラリ不要）
 """
 
 import json
-import logging
 import platform
 import subprocess
 from pathlib import Path
 from mebuki.infrastructure.user_paths import candidate_secret_paths, default_user_data_path
-
-logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -33,18 +30,6 @@ def _mac_set(service: str, key: str, value: str) -> None:
     )
 
 
-def _mac_get_legacy(service: str, key: str) -> str | None:
-    """keyring ライブラリが使っていた旧形式（-s service -a key）で検索する。"""
-    result = subprocess.run(
-        ["security", "find-generic-password", "-s", service, "-a", key, "-w"],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode == 0:
-        return result.stdout.strip() or None
-    return None
-
-
 def _mac_get(service: str, key: str) -> str | None:
     account = f"{service}.{key}"
     result = subprocess.run(
@@ -54,22 +39,6 @@ def _mac_get(service: str, key: str) -> str | None:
     )
     if result.returncode == 0:
         return result.stdout.strip() or None
-
-    # 旧形式（keyring ライブラリ互換）からの自動マイグレーション
-    legacy_value = _mac_get_legacy(service, key)
-    if legacy_value:
-        logger.info(f"Migrating {key} from legacy keychain format to new format.")
-        try:
-            _mac_set(service, key, legacy_value)
-            # 旧エントリを削除
-            subprocess.run(
-                ["security", "delete-generic-password", "-s", service, "-a", key],
-                capture_output=True,
-            )
-        except Exception as e:
-            logger.warning(f"Failed to migrate {key} in keychain: {e}")
-        return legacy_value
-
     return None
 
 
