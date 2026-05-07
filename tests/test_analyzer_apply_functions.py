@@ -8,7 +8,7 @@ dict を直接組み立てて単体テストできる。
 import pytest
 from typing import Any, cast
 
-from mebuki.services.analyzer import (
+from blue_ticker.services.analyzer import (
     _apply_ibd,
     _apply_interest_expense,
     _apply_tax,
@@ -20,8 +20,8 @@ from mebuki.services.analyzer import (
     _apply_order_book,
     _apply_wacc,
 )
-from mebuki.utils.metrics_types import YearEntry
-from mebuki.constants.financial import (
+from blue_ticker.utils.metrics_types import YearEntry
+from blue_ticker.constants.financial import (
     MILLION_YEN,
     PERCENT,
     WACC_DEFAULT_BETA,

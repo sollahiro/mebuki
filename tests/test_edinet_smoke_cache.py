@@ -3,8 +3,8 @@ from typing import Any
 
 import pytest
 
-from mebuki.services import edinet_smoke_cache
-from mebuki.services.edinet_smoke_cache import (
+from blue_ticker.services import edinet_smoke_cache
+from blue_ticker.services.edinet_smoke_cache import (
     SmokeCompany,
     prepare_edinet_smoke_cache,
     smoke_companies_from_codes,

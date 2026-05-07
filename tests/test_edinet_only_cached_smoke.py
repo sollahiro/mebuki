@@ -8,13 +8,13 @@ from typing import Any
 
 import pytest
 
-from mebuki.analysis.balance_sheet import extract_balance_sheet
-from mebuki.analysis.gross_profit import extract_gross_profit
-from mebuki.analysis.income_statement import extract_income_statement
-from mebuki.analysis.interest_bearing_debt import extract_interest_bearing_debt
-from mebuki.services.edinet_smoke_cache import DEFAULT_SMOKE_COMPANIES
-from mebuki.services.edinet_fetcher import EdinetFetcher
-from mebuki.utils.fiscal_year import normalize_date_format
+from blue_ticker.analysis.balance_sheet import extract_balance_sheet
+from blue_ticker.analysis.gross_profit import extract_gross_profit
+from blue_ticker.analysis.income_statement import extract_income_statement
+from blue_ticker.analysis.interest_bearing_debt import extract_interest_bearing_debt
+from blue_ticker.services.edinet_smoke_cache import DEFAULT_SMOKE_COMPANIES
+from blue_ticker.services.edinet_fetcher import EdinetFetcher
+from blue_ticker.utils.fiscal_year import normalize_date_format
 
 _DEFAULT_SMOKE_CACHE_DIR = Path("tmp_cache") / "edinet"
 _ExpectedStandards = frozenset[str] | Callable[[str], frozenset[str]]

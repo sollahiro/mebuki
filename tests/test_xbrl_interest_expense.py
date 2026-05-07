@@ -10,7 +10,7 @@ import unittest
 import tempfile
 from pathlib import Path
 
-from mebuki.analysis.interest_expense import extract_interest_expense
+from blue_ticker.analysis.interest_expense import extract_interest_expense
 
 NS_XBRLI = "http://www.xbrl.org/2003/instance"
 NS_JPPFS = "http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2022-11-01/jppfs_cor"

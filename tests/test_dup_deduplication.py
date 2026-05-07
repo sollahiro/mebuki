@@ -1,6 +1,6 @@
 
 import unittest
-from mebuki.utils.financial_data import extract_annual_data
+from blue_ticker.utils.financial_data import extract_annual_data
 
 class TestDeduplication(unittest.TestCase):
     def test_merge_correction_data(self):

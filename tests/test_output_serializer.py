@@ -1,6 +1,6 @@
 import copy
 
-from mebuki.utils.output_serializer import (
+from blue_ticker.utils.output_serializer import (
     _DEBUG_FIELDS,
     _REDUNDANT_SUMMARY_FIELDS,
     serialize_half_year_periods,

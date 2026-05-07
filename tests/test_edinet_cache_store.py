@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 
-from mebuki.api.edinet_cache_store import EdinetCacheStore
+from blue_ticker.api.edinet_cache_store import EdinetCacheStore
 
 
 def _age(path: Path, days: int) -> None:
@@ -219,7 +219,7 @@ def test_file_lock_removes_stale_lock(tmp_path, monkeypatch):
     lock_path.write_text("stale", encoding="utf-8")
     stale_ts = time.time() - 3600
     os.utime(lock_path, (stale_ts, stale_ts))
-    monkeypatch.setattr("mebuki.api.edinet_cache_store.EDINET_CACHE_LOCK_STALE_SECONDS", 1)
+    monkeypatch.setattr("blue_ticker.api.edinet_cache_store.EDINET_CACHE_LOCK_STALE_SECONDS", 1)
 
     with store.file_lock("document_index_2024"):
         assert lock_path.exists()
@@ -240,13 +240,13 @@ def test_file_lock_prints_wait_notice(tmp_path, monkeypatch, capsys):
             lock_path.unlink()
 
     times = iter([0.0, 1.1, 1.3, 1.5])
-    monkeypatch.setattr("mebuki.api.edinet_cache_store.time.monotonic", lambda: next(times))
-    monkeypatch.setattr("mebuki.api.edinet_cache_store.time.sleep", fake_sleep)
-    monkeypatch.setattr("mebuki.api.edinet_cache_store.EDINET_CACHE_LOCK_NOTICE_SECONDS", 1.0)
+    monkeypatch.setattr("blue_ticker.api.edinet_cache_store.time.monotonic", lambda: next(times))
+    monkeypatch.setattr("blue_ticker.api.edinet_cache_store.time.sleep", fake_sleep)
+    monkeypatch.setattr("blue_ticker.api.edinet_cache_store.EDINET_CACHE_LOCK_NOTICE_SECONDS", 1.0)
 
     with store.file_lock("document_index_2024"):
         pass
 
     captured = capsys.readouterr()
-    assert "別のmebukiプロセスの完了を待っています" in captured.err
+    assert "別のblue_tickerプロセスの完了を待っています" in captured.err
     assert "処理を続行します" in captured.err

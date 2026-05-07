@@ -1,4 +1,4 @@
-from mebuki.app.cli import build_parser
+from blue_ticker.app.cli import build_parser
 
 
 def test_cli_contract_subcommands_exist():

@@ -21,15 +21,15 @@ def svc(tmp_path):
     - CacheManager は tmp_path に実ファイルを作成（TTL ロジックも動作確認できる）
     """
     with (
-        patch("mebuki.services.data_service.settings_store") as mock_settings,
-        patch("mebuki.services.data_service.EdinetAPIClient"),
+        patch("blue_ticker.services.data_service.settings_store") as mock_settings,
+        patch("blue_ticker.services.data_service.EdinetAPIClient"),
     ):
         mock_settings.edinet_api_key = ""
         mock_settings.cache_dir = str(tmp_path)
         mock_settings.cache_enabled = True
         mock_settings.analysis_years = 5
 
-        from mebuki.services.data_service import DataService
+        from blue_ticker.services.data_service import DataService
         ds = DataService()
         ds.edinet_client = AsyncMock()
         yield ds
@@ -43,7 +43,7 @@ class TestSearchCompanies:
     @pytest.mark.asyncio
     async def test_delegates_to_master_data(self, svc):
         expected = [{"code": "72030", "name": "トヨタ自動車"}]
-        with patch("mebuki.services.company_info_service.master_data_manager") as mm:
+        with patch("blue_ticker.services.company_info_service.master_data_manager") as mm:
             mm.search.return_value = expected
             result = await svc.search_companies("トヨタ")
         mm.search.assert_called_once_with("トヨタ", limit=50)
@@ -51,7 +51,7 @@ class TestSearchCompanies:
 
     @pytest.mark.asyncio
     async def test_empty_query_returns_results(self, svc):
-        with patch("mebuki.services.company_info_service.master_data_manager") as mm:
+        with patch("blue_ticker.services.company_info_service.master_data_manager") as mm:
             mm.search.return_value = []
             result = await svc.search_companies("")
         assert result == []
@@ -72,7 +72,7 @@ class TestFetchStockBasicInfo:
             "S17Nm": "自動車・輸送機",
             "MktNm": "プライム",
         }
-        with patch("mebuki.services.company_info_service.master_data_manager") as mm:
+        with patch("blue_ticker.services.company_info_service.master_data_manager") as mm:
             mm.get_by_code.return_value = stock
             info = svc.fetch_stock_basic_info("72030")
         assert info["name"] == "トヨタ自動車"
@@ -80,7 +80,7 @@ class TestFetchStockBasicInfo:
         assert info["code"] == "72030"
 
     def test_not_found_returns_empty_defaults(self, svc):
-        with patch("mebuki.services.company_info_service.master_data_manager") as mm:
+        with patch("blue_ticker.services.company_info_service.master_data_manager") as mm:
             mm.get_by_code.return_value = None
             info = svc.fetch_stock_basic_info("99990")
         assert info["name"] == ""
@@ -94,7 +94,7 @@ class TestFetchStockBasicInfo:
 
 class TestGetRawAnalysisData:
     def _make_cached(self, code: str) -> dict:
-        from mebuki import __version__
+        from blue_ticker import __version__
         cache_version = __version__
         return {
             "_cache_version": cache_version,
@@ -270,7 +270,7 @@ class TestGetRawAnalysisData:
 
     @pytest.mark.asyncio
     async def test_legacy_mof_fallback_cache_calls_analyzer(self, svc):
-        from mebuki.constants.financial import (
+        from blue_ticker.constants.financial import (
             PERCENT,
             WACC_DEFAULT_BETA,
             WACC_MARKET_RISK_PREMIUM,
@@ -442,7 +442,7 @@ class TestGetRawAnalysisData:
 
 class TestExtractFilingContent:
     def _make_cached(self, code: str) -> dict:
-        from mebuki import __version__
+        from blue_ticker import __version__
         cache_version = __version__
         return {
             "_cache_version": cache_version,
@@ -536,8 +536,8 @@ class TestExtractFilingContent:
 
 class TestHalfYearDataService:
     def _make_service(self, tmp_path):
-        from mebuki.services.half_year_data_service import HalfYearDataService
-        from mebuki.utils.cache import CacheManager
+        from blue_ticker.services.half_year_data_service import HalfYearDataService
+        from blue_ticker.utils.cache import CacheManager
 
         edinet_client = AsyncMock()
         cache_manager = CacheManager(cache_dir=str(tmp_path), enabled=True)
@@ -571,7 +571,7 @@ class TestHalfYearDataService:
 
     @pytest.mark.asyncio
     async def test_cache_hit_skips_fetch(self, tmp_path):
-        from mebuki import __version__
+        from blue_ticker import __version__
         cache_version = __version__
         service = self._make_service(tmp_path)
         # years 非依存キー。完結ペアが 1 組あれば trim(years=1) で返ってくる
@@ -591,7 +591,7 @@ class TestHalfYearDataService:
     @pytest.mark.asyncio
     async def test_empty_financial_data_returns_empty(self, tmp_path):
         service = self._make_service(tmp_path)
-        with patch("mebuki.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
+        with patch("blue_ticker.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
             fetcher = fetcher_cls.return_value
             fetcher.build_xbrl_annual_records = AsyncMock(return_value=[])
             fetcher.build_xbrl_half_year_records = AsyncMock(return_value=[])
@@ -608,7 +608,7 @@ class TestHalfYearDataService:
         q2_record = self._q2_record()
         q2_record["CurFYEn"] = "2024-03-31"
 
-        with patch("mebuki.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
+        with patch("blue_ticker.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
             fetcher = fetcher_cls.return_value
             fetcher.build_xbrl_annual_records = AsyncMock(return_value=[fy_record])
             fetcher.build_xbrl_half_year_records = AsyncMock(return_value=[q2_record])
@@ -632,7 +632,7 @@ class TestHalfYearDataService:
         fy_record = self._fy_record()
         q2_record = self._q2_record()
 
-        with patch("mebuki.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
+        with patch("blue_ticker.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
             fetcher = fetcher_cls.return_value
             fetcher.build_xbrl_annual_records = AsyncMock(return_value=[fy_record])
             fetcher.build_xbrl_half_year_records = AsyncMock(return_value=[q2_record])
@@ -657,7 +657,7 @@ class TestHalfYearDataService:
         fy_record = self._fy_record()
         q2_record = self._q2_record()
 
-        with patch("mebuki.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
+        with patch("blue_ticker.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
             fetcher = fetcher_cls.return_value
             fetcher.build_xbrl_annual_records = AsyncMock(return_value=[fy_record])
             fetcher.build_xbrl_half_year_records = AsyncMock(return_value=[q2_record])
@@ -677,7 +677,7 @@ class TestHalfYearDataService:
         fy_record = self._fy_record()
         q2_record = self._q2_record()
 
-        with patch("mebuki.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
+        with patch("blue_ticker.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
             fetcher = fetcher_cls.return_value
             fetcher.build_xbrl_annual_records = AsyncMock(return_value=[fy_record])
             fetcher.build_xbrl_half_year_records = AsyncMock(return_value=[q2_record])

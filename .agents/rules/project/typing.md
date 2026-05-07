@@ -58,7 +58,7 @@ COMPONENT_DEFINITIONS: list[_ComponentDef] = [...]
 | ロジックを持つオブジェクト、immutable な値 | `dataclass` |
 | 一時的な戻り値で型が単純（2〜3フィールド） | `tuple[X, Y]` |
 
-複数モジュールが共有するドメイン TypedDict は `mebuki/utils/` に独立ファイルとして置く（例: `metrics_types.py`）。
+複数モジュールが共有するドメイン TypedDict は `blue_ticker/utils/` に独立ファイルとして置く（例: `metrics_types.py`）。
 
 ## 段階的に組み立てる辞書には `total=False`
 

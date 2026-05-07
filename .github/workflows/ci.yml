@@ -27,7 +27,7 @@ jobs:
         run: poetry install --no-interaction
 
       - name: Type check
-        run: poetry run pyright mebuki/
+        run: poetry run pyright blue_ticker/
 
       - name: Test
         run: poetry run pytest tests/ -q

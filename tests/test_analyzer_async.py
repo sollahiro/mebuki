@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-from mebuki.services.analyzer import IndividualAnalyzer
+from blue_ticker.services.analyzer import IndividualAnalyzer
 
 
 class _ConcurrentEdinetFetcher:
@@ -127,7 +127,7 @@ async def test_fetch_analysis_data_fetches_edinet_metadata_in_parallel_with_pred
     edinet_fetcher = _ConcurrentEdinetFetcher()
     analyzer = _make_analyzer([{"DisclosedDate": "2024-06-01"}], edinet_fetcher)
 
-    with patch("mebuki.services.analyzer._apply_wacc"):
+    with patch("blue_ticker.services.analyzer._apply_wacc"):
         result = await analyzer.fetch_analysis_data("7203", analysis_years=1, max_documents=3)
 
     assert result["edinet_data"] == {"documents": [{"docID": "S100TEST"}]}
@@ -143,7 +143,7 @@ async def test_fetch_analysis_data_uses_edinet_annual_records_without_prefetched
     analyzer = IndividualAnalyzer(edinet_client=None)
     analyzer._edinet_fetcher = edinet_fetcher  # type: ignore[assignment]
 
-    with patch("mebuki.services.analyzer._apply_wacc"):
+    with patch("blue_ticker.services.analyzer._apply_wacc"):
         result = await analyzer.fetch_analysis_data("7203", analysis_years=1)
 
     assert result["edinet_data"] == {}

@@ -7,13 +7,13 @@
 依存方向は以下を基本とする。
 
 ```text
-mebuki.app -> mebuki.services -> mebuki.analysis | mebuki.api | mebuki.infrastructure | mebuki.utils
+blue_ticker.app -> blue_ticker.services -> blue_ticker.analysis | blue_ticker.api | blue_ticker.infrastructure | blue_ticker.utils
 ```
 
 禁止ルール:
 
-- `services/` は `mebuki.app` をインポートしてはならない
-- `infrastructure/` は `mebuki.app` および `mebuki.services` をインポートしてはならない
+- `services/` は `blue_ticker.app` をインポートしてはならない
+- `infrastructure/` は `blue_ticker.app` および `blue_ticker.services` をインポートしてはならない
 
 このルールは `tests/test_dependency_rules.py` で自動検証する。
 

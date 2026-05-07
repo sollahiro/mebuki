@@ -3,7 +3,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from mebuki.utils import edinet_discovery
+from blue_ticker.utils import edinet_discovery
 
 
 @pytest.mark.asyncio

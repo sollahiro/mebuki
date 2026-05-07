@@ -4,10 +4,10 @@ from typing import Any, cast
 
 import pytest
 
-from mebuki.analysis.balance_sheet import extract_balance_sheet
-from mebuki.constants.financial import MILLION_YEN
-from mebuki.services.analyzer import _apply_balance_sheet
-from mebuki.utils.metrics_types import YearEntry
+from blue_ticker.analysis.balance_sheet import extract_balance_sheet
+from blue_ticker.constants.financial import MILLION_YEN
+from blue_ticker.services.analyzer import _apply_balance_sheet
+from blue_ticker.utils.metrics_types import YearEntry
 
 NS_XBRLI = "http://www.xbrl.org/2003/instance"
 NS_JPPFS = "http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2024-11-01/jppfs_cor"

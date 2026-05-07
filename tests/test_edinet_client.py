@@ -5,9 +5,9 @@ from typing import Any
 
 import pytest
 
-from mebuki.api.edinet_cache_backend import EdinetCacheBackend
-from mebuki.api.edinet_cache_store import EdinetCacheStore
-from mebuki.api.edinet_client import EdinetAPIClient
+from blue_ticker.api.edinet_cache_backend import EdinetCacheBackend
+from blue_ticker.api.edinet_cache_store import EdinetCacheStore
+from blue_ticker.api.edinet_client import EdinetAPIClient
 
 
 class _FakeEdinetClient(EdinetAPIClient):

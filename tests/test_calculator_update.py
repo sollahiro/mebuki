@@ -6,7 +6,7 @@ from typing import Any, cast
 project_root = Path(__file__).parent.parent
 sys.path.append(str(project_root))
 
-from mebuki.analysis.calculator import calculate_metrics_flexible
+from blue_ticker.analysis.calculator import calculate_metrics_flexible
 
 
 def test_calculate_metrics_preserves_sales_label_from_xbrl_record():

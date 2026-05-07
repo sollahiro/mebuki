@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from mebuki.analysis.balance_sheet import extract_balance_sheet
-from mebuki.analysis.cash_flow import extract_cash_flow
-from mebuki.analysis.income_statement import extract_income_statement
+from blue_ticker.analysis.balance_sheet import extract_balance_sheet
+from blue_ticker.analysis.cash_flow import extract_cash_flow
+from blue_ticker.analysis.income_statement import extract_income_statement
 
 
 def test_income_statement_falls_back_to_pure_nonconsolidated_summary_context() -> None:

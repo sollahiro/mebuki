@@ -1,7 +1,7 @@
 import tempfile
 from pathlib import Path
 
-from mebuki.analysis.order_book import extract_order_book
+from blue_ticker.analysis.order_book import extract_order_book
 
 NS_XBRLI = "http://www.xbrl.org/2003/instance"
 NS_JPCRP = "http://disclosure.edinet-fsa.go.jp/taxonomy/jpcrp/2022-11-01/jpcrp_cor"

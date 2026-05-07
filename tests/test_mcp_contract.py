@@ -1,6 +1,6 @@
 import asyncio
 
-from mebuki.app import mcp_server
+from blue_ticker.app import mcp_server
 
 
 def test_mcp_tool_contract_shape():

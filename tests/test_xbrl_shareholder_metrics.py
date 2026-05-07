@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from mebuki.analysis.shareholder_metrics import extract_shareholder_metrics
+from blue_ticker.analysis.shareholder_metrics import extract_shareholder_metrics
 
 
 def test_extract_shareholder_metrics_from_ifrs_summary() -> None:

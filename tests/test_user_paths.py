@@ -1,4 +1,4 @@
-from mebuki.infrastructure.user_paths import default_user_data_path
+from blue_ticker.infrastructure.user_paths import default_user_data_path
 
 
 def test_default_user_data_path_uses_env(monkeypatch, tmp_path) -> None:
@@ -9,7 +9,7 @@ def test_default_user_data_path_uses_env(monkeypatch, tmp_path) -> None:
 
 
 def test_settings_store_reads_blue_ticker_keychain_value(monkeypatch, tmp_path) -> None:
-    from mebuki.infrastructure import settings as settings_module
+    from blue_ticker.infrastructure import settings as settings_module
 
     monkeypatch.setenv("BLUE_TICKER_USER_DATA_PATH", str(tmp_path))
 

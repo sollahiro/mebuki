@@ -15,7 +15,7 @@
 | 月が変わった初回リリース | `YY.M.0` | 日付ベースのリリース識別 |
 | 同じ月内の追加リリース | `Micro` を +1 | derived キャッシュを確実に無効化するため |
 
-mebuki 生成キャッシュ（`analysis_cache/derived/`）は `__version__` 全体を `_cache_version` に使う。したがって、同じ月内でも `Micro` を上げると derived キャッシュは再生成される。
+blue_ticker 生成キャッシュ（`analysis_cache/derived/`）は `__version__` 全体を `_cache_version` に使う。したがって、同じ月内でも `Micro` を上げると derived キャッシュは再生成される。
 
 外部取得キャッシュ（`analysis_cache/external/`）は原則としてグローバルバージョンに連動させない。TTL、取得日、外部API用の個別バージョンで管理する。
 
@@ -24,7 +24,7 @@ mebuki 生成キャッシュ（`analysis_cache/derived/`）は `__version__` 全
 バージョン更新を依頼されたら、以下のステップをすべて実行すること。
 
 0. **バンプは機能コミットとは分離し、後続の独立コミットとして行う**
-1. `mebuki/__init__.py` と `pyproject.toml` の両方を更新する
+1. `blue_ticker/__init__.py` と `pyproject.toml` の両方を更新する
 2. `poetry lock` を実行してコミットに含める（依存変化がなくても実行する）
 3. バンプコミットを作成する（`chore: bump version to YY.M.Micro`）
 4. タグを作成する（`git tag vYY.M.Micro`）
@@ -46,7 +46,7 @@ git push origin vYY.M.Micro
 derived キャッシュには `_cache_version` フィールドを埋め込み、`__version__` 全体と照合することで古いキャッシュの混入を防ぐ。
 
 ```python
-from mebuki import __version__
+from blue_ticker import __version__
 
 _CACHE_VERSION = __version__  # 例: "26.5.0"
 

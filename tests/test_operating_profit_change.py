@@ -2,13 +2,13 @@ from typing import Any, cast
 
 import pytest
 
-from mebuki.utils.operating_profit_change import (
+from blue_ticker.utils.operating_profit_change import (
     apply_operating_profit_change_from_xbrl,
     apply_operating_profit_change_to_periods,
     apply_operating_profit_change_to_periods_from_xbrl,
     apply_operating_profit_change_to_years,
 )
-from mebuki.utils.metrics_types import YearEntry
+from blue_ticker.utils.metrics_types import YearEntry
 
 
 def _year(fy_end: str, sales: float, gross_profit: float | None, op: float) -> YearEntry:

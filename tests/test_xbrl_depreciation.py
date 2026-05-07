@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from mebuki.analysis.depreciation import extract_depreciation
+from blue_ticker.analysis.depreciation import extract_depreciation
 
 NS_XBRLI = "http://www.xbrl.org/2003/instance"
 NS_JPPFS = "http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2022-11-01/jppfs_cor"

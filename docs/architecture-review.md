@@ -37,7 +37,7 @@ flowchart TD
 
 | レイヤー | 主なファイル | 現在の責務 |
 |---|---|---|
-| CLI/MCP | `mebuki/app/cli/*`, `mebuki/app/mcp_server.py` | 入力検証、出力形式、DataService呼び出し |
+| CLI/MCP | `blue_ticker/app/cli/*`, `blue_ticker/app/mcp_server.py` | 入力検証、出力形式、DataService呼び出し |
 | 統合サービス | `services/data_service.py` | EDINETクライアント生成、キャッシュ、各サービス委譲 |
 | 年次分析 | `services/analyzer.py` | EDINET基礎指標、XBRL補完、WACCの統合 |
 | 基礎指標 | `analysis/calculator.py` | 年度抽出、基礎指標計算 |

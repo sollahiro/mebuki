@@ -11,7 +11,7 @@ sys.path.insert(0, str(project_root))
 sys.modules["keyring"] = MagicMock()
 sys.modules["questionary"] = MagicMock()
 
-from mebuki.app.cli import cmd_analyze
+from blue_ticker.app.cli import cmd_analyze
 
 
 def test_cmd_analyze_multi_year():
@@ -61,9 +61,9 @@ def test_cmd_analyze_multi_year():
     }
 
     with (
-        patch("mebuki.services.data_service.data_service.fetch_stock_basic_info") as mock_info,
-        patch("mebuki.services.data_service.data_service.get_raw_analysis_data") as mock_get_data,
-        patch("mebuki.app.cli.analyze.settings_store", mock_settings),
+        patch("blue_ticker.services.data_service.data_service.fetch_stock_basic_info") as mock_info,
+        patch("blue_ticker.services.data_service.data_service.get_raw_analysis_data") as mock_get_data,
+        patch("blue_ticker.app.cli.analyze.settings_store", mock_settings),
     ):
         mock_info.return_value = {"name": "トヨタ自動車", "market_name": "プライム"}
         mock_get_data.return_value = mock_result

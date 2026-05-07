@@ -9,8 +9,8 @@ import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from mebuki.services.edinet_fetcher import EdinetFetcher, _EDINET_DOCS_CACHE_VERSION
-from mebuki.utils.cache import CacheManager
+from blue_ticker.services.edinet_fetcher import EdinetFetcher, _EDINET_DOCS_CACHE_VERSION
+from blue_ticker.utils.cache import CacheManager
 
 
 def _make_doc(fy_end: str) -> dict:

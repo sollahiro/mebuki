@@ -3,9 +3,9 @@ import sys
 from datetime import datetime
 from unittest.mock import AsyncMock, Mock, patch
 
-from mebuki.api.edinet_cache_store import EdinetCacheStore
-from mebuki.app.cli.main import main
-from mebuki.utils.cache_paths import edinet_cache_dir
+from blue_ticker.api.edinet_cache_store import EdinetCacheStore
+from blue_ticker.app.cli.main import main
+from blue_ticker.utils.cache_paths import edinet_cache_dir
 
 
 def _run_cli(monkeypatch, argv: list[str]) -> None:
@@ -16,7 +16,7 @@ def _run_cli(monkeypatch, argv: list[str]) -> None:
 def test_main_keyboard_interrupt_exits_cleanly(monkeypatch, capsys) -> None:
     monkeypatch.setattr(sys, "argv", ["ticker", "search", "トヨタ", "--format", "json"])
 
-    with patch("mebuki.app.cli.analyze.master_data_manager.search", side_effect=KeyboardInterrupt):
+    with patch("blue_ticker.app.cli.analyze.master_data_manager.search", side_effect=KeyboardInterrupt):
         exit_code = main()
 
     captured = capsys.readouterr()
@@ -26,7 +26,7 @@ def test_main_keyboard_interrupt_exits_cleanly(monkeypatch, capsys) -> None:
 
 
 def test_main_cache_status_reports_missing_prepare_cache(monkeypatch, capsys, tmp_path) -> None:
-    with patch("mebuki.app.cli.cache.settings_store") as settings:
+    with patch("blue_ticker.app.cli.cache.settings_store") as settings:
         settings.cache_dir = str(tmp_path)
 
         _run_cli(monkeypatch, ["cache", "status", "--format", "json"])
@@ -44,7 +44,7 @@ def test_main_cache_status_reports_ready_prepare_cache(monkeypatch, capsys, tmp_
         year = current_year - offset
         store.save_document_index(year, [{"docID": f"S100{year}"}], built_through=f"{year}-12-31")
 
-    with patch("mebuki.app.cli.cache.settings_store") as settings:
+    with patch("blue_ticker.app.cli.cache.settings_store") as settings:
         settings.cache_dir = str(tmp_path)
 
         _run_cli(monkeypatch, ["cache", "status", "--format", "json"])
@@ -60,7 +60,7 @@ def test_main_search_outputs_json(monkeypatch, capsys) -> None:
         {"code": "7203", "name": "トヨタ自動車", "market": "プライム", "sector": "輸送用機器"},
     ]
 
-    with patch("mebuki.app.cli.analyze.master_data_manager.search", return_value=results) as search:
+    with patch("blue_ticker.app.cli.analyze.master_data_manager.search", return_value=results) as search:
         _run_cli(monkeypatch, ["search", "トヨタ", "--format", "json"])
 
     captured = capsys.readouterr()
@@ -88,7 +88,7 @@ def test_main_analyze_outputs_json_and_closes_service(monkeypatch, capsys) -> No
     })
     data_service.close = AsyncMock()
 
-    with patch("mebuki.services.data_service.data_service", data_service):
+    with patch("blue_ticker.services.data_service.data_service", data_service):
         _run_cli(monkeypatch, ["analyze", "7203", "--years", "2", "--format", "json", "--no-cache"])
 
     captured = capsys.readouterr()
@@ -111,7 +111,7 @@ def test_main_filings_outputs_json(monkeypatch, capsys) -> None:
     data_service.search_filings = AsyncMock(return_value=docs)
     data_service.close = AsyncMock()
 
-    with patch("mebuki.services.data_service.data_service", data_service):
+    with patch("blue_ticker.services.data_service.data_service", data_service):
         _run_cli(monkeypatch, ["filings", "7203", "--format", "json"])
 
     captured = capsys.readouterr()
@@ -130,7 +130,7 @@ def test_main_filings_accepts_years(monkeypatch, capsys) -> None:
     data_service.search_filings = AsyncMock(return_value=[])
     data_service.close = AsyncMock()
 
-    with patch("mebuki.services.data_service.data_service", data_service):
+    with patch("blue_ticker.services.data_service.data_service", data_service):
         _run_cli(monkeypatch, ["filings", "7203", "--years", "6", "--format", "json"])
 
     captured = capsys.readouterr()
@@ -153,7 +153,7 @@ def test_main_filing_outputs_json_with_sections(monkeypatch, capsys) -> None:
     data_service.extract_filing_content = AsyncMock(return_value=result)
     data_service.close = AsyncMock()
 
-    with patch("mebuki.services.data_service.data_service", data_service):
+    with patch("blue_ticker.services.data_service.data_service", data_service):
         _run_cli(
             monkeypatch,
             ["filing", "7203", "--doc-id", "S100TEST", "--sections", "mda", "--format", "json"],
@@ -183,10 +183,10 @@ def test_main_cache_clean_outputs_json(monkeypatch, capsys) -> None:
     pruner.prune.return_value = summary
 
     with (
-        patch("mebuki.app.cli.cache.settings_store") as settings,
-        patch("mebuki.app.cli.cache.CachePruner", return_value=pruner) as pruner_cls,
+        patch("blue_ticker.app.cli.cache.settings_store") as settings,
+        patch("blue_ticker.app.cli.cache.CachePruner", return_value=pruner) as pruner_cls,
     ):
-        settings.cache_dir = "/tmp/mebuki-cache"
+        settings.cache_dir = "/tmp/blue_ticker-cache"
         _run_cli(
             monkeypatch,
             [
@@ -204,7 +204,7 @@ def test_main_cache_clean_outputs_json(monkeypatch, capsys) -> None:
 
     captured = capsys.readouterr()
     assert json.loads(captured.out)["freed_bytes"] == 3
-    pruner_cls.assert_called_once_with("/tmp/mebuki-cache")
+    pruner_cls.assert_called_once_with("/tmp/blue_ticker-cache")
     pruner.prune.assert_called_once_with(
         dry_run=False,
         edinet_search_days=30,
@@ -215,8 +215,8 @@ def test_main_cache_clean_outputs_json(monkeypatch, capsys) -> None:
 
 def test_main_cache_prepare_outputs_json(monkeypatch, capsys) -> None:
     with (
-        patch("mebuki.app.cli.cache.settings_store") as settings,
-        patch("mebuki.app.cli.cache.prepare_edinet_index_async", AsyncMock(return_value={
+        patch("blue_ticker.app.cli.cache.settings_store") as settings,
+        patch("blue_ticker.app.cli.cache.prepare_edinet_index_async", AsyncMock(return_value={
             "requested_years": 2,
             "prepared_years": 2,
             "entries": [
@@ -225,19 +225,19 @@ def test_main_cache_prepare_outputs_json(monkeypatch, capsys) -> None:
             ],
         })) as prepare,
     ):
-        settings.cache_dir = "/tmp/mebuki-cache"
+        settings.cache_dir = "/tmp/blue_ticker-cache"
         settings.edinet_api_key = "dummy"
         _run_cli(monkeypatch, ["cache", "prepare", "--years", "2", "--format", "json"])
 
     captured = capsys.readouterr()
     assert json.loads(captured.out)["prepared_years"] == 2
-    prepare.assert_awaited_once_with("dummy", "/tmp/mebuki-cache", 2)
+    prepare.assert_awaited_once_with("dummy", "/tmp/blue_ticker-cache", 2)
 
 
 def test_main_cache_refresh_outputs_json(monkeypatch, capsys) -> None:
     with (
-        patch("mebuki.app.cli.cache.settings_store") as settings,
-        patch("mebuki.app.cli.cache.refresh_edinet_index_async", AsyncMock(return_value={
+        patch("blue_ticker.app.cli.cache.settings_store") as settings,
+        patch("blue_ticker.app.cli.cache.refresh_edinet_index_async", AsyncMock(return_value={
             "requested_years": 2,
             "refreshed_years": 2,
             "entries": [
@@ -246,19 +246,19 @@ def test_main_cache_refresh_outputs_json(monkeypatch, capsys) -> None:
             ],
         })) as refresh,
     ):
-        settings.cache_dir = "/tmp/mebuki-cache"
+        settings.cache_dir = "/tmp/blue_ticker-cache"
         settings.edinet_api_key = "dummy"
         _run_cli(monkeypatch, ["cache", "refresh", "--years", "2", "--format", "json"])
 
     captured = capsys.readouterr()
     assert json.loads(captured.out)["refreshed_years"] == 2
-    refresh.assert_awaited_once_with("dummy", "/tmp/mebuki-cache", 2)
+    refresh.assert_awaited_once_with("dummy", "/tmp/blue_ticker-cache", 2)
 
 
 def test_main_cache_catchup_outputs_json(monkeypatch, capsys) -> None:
     with (
-        patch("mebuki.app.cli.cache.settings_store") as settings,
-        patch("mebuki.app.cli.cache.catchup_edinet_index_async", AsyncMock(return_value={
+        patch("blue_ticker.app.cli.cache.settings_store") as settings,
+        patch("blue_ticker.app.cli.cache.catchup_edinet_index_async", AsyncMock(return_value={
             "requested_years": 2,
             "caught_up_years": 2,
             "entries": [
@@ -267,13 +267,13 @@ def test_main_cache_catchup_outputs_json(monkeypatch, capsys) -> None:
             ],
         })) as catchup,
     ):
-        settings.cache_dir = "/tmp/mebuki-cache"
+        settings.cache_dir = "/tmp/blue_ticker-cache"
         settings.edinet_api_key = "dummy"
         _run_cli(monkeypatch, ["cache", "catchup", "--years", "2", "--format", "json"])
 
     captured = capsys.readouterr()
     assert json.loads(captured.out)["caught_up_years"] == 2
-    catchup.assert_awaited_once_with("dummy", "/tmp/mebuki-cache", 2)
+    catchup.assert_awaited_once_with("dummy", "/tmp/blue_ticker-cache", 2)
 
 
 
@@ -285,7 +285,7 @@ def test_main_watch_add_outputs_json(monkeypatch, capsys) -> None:
     portfolio_service = Mock()
     portfolio_service.add_watch.return_value = result
 
-    with patch("mebuki.services.portfolio_service.portfolio_service", portfolio_service):
+    with patch("blue_ticker.services.portfolio_service.portfolio_service", portfolio_service):
         _run_cli(monkeypatch, ["watch", "add", "7203", "--name", "トヨタ自動車", "--format", "json"])
 
     captured = capsys.readouterr()
@@ -301,7 +301,7 @@ def test_main_portfolio_list_outputs_json(monkeypatch, capsys) -> None:
     portfolio_service = Mock()
     portfolio_service.get_consolidated.return_value = holdings
 
-    with patch("mebuki.services.portfolio_service.portfolio_service", portfolio_service):
+    with patch("blue_ticker.services.portfolio_service.portfolio_service", portfolio_service):
         _run_cli(monkeypatch, ["portfolio", "list", "--format", "json"])
 
     captured = capsys.readouterr()

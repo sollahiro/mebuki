@@ -12,8 +12,8 @@ import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from mebuki.utils.financial_data import _latest_complete_pairs, build_half_year_periods
-from mebuki.services.half_year_data_service import _trim_half_year_periods
+from blue_ticker.utils.financial_data import _latest_complete_pairs, build_half_year_periods
+from blue_ticker.services.half_year_data_service import _trim_half_year_periods
 
 
 # ──────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 # MCP ツールと CLI の対応原則
 
-`mebuki/app/mcp_server.py` の MCP ツール群は、CLI（`ticker analyze` 等）の機能・パラメーターに揃えること。
+`blue_ticker/app/mcp_server.py` の MCP ツール群は、CLI（`ticker analyze` 等）の機能・パラメーターに揃えること。
 
 - CLI で廃止した機能・オプションは MCP からも削除する
 - CLI で追加した機能は MCP にも追加する

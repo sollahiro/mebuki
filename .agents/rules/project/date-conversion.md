@@ -6,8 +6,8 @@
 ## 正規関数
 
 ```python
-from mebuki.utils.fiscal_year import normalize_date_format, parse_date_string
-from mebuki.utils.converters import extract_year_month
+from blue_ticker.utils.fiscal_year import normalize_date_format, parse_date_string
+from blue_ticker.utils.converters import extract_year_month
 ```
 
 | 関数 | 入力 | 出力 | 用途 |
@@ -44,12 +44,12 @@ if len(date_str) == 8:
 if len(date_str) == 8:  # DATE_LEN_COMPACT を使うこと
 
 # ✅ 正しい書き方
-from mebuki.constants.formats import DATE_LEN_COMPACT
+from blue_ticker.constants.formats import DATE_LEN_COMPACT
 if len(date_str) == DATE_LEN_COMPACT:
     ...
 ```
 
-## 日付長定数（`mebuki/constants/formats.py`）
+## 日付長定数（`blue_ticker/constants/formats.py`）
 
 ```python
 DATE_LEN_COMPACT    = 8   # YYYYMMDD 形式

@@ -69,10 +69,10 @@ def store():
 def svc(store):
     """PortfolioService をインメモリストアで初期化"""
     with (
-        patch("mebuki.services.portfolio_service.portfolio_store", store),
-        patch("mebuki.services.portfolio_service._resolve_name", return_value="テスト銘柄"),
+        patch("blue_ticker.services.portfolio_service.portfolio_store", store),
+        patch("blue_ticker.services.portfolio_service._resolve_name", return_value="テスト銘柄"),
     ):
-        from mebuki.services.portfolio_service import PortfolioService
+        from blue_ticker.services.portfolio_service import PortfolioService
         yield PortfolioService(), store
 
 

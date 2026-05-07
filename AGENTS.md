@@ -4,8 +4,8 @@
 
 ## アーキテクチャ依存ルール
 
-- `services/` は `mebuki.app` をインポートしてはならない
-- `infrastructure/` は `mebuki.app` および `mebuki.services` をインポートしてはならない
+- `services/` は `blue_ticker.app` をインポートしてはならない
+- `infrastructure/` は `blue_ticker.app` および `blue_ticker.services` をインポートしてはならない
 
 テストで自動検証: `tests/test_dependency_rules.py`
 

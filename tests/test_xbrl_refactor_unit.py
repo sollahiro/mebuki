@@ -2,8 +2,8 @@
 import unittest
 import tempfile
 from pathlib import Path
-from mebuki.analysis.xbrl_parser import XBRLParser
-from mebuki.constants.xbrl import XBRL_SECTIONS
+from blue_ticker.analysis.xbrl_parser import XBRLParser
+from blue_ticker.constants.xbrl import XBRL_SECTIONS
 
 class TestXBRLParserRefactor(unittest.TestCase):
     def setUp(self):

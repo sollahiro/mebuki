@@ -2,10 +2,10 @@
 
 ## 共通ユーティリティの使用
 
-XBRL解析モジュール（`mebuki/analysis/` 配下）では、以下の共通関数を必ず `xbrl_utils.py` からインポートして使うこと。各モジュールに同じ実装を書き直してはならない。
+XBRL解析モジュール（`blue_ticker/analysis/` 配下）では、以下の共通関数を必ず `xbrl_utils.py` からインポートして使うこと。各モジュールに同じ実装を書き直してはならない。
 
 ```python
-from mebuki.analysis.xbrl_utils import parse_xbrl_value, collect_numeric_elements, find_xbrl_files
+from blue_ticker.analysis.xbrl_utils import parse_xbrl_value, collect_numeric_elements, find_xbrl_files
 ```
 
 | 関数 | 用途 |

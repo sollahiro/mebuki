@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 
-from mebuki import __version__
-from mebuki.services.edinet_fetcher import EdinetFetcher
-from mebuki.utils.cache import CacheManager
+from blue_ticker import __version__
+from blue_ticker.services.edinet_fetcher import EdinetFetcher
+from blue_ticker.utils.cache import CacheManager
 
 
 def _financial_record(
@@ -260,7 +260,7 @@ async def test_build_xbrl_half_year_records_builds_2q_record(monkeypatch) -> Non
     fetcher._download_and_parse_docs = AsyncMock(return_value={"20250331": (Path("."), {})})  # type: ignore[method-assign]
 
     monkeypatch.setattr(
-        "mebuki.services.edinet_fetcher.extract_income_statement",
+        "blue_ticker.services.edinet_fetcher.extract_income_statement",
         lambda *args, **kwargs: {
             "sales": 50_000_000,
             "operating_profit": 6_000_000,
@@ -269,18 +269,18 @@ async def test_build_xbrl_half_year_records_builds_2q_record(monkeypatch) -> Non
         },
     )
     monkeypatch.setattr(
-        "mebuki.services.edinet_fetcher.extract_balance_sheet",
+        "blue_ticker.services.edinet_fetcher.extract_balance_sheet",
         lambda *args, **kwargs: {"net_assets": 40_000_000},
     )
     monkeypatch.setattr(
-        "mebuki.services.edinet_fetcher.extract_cash_flow",
+        "blue_ticker.services.edinet_fetcher.extract_cash_flow",
         lambda *args, **kwargs: {
             "cfo": {"current": 7_000_000},
             "cfi": {"current": -2_000_000},
         },
     )
     monkeypatch.setattr(
-        "mebuki.services.edinet_fetcher.extract_shareholder_metrics",
+        "blue_ticker.services.edinet_fetcher.extract_shareholder_metrics",
         lambda *args, **kwargs: {
             "EPS": 40.0,
             "BPS": 400.0,
@@ -344,7 +344,7 @@ async def test_build_xbrl_annual_records_falls_back_to_ordinary_revenue_for_sale
     fetcher._download_and_parse_docs = AsyncMock(return_value={"20250331": (Path("."), {})})  # type: ignore[method-assign]
 
     monkeypatch.setattr(
-        "mebuki.services.edinet_fetcher.extract_income_statement",
+        "blue_ticker.services.edinet_fetcher.extract_income_statement",
         lambda *args, **kwargs: {
             "sales": None,
             "operating_profit": 367_694_000_000,
@@ -353,22 +353,22 @@ async def test_build_xbrl_annual_records_falls_back_to_ordinary_revenue_for_sale
         },
     )
     monkeypatch.setattr(
-        "mebuki.services.edinet_fetcher.extract_gross_profit",
+        "blue_ticker.services.edinet_fetcher.extract_gross_profit",
         lambda *args, **kwargs: {"current_sales": 2_922_428_000_000},
     )
     monkeypatch.setattr(
-        "mebuki.services.edinet_fetcher.extract_balance_sheet",
+        "blue_ticker.services.edinet_fetcher.extract_balance_sheet",
         lambda *args, **kwargs: {"net_assets": 3_127_317_000_000},
     )
     monkeypatch.setattr(
-        "mebuki.services.edinet_fetcher.extract_cash_flow",
+        "blue_ticker.services.edinet_fetcher.extract_cash_flow",
         lambda *args, **kwargs: {
             "cfo": {"current": 3_976_669_000_000},
             "cfi": {"current": -1_763_839_000_000},
         },
     )
     monkeypatch.setattr(
-        "mebuki.services.edinet_fetcher.extract_shareholder_metrics",
+        "blue_ticker.services.edinet_fetcher.extract_shareholder_metrics",
         lambda *args, **kwargs: {},
     )
 
@@ -397,7 +397,7 @@ async def test_build_xbrl_annual_records_uses_operating_profit_fallback(monkeypa
     fetcher._download_and_parse_docs = AsyncMock(return_value={"20250331": (Path("."), {})})  # type: ignore[method-assign]
 
     monkeypatch.setattr(
-        "mebuki.services.edinet_fetcher.extract_income_statement",
+        "blue_ticker.services.edinet_fetcher.extract_income_statement",
         lambda *args, **kwargs: {
             "sales": 3_195_828_000_000,
             "operating_profit": None,
@@ -406,22 +406,22 @@ async def test_build_xbrl_annual_records_uses_operating_profit_fallback(monkeypa
         },
     )
     monkeypatch.setattr(
-        "mebuki.services.edinet_fetcher.extract_operating_profit",
+        "blue_ticker.services.edinet_fetcher.extract_operating_profit",
         lambda *args, **kwargs: {"current": 340_594_000_000},
     )
     monkeypatch.setattr(
-        "mebuki.services.edinet_fetcher.extract_balance_sheet",
+        "blue_ticker.services.edinet_fetcher.extract_balance_sheet",
         lambda *args, **kwargs: {"net_assets": 3_348_480_000_000},
     )
     monkeypatch.setattr(
-        "mebuki.services.edinet_fetcher.extract_cash_flow",
+        "blue_ticker.services.edinet_fetcher.extract_cash_flow",
         lambda *args, **kwargs: {
             "cfo": {"current": 428_162_000_000},
             "cfi": {"current": -541_953_000_000},
         },
     )
     monkeypatch.setattr(
-        "mebuki.services.edinet_fetcher.extract_shareholder_metrics",
+        "blue_ticker.services.edinet_fetcher.extract_shareholder_metrics",
         lambda *args, **kwargs: {"CashEq": 172_111_000_000},
     )
 
@@ -449,7 +449,7 @@ async def test_build_xbrl_annual_records_defers_ordinary_income_to_edinet_applie
     fetcher._download_and_parse_docs = AsyncMock(return_value={"20250331": (Path("."), {})})  # type: ignore[method-assign]
 
     monkeypatch.setattr(
-        "mebuki.services.edinet_fetcher.extract_income_statement",
+        "blue_ticker.services.edinet_fetcher.extract_income_statement",
         lambda *args, **kwargs: {
             "sales": 13_629_997_000_000,
             "operating_profit": None,
@@ -458,22 +458,22 @@ async def test_build_xbrl_annual_records_defers_ordinary_income_to_edinet_applie
         },
     )
     monkeypatch.setattr(
-        "mebuki.services.edinet_fetcher.extract_operating_profit",
+        "blue_ticker.services.edinet_fetcher.extract_operating_profit",
         lambda *args, **kwargs: {"current": 2_669_483_000_000, "label": "経常利益"},
     )
     monkeypatch.setattr(
-        "mebuki.services.edinet_fetcher.extract_balance_sheet",
+        "blue_ticker.services.edinet_fetcher.extract_balance_sheet",
         lambda *args, **kwargs: {"net_assets": 21_728_132_000_000},
     )
     monkeypatch.setattr(
-        "mebuki.services.edinet_fetcher.extract_cash_flow",
+        "blue_ticker.services.edinet_fetcher.extract_cash_flow",
         lambda *args, **kwargs: {
             "cfo": {"current": 6_415_000_000},
             "cfi": {"current": -186_948_000_000},
         },
     )
     monkeypatch.setattr(
-        "mebuki.services.edinet_fetcher.extract_shareholder_metrics",
+        "blue_ticker.services.edinet_fetcher.extract_shareholder_metrics",
         lambda *args, **kwargs: {},
     )
 

@@ -25,7 +25,7 @@ class InsufficientDataError(Exception): ...
 raise InsufficientDataError(required_years=5, available_years=2)
 ```
 
-## 既存ユーティリティ（`mebuki/utils/errors.py`）
+## 既存ユーティリティ（`blue_ticker/utils/errors.py`）
 
 | 関数・クラス | 用途 |
 |---|---|

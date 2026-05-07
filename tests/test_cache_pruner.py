@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timedelta
 
-from mebuki.services.cache_pruner import CachePruner
+from blue_ticker.services.cache_pruner import CachePruner
 
 
 def _touch_old(path, days: int) -> None:
@@ -79,7 +79,7 @@ def test_prune_edinet_doc_indexes_can_keep_custom_years(tmp_path) -> None:
 
 
 def test_stats_counts_cache_categories(tmp_path) -> None:
-    from mebuki.utils.cache import CacheManager
+    from blue_ticker.utils.cache import CacheManager
 
     cache = CacheManager(cache_dir=str(tmp_path))
     cache.set("mof_rf_rates", {"rates": {}})
@@ -115,7 +115,7 @@ def test_stats_counts_cache_categories(tmp_path) -> None:
 
 
 def test_audit_lists_cache_categories(tmp_path) -> None:
-    from mebuki.utils.cache import CacheManager
+    from blue_ticker.utils.cache import CacheManager
 
     cache = CacheManager(cache_dir=str(tmp_path))
     cache.set("edinet_docs_72030_1", {"docs": []})

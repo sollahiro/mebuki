@@ -11,7 +11,7 @@ import unittest
 import tempfile
 from pathlib import Path
 
-from mebuki.analysis.tax_expense import extract_tax_expense
+from blue_ticker.analysis.tax_expense import extract_tax_expense
 
 NS_XBRLI = "http://www.xbrl.org/2003/instance"
 NS_JPPFS = "http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2022-11-01/jppfs_cor"

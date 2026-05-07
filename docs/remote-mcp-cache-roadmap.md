@@ -68,9 +68,9 @@ EDINET external cache の抽象境界は追加済み。
 
 | ファイル | 役割 |
 |---|---|
-| `mebuki/api/edinet_cache_backend.py` | `EdinetCacheBackend`。EDINET external cacheの差し替え境界 |
-| `mebuki/api/edinet_cache_store.py` | `EdinetCacheBackend` のローカルファイル実装 |
-| `mebuki/api/edinet_client.py` | 具象 `EdinetCacheStore` ではなく `EdinetCacheBackend` を受け取る |
+| `blue_ticker/api/edinet_cache_backend.py` | `EdinetCacheBackend`。EDINET external cacheの差し替え境界 |
+| `blue_ticker/api/edinet_cache_store.py` | `EdinetCacheBackend` のローカルファイル実装 |
+| `blue_ticker/api/edinet_client.py` | 具象 `EdinetCacheStore` ではなく `EdinetCacheBackend` を受け取る |
 | `tests/test_edinet_client.py` | メモリbackendを差し込み、抽象境界で動くことを確認 |
 
 この段階では、ユーザー向け挙動は変えない。既存のローカルキャッシュとEDINET API直接通信はそのまま動作する。
@@ -89,7 +89,7 @@ EDINET external cache の抽象境界は追加済み。
 
 完了条件:
 
-- `poetry run pyright mebuki/` が通る。
+- `poetry run pyright blue_ticker/` が通る。
 - `poetry run pytest` が通る。
 - ローカルCLIの既存挙動が変わらない。
 
