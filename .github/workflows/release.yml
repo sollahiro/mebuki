@@ -103,13 +103,12 @@ jobs:
             sed "s|sha256 \".*\"|sha256 \"${SHA256}\"|" | \
             sed "s|version \".*\"|version \"${VERSION}\"|" > homebrew-tap/Formula/blue-ticker.rb
 
-          rm -f homebrew-tap/Formula/mebuki.rb
-          printf '{\n  "mebuki": "blue-ticker"\n}\n' > homebrew-tap/formula_renames.json
+          rm -f homebrew-tap/Formula/mebuki.rb homebrew-tap/formula_renames.json
           
           cd homebrew-tap
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A Formula/blue-ticker.rb Formula/mebuki.rb formula_renames.json
+          git add -A
           git commit -m "Update blue-ticker to v${VERSION}" || echo "No changes to commit"
           git branch -M main
           git push origin main
