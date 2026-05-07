@@ -257,10 +257,15 @@ class HalfYearDataService:
         if use_cache:
             cached = self.cache_manager.get(cache_key)
             if cached and cached.get("_cache_version") == _CACHE_VERSION:
-                trimmed = _trim_half_year_periods(cached["periods"], years)
-                return serialize_half_year_periods(trimmed, include_debug_fields=include_debug_fields)
+                # 完結ペア数が要求 years を満たすか確認（不足なら再取得）
+                cached_pair_count = len({
+                    p["fy_end"] for p in cached.get("periods", []) if p.get("half") == "H2"
+                })
+                if cached_pair_count >= years:
+                    trimmed = _trim_half_year_periods(cached["periods"], years)
+                    return serialize_half_year_periods(trimmed, include_debug_fields=include_debug_fields)
 
-        fetch_years = years + EDINET_DOC_DISCOVERY_BUFFER
+        fetch_years = max(EDINET_DOC_DISCOVERY_LIMIT, years) + EDINET_DOC_DISCOVERY_BUFFER
         edinet_fetcher = EdinetFetcher(
             self.edinet_client,
             cache_manager=self.cache_manager,

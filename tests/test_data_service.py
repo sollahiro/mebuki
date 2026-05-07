@@ -574,7 +574,7 @@ class TestHalfYearDataService:
         from mebuki import __version__
         cache_version = __version__
         service = self._make_service(tmp_path)
-        # years 非依存キー。完結ペアが 1 組あれば trim(years=3) で返ってくる
+        # years 非依存キー。完結ペアが 1 組あれば trim(years=1) で返ってくる
         cached_periods = [
             {"label": "24H1", "half": "H1", "fy_end": "2024-03-31", "data": {"Sales": 45.0}},
             {"label": "24H2", "half": "H2", "fy_end": "2024-03-31", "data": {"Sales": 47.0}},
@@ -584,7 +584,7 @@ class TestHalfYearDataService:
             "periods": cached_periods,
         })
 
-        result = await service.get_half_year_periods("72030", years=3, use_cache=True)
+        result = await service.get_half_year_periods("72030", years=1, use_cache=True)
 
         assert result == cached_periods
 
@@ -622,9 +622,9 @@ class TestHalfYearDataService:
         assert [p["label"] for p in result] == ["24H1", "24H2"]
         assert result[0]["data"]["Sales"] == 45.0
         assert result[1]["data"]["Sales"] == 55.0
-        # years=1 + BUFFER=2 → fetch_years=3
-        fetcher.build_xbrl_annual_records.assert_awaited_once_with("72030", 3)
-        fetcher.build_xbrl_half_year_records.assert_awaited_once_with("72030", 3)
+        # fetch_years = EDINET_DOC_DISCOVERY_LIMIT(10) + BUFFER(2) = 12
+        fetcher.build_xbrl_annual_records.assert_awaited_once_with("72030", 12)
+        fetcher.build_xbrl_half_year_records.assert_awaited_once_with("72030", 12)
 
     @pytest.mark.asyncio
     async def test_edinet_failure_returns_base_periods(self, tmp_path):

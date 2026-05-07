@@ -69,6 +69,25 @@ def _infer_fy_end_from_period_start(period_start: str) -> str:
 _XBRL_PARSE_CACHE_VERSION = f"{__version__}:xbrl-parse"
 
 _PreParsedMap: TypeAlias = dict[str, tuple[Path, XbrlTagElements]]
+
+
+def _slice_docs_preserving_amendments(
+    docs: list[dict[str, Any]],
+    max_years: int,
+) -> list[dict[str, Any]]:
+    """通常書類を max_years 件に絞り、該当年度の訂正書類は保持する。
+
+    build_document_index_for_code() は末尾に訂正書類を追加する場合がある。
+    単純な docs[:max_years] だと訂正書類が落ちて XBRL 上書き処理が効かなくなる。
+    """
+    regular = [d for d in docs if not d.get("_is_amendment")]
+    sliced = regular[:max_years]
+    selected_fy_ends = {_fy_end_key(d.get("edinet_fy_end")) for d in sliced}
+    amendments = [
+        d for d in docs
+        if d.get("_is_amendment") and _fy_end_key(d.get("edinet_fy_end")) in selected_fy_ends
+    ]
+    return sliced + amendments
 _MetricByYear: TypeAlias = dict[str, dict[str, Any]]
 _AllMetrics: TypeAlias = dict[str, dict[str, Any]]
 _DocCacheKey: TypeAlias = tuple[str, int] | tuple[str, int, str] | tuple[str, str]
@@ -196,22 +215,25 @@ class EdinetFetcher:
         if lock_key not in self._doc_locks:
             self._doc_locks[lock_key] = asyncio.Lock()
         async with self._doc_locks[lock_key]:
-            # メモリキャッシュが十分な件数を持っていれば即返す
+            # メモリキャッシュが十分な通常書類を持っていれば即返す
             mem = self._doc_cache.get(lock_key)
-            if mem is not None and len(mem) >= max_years:
-                return mem[:max_years]
+            if mem is not None:
+                regular_mem = [d for d in mem if not d.get("_is_amendment")]
+                if len(regular_mem) >= max_years:
+                    return _slice_docs_preserving_amendments(mem, max_years)
 
-            # 永続キャッシュが十分な件数を持っていれば使う
+            # 永続キャッシュが十分な通常書類を持っていれば使う
             if self.cache_manager is not None:
                 cached = self.cache_manager.get(persistent_key)
                 if (
                     isinstance(cached, dict)
                     and cached.get("_cache_version") == _EDINET_DOCS_CACHE_VERSION
                     and isinstance(cached.get("docs"), list)
-                    and len(cached["docs"]) >= max_years
                 ):
-                    self._doc_cache[lock_key] = cached["docs"]
-                    return cached["docs"][:max_years]
+                    cached_regular = [d for d in cached["docs"] if not d.get("_is_amendment")]
+                    if len(cached_regular) >= max_years:
+                        self._doc_cache[lock_key] = cached["docs"]
+                        return _slice_docs_preserving_amendments(cached["docs"], max_years)
 
             # financial_data 由来の docs_from_records を試みる（max_years 以上あれば採用）
             annual_records = [r for r in financial_data if r.get("CurPerType") == "FY"]
@@ -228,7 +250,7 @@ class EdinetFetcher:
                     persistent_key,
                     {"_cache_version": _EDINET_DOCS_CACHE_VERSION, "docs": docs},
                 )
-            return docs[:max_years]
+            return _slice_docs_preserving_amendments(docs, max_years)
 
     async def _search_edinet_annual_docs(
         self,
@@ -314,22 +336,25 @@ class EdinetFetcher:
         if lock_key not in self._doc_locks:
             self._doc_locks[lock_key] = asyncio.Lock()
         async with self._doc_locks[lock_key]:
-            # メモリキャッシュが十分な件数を持っていれば即返す
+            # メモリキャッシュが十分な通常書類を持っていれば即返す
             mem = self._doc_cache.get(lock_key)
-            if mem is not None and len(mem) >= max_years:
-                return mem[:max_years]
+            if mem is not None:
+                regular_mem = [d for d in mem if not d.get("_is_amendment")]
+                if len(regular_mem) >= max_years:
+                    return _slice_docs_preserving_amendments(mem, max_years)
 
-            # 永続キャッシュが十分な件数を持っていれば使う
+            # 永続キャッシュが十分な通常書類を持っていれば使う
             if self.cache_manager is not None:
                 cached = self.cache_manager.get(persistent_key)
                 if (
                     isinstance(cached, dict)
                     and cached.get("_cache_version") == _EDINET_DOCS_CACHE_VERSION
                     and isinstance(cached.get("docs"), list)
-                    and len(cached["docs"]) >= max_years
                 ):
-                    self._doc_cache[lock_key] = cached["docs"]
-                    return cached["docs"][:max_years]
+                    cached_regular = [d for d in cached["docs"] if not d.get("_is_amendment")]
+                    if len(cached_regular) >= max_years:
+                        self._doc_cache[lock_key] = cached["docs"]
+                        return _slice_docs_preserving_amendments(cached["docs"], max_years)
 
             if not self.edinet_client:
                 return []
@@ -349,7 +374,7 @@ class EdinetFetcher:
                     persistent_key,
                     {"_cache_version": _EDINET_DOCS_CACHE_VERSION, "docs": docs},
                 )
-            return docs[:max_years]
+            return _slice_docs_preserving_amendments(docs, max_years)
 
     async def fetch_latest_annual_report(
         self,
