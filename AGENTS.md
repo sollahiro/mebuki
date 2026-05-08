@@ -16,7 +16,6 @@
 - `.agents/rules/generic/commit-conventions.md`
 - `.agents/rules/project/date-conversion.md`
 - `.agents/rules/project/versioning.md`
-- `.agents/rules/project/mcp-cli-parity.md`
 - `.agents/rules/project/error-handling.md`
 - `.agents/rules/project/xbrl-analysis.md`
 - `.agents/rules/project/dependencies.md`
