@@ -8,6 +8,7 @@ from blue_ticker.infrastructure.settings import settings_store
 from blue_ticker.services.master_data import master_data_manager
 from blue_ticker.utils.converters import extract_year_month
 from blue_ticker.constants.api import EDINET_FILINGS_DEFAULT_YEARS
+from blue_ticker.constants.financial import MILLION_YEN
 
 logger = logging.getLogger(__name__)
 
@@ -208,6 +209,9 @@ async def cmd_analyze(args):
         def get_op_margin(c):
             return c.get("OperatingMargin") or (c.get("OP") / c.get("Sales") * 100 if c.get("OP") and c.get("Sales") else None)
 
+        def to_million(value):
+            return value / MILLION_YEN if value is not None else None
+
         # IFRS金融会社は純収益・事業利益ラベルを使う（最新年度のラベルで判定）
         latest_cd = periods[-1].get("CalculatedData", {}) if periods else {}
         sales_label = latest_cd.get("SalesLabel", "売上高") + " (百万)"
@@ -230,6 +234,7 @@ async def cmd_analyze(args):
             ("売上差影響",             lambda c: c.get("SalesChangeImpact")),
             (gross_margin_change_label, lambda c: c.get("GrossMarginChangeImpact")),
             ("販管費増影響",           lambda c: c.get("SGAChangeImpact")),
+            ("純利益 (百万)",          lambda c: c.get("NP")),
             ("ROE (%)",               lambda c: c.get("ROE")),
             ("ROIC (%)",              lambda c: c.get("ROIC")),
             ("総資産 (百万)",           lambda c: c.get("TotalAssets")),
@@ -241,6 +246,7 @@ async def cmd_analyze(args):
             ("営業CF (百万)",          lambda c: c.get("CFO")),
             ("投資CF (百万)",          lambda c: c.get("CFI")),
             ("フリーCF (百万)",        lambda c: c.get("CFC")),
+            ("現金及び現金同等物 (百万)", lambda c: c.get("CashEq")),
             ("減価償却費 (百万)",      lambda c: c.get("DepreciationAmortization")),
             ("配当性向 (%)",           lambda c: c.get("PayoutRatio")),
             # ── 税引前利益・実効税率 ──
@@ -256,12 +262,41 @@ async def cmd_analyze(args):
             # ── 従業員数 ──
             ("従業員数 (人)",           lambda c: c.get("Employees"),   "int"),
             ("DocID",                  lambda c: c.get("DocID")),
+            ("調整後EPS (円)",          lambda c: c.get("AdjustedEPS")),
+            ("調整後BPS (円)",          lambda c: c.get("AdjustedBPS")),
         ]
 
         for metric_def in metrics_to_show:
             label, func = metric_def[0], metric_def[1]
             fmt_hint = metric_def[2] if len(metric_def) > 2 else None
             values = [func(p.get("CalculatedData", {})) for p in periods]
+            if all(v is None for v in values):
+                continue
+            row = [label]
+            for val in values:
+                if val is None:
+                    row.append(f"{'-':>10}")
+                elif isinstance(val, str):
+                    row.append(f"{val:>10}")
+                elif fmt_hint == "int":
+                    row.append(f"{int(val):>10,}")
+                else:
+                    row.append(f"{val:>10.2f}")
+            print(row_format.format(*row), file=sys.stderr)
+
+        raw_metrics_to_show = [
+            ("EPS (円)",              lambda r: r.get("EPS")),
+            ("BPS (円)",              lambda r: r.get("BPS")),
+            ("期末発行済株式数 (株)", lambda r: r.get("ShOutFY"), "int"),
+            ("年間配当総額 (百万)",   lambda r: to_million(r.get("DivTotalAnn"))),
+            ("年間配当 (円)",         lambda r: r.get("DivAnn")),
+            ("中間配当 (円)",         lambda r: r.get("Div2Q")),
+        ]
+
+        for metric_def in raw_metrics_to_show:
+            label, func = metric_def[0], metric_def[1]
+            fmt_hint = metric_def[2] if len(metric_def) > 2 else None
+            values = [func(p.get("RawData", {})) for p in periods]
             if all(v is None for v in values):
                 continue
             row = [label]

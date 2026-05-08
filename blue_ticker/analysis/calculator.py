@@ -10,7 +10,13 @@ from collections.abc import Sequence
 from datetime import datetime
 
 from ..utils.converters import to_float, is_valid_value, is_valid_financial_record, extract_year_month
-from blue_ticker.constants.financial import PERCENT, MILLION_YEN
+from blue_ticker.constants.financial import (
+    KNOWN_STOCK_SPLIT_MULTIPLIERS,
+    MILLION_YEN,
+    PERCENT,
+    STOCK_SPLIT_NO_SPLIT_REL_TOLERANCE,
+    STOCK_SPLIT_SNAP_REL_TOLERANCE,
+)
 from blue_ticker.utils.metrics_types import RawData, CalculatedData, YearEntry, MetricsResult
 
 
@@ -21,15 +27,28 @@ def to_millions(value: float | None) -> float | None:
     return value / MILLION_YEN
 
 
-def calculate_adjustment_ratio(current_avg_sh: float | None, base_avg_sh: float | None) -> float | None:
+def calculate_adjustment_ratio(current_shares: float | None, base_shares: float | None) -> float | None:
     """
-    株式分割等の調整倍率を計算（各年度の株式数 / 基準年度の株式数）
+    株式分割等の調整倍率を計算（各年度の期末発行済株式数 / 基準年度の期末発行済株式数）
 
     過去のEPS, BPSにこの倍率を掛けることで「現在の株式数ベース」の数値に変換できます。
     """
-    if base_avg_sh is not None and current_avg_sh is not None and base_avg_sh > 0:
-        return current_avg_sh / base_avg_sh
+    if base_shares is not None and current_shares is not None and base_shares > 0:
+        return _snap_adjustment_ratio(current_shares / base_shares)
     return None
+
+
+def _snap_adjustment_ratio(raw_ratio: float) -> float:
+    """期末株数比を実務上よくある株式分割比率へ寄せる。"""
+    candidates = [1 / multiplier for multiplier in KNOWN_STOCK_SPLIT_MULTIPLIERS]
+    nearest = min(candidates, key=lambda candidate: abs(raw_ratio - candidate) / candidate)
+    rel_diff = abs(raw_ratio - nearest) / nearest
+    tolerance = (
+        STOCK_SPLIT_NO_SPLIT_REL_TOLERANCE
+        if nearest == 1.0
+        else STOCK_SPLIT_SNAP_REL_TOLERANCE
+    )
+    return nearest if rel_diff <= tolerance else 1.0
 
 
 def apply_adjustment(value: float | None, ratio: float | None) -> float | None:
@@ -133,14 +152,12 @@ def _extract_raw_values(year_data: dict[str, Any]) -> RawData:
         'CFI': to_float(year_data.get("CFI")),
         'EPS': to_float(year_data.get("EPS")),
         'BPS': to_float(year_data.get("BPS")),
-        'AvgSh': to_float(year_data.get("AvgSh")),
         'ShOutFY': to_float(year_data.get("ShOutFY")),
         'DivTotalAnn': to_float(year_data.get("DivTotalAnn")),
         'PayoutRatioAnn': to_float(year_data.get("PayoutRatioAnn")),
         'CashEq': to_float(year_data.get("CashAndCashEquivalents")) or to_float(year_data.get("CashEq")) or to_float(year_data.get("Cash")),
         'Div2Q': to_float(year_data.get("Div2Q")),
         'DivAnn': to_float(year_data.get("DivAnn")),
-        'NxFDivAnn': to_float(year_data.get("NxFDivAnn")),
         '_xbrl_source': bool(year_data.get("_xbrl_source")),
     }
 
@@ -197,7 +214,7 @@ def _format_financial_period(fy_end: str | None, per_type: str) -> str:
 
 def _build_year_entry(
     year_data: dict[str, Any],
-    latest_avg_sh: float | None,
+    latest_sh_out_fy: float | None,
 ) -> YearEntry:
     """1年分の指標エントリを組み立てる"""
     fy_end = year_data.get("CurFYEn")
@@ -225,7 +242,7 @@ def _build_year_entry(
     calc_values["MetricSources"] = metric_sources
 
     # 株式分割調整
-    ratio = calculate_adjustment_ratio(raw_values.get('AvgSh'), latest_avg_sh)
+    ratio = calculate_adjustment_ratio(raw_values.get('ShOutFY'), latest_sh_out_fy)
     calc_values.update({
         'AdjustmentRatio': ratio,
         'AdjustedEPS': apply_adjustment(raw_values.get('EPS'), ratio),
@@ -234,8 +251,8 @@ def _build_year_entry(
     metric_sources = calc_values.get("MetricSources") or {}
     metric_sources.update({
         "AdjustmentRatio": {"source": "derived", "unit": "ratio"},
-        "AdjustedEPS": {"source": "derived", "method": "EPS / adjustment_ratio", "unit": "yen"},
-        "AdjustedBPS": {"source": "derived", "method": "BPS / adjustment_ratio", "unit": "yen"},
+        "AdjustedEPS": {"source": "derived", "method": "EPS * (ShOutFY / latest ShOutFY)", "unit": "yen"},
+        "AdjustedBPS": {"source": "derived", "method": "BPS * (ShOutFY / latest ShOutFY)", "unit": "yen"},
     })
     calc_values["MetricSources"] = metric_sources
 
@@ -253,15 +270,6 @@ def _build_year_entry(
 
 def _assemble_summary(metrics: MetricsResult, years_metrics: Sequence[YearEntry], analysis_years: int) -> None:
     """最新年度の要約値設定・データ可用性チェック・バリデーションを実行し metrics を更新する"""
-    if years_metrics:
-        latest_calc = years_metrics[0]["CalculatedData"]
-        metrics.update({
-            "latest_fcf": latest_calc.get("CFC"),
-            "latest_roe": latest_calc.get("ROE"),
-            "latest_eps": latest_calc.get("AdjustedEPS"),
-            "latest_sales": latest_calc.get("Sales")
-        })
-
     data_status = check_data_availability(metrics, analysis_years)
     metrics["data_availability"] = data_status.value
     metrics["data_availability_message"] = get_data_availability_message(metrics, analysis_years)
@@ -290,7 +298,7 @@ def calculate_metrics_flexible(
         return {}
 
     latest = years_data[0]
-    latest_avg_sh = to_float(latest.get("AvgSh"))
+    latest_sh_out_fy = to_float(latest.get("ShOutFY"))
 
     metrics: MetricsResult = {
         "code": latest.get("Code"),
@@ -299,7 +307,7 @@ def calculate_metrics_flexible(
         "available_years": len(years_data),
     }
 
-    years_metrics = [_build_year_entry(yd, latest_avg_sh) for yd in years_data]
+    years_metrics = [_build_year_entry(yd, latest_sh_out_fy) for yd in years_data]
     metrics["years"] = years_metrics
 
     _assemble_summary(metrics, years_metrics, analysis_years)

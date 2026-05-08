@@ -2,9 +2,7 @@
 
 from pathlib import Path
 
-from bs4 import BeautifulSoup
-
-from blue_ticker.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files, parse_html_number
+from blue_ticker.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
 from blue_ticker.utils.xbrl_result_types import XbrlTagElements
 
 _CASH_EQ_TAGS: list[str] = [
@@ -114,33 +112,6 @@ def _sum_filing_rows(tag_elements: XbrlTagElements, tags: list[str]) -> float | 
     return None
 
 
-def _derive_average_shares(net_profit: float | None, eps: float | None) -> float | None:
-    if net_profit is None or eps is None or eps == 0:
-        return None
-    return net_profit / eps
-
-
-def _extract_average_shares_from_html(xbrl_dir: Path) -> float | None:
-    for html_file in xbrl_dir.rglob("*.htm"):
-        try:
-            soup = BeautifulSoup(html_file.read_text(encoding="utf-8", errors="ignore"), "html.parser")
-        except OSError:
-            continue
-        for row in soup.find_all("tr"):
-            cells = row.find_all(["td", "th"])
-            if len(cells) < 2:
-                continue
-            label = cells[0].get_text(" ", strip=True)
-            if "普通株式の加重平均株式数" not in label:
-                continue
-            current_text = cells[-1].get_text(" ", strip=True)
-            current_text = current_text.replace("千株", "")
-            value = parse_html_number(current_text)
-            if value is not None:
-                return value * 1000
-    return None
-
-
 def extract_shareholder_metrics(
     xbrl_dir: Path,
     *,
@@ -169,13 +140,11 @@ def extract_shareholder_metrics(
     payout_ratio = _first_current_value(tag_elements, _PAYOUT_RATIO_TAGS)
     if payout_ratio is None:
         payout_ratio = round(div_ann / eps, 3) if div_ann is not None and eps else None
-    avg_sh = _extract_average_shares_from_html(xbrl_dir)
 
     return {
         "CashEq": _first_current_value(tag_elements, _CASH_EQ_TAGS),
         "EPS": eps,
         "BPS": _first_current_value(tag_elements, _BPS_TAGS),
-        "AvgSh": avg_sh if avg_sh is not None else _derive_average_shares(net_profit, eps),
         "ShOutFY": _first_current_value(tag_elements, _ISSUED_SHARES_TAGS),
         "DivAnn": div_ann,
         "Div2Q": _first_current_value(tag_elements, _INTERIM_DIVIDEND_PER_SHARE_TAGS),

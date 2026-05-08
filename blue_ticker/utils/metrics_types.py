@@ -44,14 +44,12 @@ class RawData(TypedDict, total=False):
     CFI: float | None
     EPS: float | None
     BPS: float | None
-    AvgSh: float | None
     ShOutFY: float | None
     DivTotalAnn: float | None
     PayoutRatioAnn: float | None
     CashEq: float | None
     Div2Q: float | None
     DivAnn: float | None
-    NxFDivAnn: float | None
     _xbrl_source: bool
 
 
@@ -185,10 +183,6 @@ class MetricsResult(TypedDict, total=False):
     analysis_years: int
     available_years: int
     years: list[YearEntry]
-    latest_fcf: float | None
-    latest_roe: float | None
-    latest_eps: float | None
-    latest_sales: float | None
     data_availability: str
     data_availability_message: str
     data_valid: bool

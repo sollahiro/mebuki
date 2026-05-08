@@ -904,7 +904,6 @@ class EdinetFetcher:
                 # 株式・配当・現金同等物
                 "EPS": sh_result.get("EPS"),
                 "BPS": sh_result.get("BPS"),
-                "AvgSh": sh_result.get("AvgSh"),
                 "ShOutFY": sh_result.get("ShOutFY"),
                 "DivTotalAnn": sh_result.get("DivTotalAnn"),
                 "PayoutRatioAnn": sh_result.get("PayoutRatioAnn"),
@@ -1004,7 +1003,6 @@ class EdinetFetcher:
                 "CFI": cf_result["cfi"].get("current"),
                 "EPS": sh_result.get("EPS"),
                 "BPS": sh_result.get("BPS"),
-                "AvgSh": sh_result.get("AvgSh"),
                 "ShOutFY": sh_result.get("ShOutFY"),
                 "DivTotalAnn": sh_result.get("DivTotalAnn"),
                 "PayoutRatioAnn": sh_result.get("PayoutRatioAnn"),

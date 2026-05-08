@@ -284,7 +284,6 @@ async def test_build_xbrl_half_year_records_builds_2q_record(monkeypatch) -> Non
         lambda *args, **kwargs: {
             "EPS": 40.0,
             "BPS": 400.0,
-            "AvgSh": 100_000.0,
             "ShOutFY": 120_000.0,
             "DivTotalAnn": None,
             "PayoutRatioAnn": None,
@@ -323,7 +322,6 @@ async def test_build_xbrl_half_year_records_builds_2q_record(monkeypatch) -> Non
         "CFI": -2_000_000,
         "EPS": 40.0,
         "BPS": 400.0,
-        "AvgSh": 100_000.0,
         "ShOutFY": 120_000.0,
         "DivTotalAnn": None,
         "PayoutRatioAnn": None,

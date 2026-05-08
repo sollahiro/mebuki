@@ -2,7 +2,6 @@ import copy
 
 from blue_ticker.utils.output_serializer import (
     _DEBUG_FIELDS,
-    _REDUNDANT_SUMMARY_FIELDS,
     serialize_half_year_periods,
     serialize_metrics_result,
 )
@@ -132,10 +131,6 @@ def _complete_metrics_result():
         "latest_fy_end": "2024-03-31",
         "analysis_years": 1,
         "available_years": 1,
-        "latest_fcf": 1.0,
-        "latest_roe": 1.0,
-        "latest_eps": 1.0,
-        "latest_sales": 1.0,
         "data_availability": "sufficient",
         "data_availability_message": "ok",
         "data_valid": True,
@@ -249,13 +244,7 @@ def test_serialize_metrics_result_includes_debug_fields_when_requested():
 
 
 def test_serialize_metrics_result_handles_missing_years_or_calculated_data():
-    metrics_without_years = {
-        "code": "7203",
-        "latest_fcf": 1.0,
-        "latest_roe": 1.0,
-        "latest_eps": 1.0,
-        "latest_sales": 1.0,
-    }
+    metrics_without_years = {"code": "7203"}
     metrics_with_missing_calculated_data = {
         "code": "7203",
         "years": [{"fy_end": "2024-03-31", "RawData": {}}],
@@ -361,9 +350,8 @@ def test_serialize_metrics_result_preserves_outer_structure():
     serialized = serialize_metrics_result(metrics)
 
     for key, value in metrics.items():
-        if key != "years" and key not in _REDUNDANT_SUMMARY_FIELDS:
+        if key != "years":
             assert serialized[key] == value
-    assert _REDUNDANT_SUMMARY_FIELDS.isdisjoint(serialized)
 
     original_year = metrics["years"][0]
     serialized_year = serialized["years"][0]

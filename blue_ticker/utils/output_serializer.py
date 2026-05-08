@@ -18,24 +18,12 @@ _DEBUG_FIELDS: frozenset[str] = frozenset({
     "OperatingProfitChangeReconciliationDiff",
 })
 
-_REDUNDANT_SUMMARY_FIELDS: frozenset[str] = frozenset({
-    "latest_fcf",
-    "latest_roe",
-    "latest_eps",
-    "latest_sales",
-})
-
-
 def _strip_debug(cd: dict[str, Any]) -> dict[str, Any]:
     return {
         k: v
         for k, v in cd.items()
         if k not in _DEBUG_FIELDS
     }
-
-
-def _strip_redundant_summary(metrics: dict[str, Any]) -> dict[str, Any]:
-    return {k: v for k, v in metrics.items() if k not in _REDUNDANT_SUMMARY_FIELDS}
 
 
 def serialize_metrics_result(
@@ -46,7 +34,6 @@ def serialize_metrics_result(
     """MetricsResult の各 YearEntry.CalculatedData からデバッグフィールドを除去する。"""
     if include_debug_fields:
         return metrics
-    metrics = _strip_redundant_summary(metrics)
     years = metrics.get("years")
     if not years:
         return metrics
