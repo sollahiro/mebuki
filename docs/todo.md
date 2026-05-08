@@ -9,9 +9,9 @@
 |---|---|---|
 | 保守性 | A- | レイヤー境界と依存規則テストが効いている |
 | パフォーマンス | A- | EDINET書類検索、XBRL展開、parse結果のキャッシュが揃っている |
-| テスト | A- | XBRL、サービス、CLI/MCP契約、キャッシュ境界のテストが厚い |
+| テスト | A- | XBRL、サービス、CLI契約、キャッシュ境界のテストが厚い |
 | 型安全性 | A- | 主要metricsとXBRL抽出結果はTypedDict化済み。pyrightをCIで実行 |
-| CLI/MCP パリティ | A | 主要機能はCLI/MCPで対応済み。削除系はCLI限定 |
+| ローカルMCP | 廃止済み | CLI版のローカルMCPサーバーと `ticker mcp` は削除済み |
 | DRY | A- | 年次抽出器レジストリ、XBRL共通parse、年次/半期の書類検索共有が効いている |
 | 総合 | A- | 次の伸びしろは実企業回帰テスト |
 
@@ -34,7 +34,6 @@
 | `analysis/xbrl_parser.py` | 517 | 有報本文抽出の基盤。HTML/XBRL揺れに対する回帰テストを優先 |
 | `services/analyzer.py` | 507 | metrics適用とWACC統合。新指標追加時は `_METRIC_APPLIERS` と型定義を揃える |
 | `analysis/gross_profit.py` | 468 | 会計基準・タグ候補・US-GAAP HTML補完が絡む。タグ整理は実企業テスト後に行う |
-| `app/mcp_server.py` | 380 | CLI/MCPパリティを崩しやすい。CLI側オプション追加時はMCP契約も確認 |
 | `app/cli/analyze.py` | 376 | 表示・JSON出力・EDINET書類コマンドの入口。serializer経由を維持する |
 | `api/edinet_client.py` | 382 | API retry、日次検索、XBRL取得。ファイル管理を増やす場合は `EdinetCacheStore` に寄せる |
 | `utils/financial_data.py` | 356 | 年次/半期の基礎データ構築。日付変換と単位境界に注意 |
@@ -46,7 +45,7 @@
 | XBRL抽出 | `test_xbrl_*.py` | 会計基準・タグ・HTML補完の単体テストが厚い |
 | EDINET境界 | `test_edinet_client.py`, `test_edinet_cache_store.py`, `test_edinet_fetcher_boundary.py`, `test_edinet_discovery.py` | 通信境界、キャッシュ、書類発見を分けて検証 |
 | サービス層 | `test_data_service.py`, `test_analyzer_async.py`, `test_analyzer_apply_functions.py` | キャッシュヒット、非同期経路、metrics適用を検証 |
-| CLI/MCP | `test_cli_contract.py`, `test_cli_integration.py`, `test_mcp_contract.py` | 主要コマンド、JSON出力、MCPツール契約を検証 |
+| CLI | `test_cli_contract.py`, `test_cli_integration.py` | 主要コマンド、JSON出力を検証 |
 | 出力契約 | `test_output_serializer.py` | 公開JSONキーとデバッグフィールド除外を固定 |
 | アーキテクチャ | `test_dependency_rules.py` | services/infrastructureの禁止依存を検証 |
 
@@ -58,4 +57,4 @@
 
 2. `CalculatedData` の公開キー削除やrenameは慎重に進める
 
-   MCP/CLI利用者への互換性影響が大きい。alias期間、利用者向けの変更案内、契約テストを用意してから判断する。
+   CLI利用者への互換性影響が大きい。alias期間、利用者向けの変更案内、契約テストを用意してから判断する。

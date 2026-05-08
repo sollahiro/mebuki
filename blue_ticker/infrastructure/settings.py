@@ -14,7 +14,7 @@ class SettingsStore:
     """
     設定ストア（メモリ上で設定を保持）
     
-    CLI や MCP サーバーの起動時または設定変更時に、
+    CLI の起動時または設定変更時に、
     設定値（APIキー等）を保持します。
     また、起動時にファイル（config.json）から以前の設定を読み込みます。
     """
@@ -39,7 +39,6 @@ class SettingsStore:
             "analysisYears": 6,
             "cacheDir": str(cache_dir),
             "cacheEnabled": True,
-            "mcpEnabled": True,
         }
         
         self.config_path = self.user_data_path / "config.json"
@@ -224,10 +223,6 @@ class SettingsStore:
     @property
     def cache_enabled(self) -> bool:
         return self._settings.get("cacheEnabled", True)
-
-    @property
-    def mcp_enabled(self) -> bool:
-        return self._settings.get("mcpEnabled", True)
 
 
 # グローバル設定インスタンス

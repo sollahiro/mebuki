@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class _DummyParser:
-    """対話型モードで cmd_config / cmd_mcp に渡すダミーパーサー"""
+    """対話型モードで cmd_config に渡すダミーパーサー"""
     def print_help(self):
         pass
 

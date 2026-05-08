@@ -32,10 +32,6 @@ def main() -> int:
             from .cache import cmd_cache
 
             cmd_cache(args, parser)
-        elif args.command == "mcp":
-            from .mcp import cmd_mcp
-
-            cmd_mcp(args, parser)
         elif args.command == "filings":
             import asyncio
             from .analyze import cmd_filings

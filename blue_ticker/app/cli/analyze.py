@@ -278,7 +278,7 @@ async def cmd_analyze(args):
 
         print("-" * (16 + 11 * len(periods)), file=sys.stderr)
 
-        print("\n詳細な分析や定性情報は MCP版（Claude等）をご利用ください。", file=sys.stderr)
+        print("\n定性情報は ticker filing コマンドで抽出できます。", file=sys.stderr)
 
         # ウォッチリスト追加の確認（対話端末のみ）
         if args.format == "table" and sys.stdin.isatty():

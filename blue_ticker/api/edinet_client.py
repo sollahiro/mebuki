@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 
 import aiohttp
-import certifi
 
 from ..constants.api import (
     EDINET_API_BASE_URL,
@@ -62,7 +61,7 @@ class EdinetAPIClient:
             await self._session.close()
             self._session = None
         if self._session is None or self._session.closed:
-            ssl_context = ssl.create_default_context(cafile=certifi.where())
+            ssl_context = ssl.create_default_context()
             connector = aiohttp.TCPConnector(ssl=ssl_context)
             self._session = aiohttp.ClientSession(connector=connector)
             self._session_loop = current_loop

@@ -26,13 +26,12 @@ blue_ticker.app -> blue_ticker.services -> blue_ticker.analysis | blue_ticker.ap
 
 標準ライブラリで賄えるものは外部パッケージを追加しない。
 
-## 現在の依存関係（v2.15.2）
+## 現在の依存関係
 
 | パッケージ | 採用理由 |
 |---|---|
 | `aiohttp` | 非同期HTTP通信（`asyncio` + `urllib` では代替不可） |
 | `beautifulsoup4` | HTML/XML の柔軟なパース（標準 `xml` では壊れた HTML を扱えない） |
-| `mcp` | MCPサーバープロトコル実装（外部仕様） |
 
 ## 新規パッケージ追加の判断基準
 

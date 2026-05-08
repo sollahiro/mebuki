@@ -118,14 +118,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     clean_parser.add_argument("--format", choices=["table", "json"], default="table", help="出力形式")
 
-    # mcp
-    mcp_parser = subparsers.add_parser("mcp", help="MCP連携管理")
-    mcp_sub = mcp_parser.add_subparsers(dest="mcp_subcommand")
-    mcp_sub.add_parser("install-claude", help="Claude Desktop に登録")
-    mcp_sub.add_parser("install-goose", help="Goose に登録")
-    mcp_sub.add_parser("install-lm-studio", help="LM Studio に登録")
-    mcp_sub.add_parser("start", help="MCPサーバーを起動 (STDIO)")
-
     # sector
     sector_parser = subparsers.add_parser("sector", help="東証33業種で銘柄を検索")
     sector_parser.add_argument("sector", nargs="?", help="業種名（省略時は全業種一覧を表示）")

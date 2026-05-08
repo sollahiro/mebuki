@@ -33,7 +33,6 @@ def validate(metrics: dict[str, Any]) -> tuple[bool, str | None]: ...
 |---|---|
 | 外部 API レスポンス（EDINET / MOF 等）の `dict[str, Any]` | JSON の値型が実行時にしか判明しない |
 | 任意型を受け入れる検証関数の引数（`is_nan`, `is_valid_value`） | `float`, `str`, `None` など全型を動的に処理する |
-| MCP プロトコルの `arguments: dict[str, Any]` | プロトコル仕様で型が規定されていない |
 
 値が `float | None` などに絞れる場合は `Any` を使わない（`dict[str, Any]` → `dict[str, float | None]`、`-> Any` → 具体型 など）。
 

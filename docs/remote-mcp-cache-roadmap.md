@@ -134,7 +134,7 @@ EDINET external cache の抽象境界は追加済み。
 目的: MCP利用時のEDINET処理をremote server側へ寄せる。
 
 - remote MCPはremote server上のキャッシュとEDINET取得機能を使う。
-- CLI/MCPの公開機能とパラメーターは既存のCLI/MCPパリティ規約に合わせる。
+- remote MCPの公開機能とパラメーターは、CLIの公開機能を基準に設計する。
 - remote MCPは、ローカルの `analysis_cache` を直接操作しない。
 - キャッシュ削除系は引き続き慎重に扱う。remote MCPから破壊的な削除操作を出す場合は、別途安全設計を行う。
 
@@ -144,16 +144,15 @@ EDINET external cache の抽象境界は追加済み。
 - CLIは `local` / `remote` backendを設定で選択できる。
 - ローカルMCPなしでも、AIエージェントのローカル操作は CLI + Skills で成立する。
 
-### Phase 5: ローカルMCP廃止
+### Phase 5: ローカルMCP廃止（完了）
 
 目的: MCPの運用経路をremoteへ寄せ、ローカルMCPの保守負荷を下げる。
 
-- ローカルMCP機能を deprecated として告知する。
-- CLI + Skills の利用導線をドキュメントで明確にする。
-- remote MCPへの移行手順を用意する。
-- 一定期間後にローカルMCPの起動・インストール導線を削除する。
+- ローカルMCP機能の起動・インストール導線を削除済み。
+- CLI + Skills のローカル操作導線を残す。
+- remote MCPは将来の外部サーバー運用としてローカルCLIとは分離する。
 
-削除対象の候補:
+削除済み:
 
 - `ticker mcp start`
 - `ticker mcp install-*`

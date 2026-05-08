@@ -2,7 +2,7 @@
 出力境界での JSON 整形ユーティリティ。
 
 内部の CalculatedData には計算追跡・デバッグ用フィールドが含まれるが、
-MCP / CLI の標準 JSON 出力にはトークン効率・可読性のためこれらを除外する。
+CLI の標準 JSON 出力には可読性のためこれらを除外する。
 include_debug_fields=True を渡すと全フィールドを含む。
 """
 

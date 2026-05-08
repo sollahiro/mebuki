@@ -1,5 +1,5 @@
 class BlueTicker < Formula
-  desc "Japanese stock analysis CLI/MCP tool powered by EDINET"
+  desc "Japanese stock analysis CLI tool powered by EDINET"
   homepage "https://github.com/sollahiro/blue-ticker"
   url "https://github.com/sollahiro/blue-ticker/releases/download/v26.5.3/blue-ticker-macos-arm64.tar.gz"
   version "26.5.3"

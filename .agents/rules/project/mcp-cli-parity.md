@@ -1,26 +1,18 @@
-# MCP ツールと CLI の対応原則
+# ローカルMCP廃止後のCLI公開面
 
-`blue_ticker/app/mcp_server.py` の MCP ツール群は、CLI（`ticker analyze` 等）の機能・パラメーターに揃えること。
+CLI版のローカルMCPサーバーは廃止済み。`ticker mcp`、`blue_ticker/app/mcp_server.py`、ローカルMCP固有の契約テストは復活させない。
 
-- CLI で廃止した機能・オプションは MCP からも削除する
-- CLI で追加した機能は MCP にも追加する
-- CLI に存在しない MCP 専用機能は原則として追加しない
+AIエージェントからのローカル操作は CLI + Skills で行う。将来 remote MCP を追加する場合も、ローカルCLIのサブコマンドとして stdio サーバーを再導入しない。
 
-## ツール対応表
+## 旧ローカルMCP削除対象
 
-| MCP ツール | CLI コマンド |
-|---|---|
-| `find_japan_stock_code` | `ticker search` |
-| `get_japan_stock_financial_data` | `ticker analyze` |
-| `search_japan_stock_filings` | `ticker filings` |
-| `extract_japan_stock_filing_content` | `ticker filing` |
-| `get_japan_stock_watchlist` | `ticker watch list` |
-| `manage_japan_stock_watchlist` | `ticker watch add/remove` |
-| `get_japan_stock_portfolio` | `ticker portfolio list` |
-| `manage_japan_stock_portfolio` | `ticker portfolio add/sell/remove` |
-| `search_japan_stocks_by_sector` | `ticker sector [業種名]` |
+- `ticker mcp start`
+- `ticker mcp install-*`
+- `blue_ticker/app/mcp_server.py`
+- `blue_ticker/app/cli/mcp.py`
+- `tests/test_mcp_contract.py`
 
-## パラメーター追加時のデフォルト値ルール
+## CLIパラメーター追加時のデフォルト値ルール
 
 新しいオプションパラメーターはオプトインにする。
 
@@ -28,10 +20,3 @@
 - 値パラメーター → `None`（例: `years`、サービス層でデフォルト処理）
 
 ただし `use_cache` は既存挙動との互換性のため `True` のまま維持する（例外）。
-
-## `get_japan_stock_financial_data` のパラメーター対応
-
-| MCP パラメーター | CLI オプション | 備考 |
-|---|---|---|
-| `years` | `--years N` | デフォルト 5（`half=true` 時は 3） |
-| `half: true` | `--half` | H1/H2 半期推移 |
