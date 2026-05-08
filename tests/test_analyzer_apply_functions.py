@@ -261,13 +261,13 @@ class TestApplyTax:
 # ──────────────────────────────────────────────────────────────
 
 class TestApplyGrossProfit:
-    def test_inserts_after_sales(self):
+    def test_sets_gross_profit(self):
         years = [_make_year("2024-03-31", Sales=1000.0, OP=100.0)]
         gp_by_year = {"20240331": {"current": 400_000_000, "method": "direct"}}
         _apply_gross_profit(years, gp_by_year)
-        keys = list(years[0]["CalculatedData"].keys())
-        assert "GrossProfit" in keys
-        assert keys.index("GrossProfit") == keys.index("Sales") + 1
+        cd = years[0]["CalculatedData"]
+        assert cd["GrossProfit"] == pytest.approx(400.0)
+        assert cd["GrossProfitMethod"] == "direct"
 
     def test_calculates_margin(self):
         years = [_make_year("2024-03-31", Sales=1000.0)]

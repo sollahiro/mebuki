@@ -57,13 +57,6 @@ class CalculatedData(TypedDict, total=False):
     # ── source metadata ──
     MetricSources: dict[str, MetricSource]
     # ── calculator.py: _calculate_base_values ──
-    Sales: float | None
-    OP: float | None
-    NP: float | None
-    NetAssets: float | None
-    CFO: float | None
-    CFI: float | None
-    CashEq: float | None
     PayoutRatio: float | None
     CFC: float | None
     # ── calculator.py: _calculate_profitability_metrics ──
@@ -101,7 +94,6 @@ class CalculatedData(TypedDict, total=False):
     # ── analyzer.py: _apply_operating_profit / _apply_net_revenue ──
     OperatingMargin: float | None
     OPLabel: str
-    SalesLabel: str
     # ── operating_profit_change.py: 営業利益前年差分解 ──
     SellingGeneralAdministrativeExpenses: float | None
     OperatingProfitChange: float | None

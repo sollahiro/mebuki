@@ -7,6 +7,8 @@ from blue_ticker.constants.financial import MILLION_YEN
 from blue_ticker.utils.metrics_types import YearEntry
 
 
+# RawData の金額ファクトは円単位で保持する。表示・派生計算で百万円単位に
+# 変換して扱うフィールドはここに明示する。
 RAW_MILLION_FIELDS = frozenset((
     "Sales",
     "OP",
@@ -37,6 +39,8 @@ def year_metric_value(year: YearEntry, key: str) -> object:
         raw_value = raw_metric_millions(raw_data, key)
         if raw_value is not None:
             return raw_value
+    elif raw_data.get(key) is not None:
+        return raw_data.get(key)
     calculated = year.get("CalculatedData") or {}
     return calculated.get(key)
 

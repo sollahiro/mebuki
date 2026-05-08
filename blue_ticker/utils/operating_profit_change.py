@@ -188,6 +188,8 @@ def apply_operating_profit_change_to_years(years: list[YearEntry]) -> None:
     for year in years:
         view = views_by_fy_end[str(year.get("fy_end") or "")]
         calculated = cast(dict[str, Any], year["CalculatedData"])
+        # MetricSources は通常 shallow copy 経由で同一オブジェクトだが、
+        # 元の CalculatedData に未作成だったケースも含めて書き戻す。
         for key in _DERIVED_KEYS:
             if key in view:
                 calculated[key] = view[key]
