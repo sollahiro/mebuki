@@ -21,6 +21,7 @@ from blue_ticker.utils.operating_profit_change import (
     apply_operating_profit_change_to_years,
 )
 from blue_ticker.utils.wacc import load_rf_rates, resolve_rf_for_date, calculate_wacc
+from blue_ticker.utils.metrics_access import year_metric_value
 from blue_ticker.utils.metrics_types import CalculatedData, MetricSource, RawXbrlExtraction, YearEntry
 
 from .edinet_fetcher import EdinetFetcher
@@ -61,6 +62,13 @@ def _metric_doc_id(result: dict[str, Any]) -> str | None:
 
 def _to_millions_or_none(value: float | None) -> float | None:
     return value / MILLION_YEN if value is not None else None
+
+
+def _year_metric_float(year: YearEntry, key: str) -> float | None:
+    value = year_metric_value(year, key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
 
 
 def _raw_by_year(all_metrics: dict[str, dict[str, Any]]) -> dict[str, RawXbrlExtraction]:
@@ -256,8 +264,8 @@ def _apply_ibd(
             doc_id=doc_id,
             label=raw.get("ibd_accounting_standard"),
         )
-        np_ = cd.get("NP")
-        net_assets = cd.get("NetAssets")
+        np_ = _year_metric_float(year, "NP")
+        net_assets = _year_metric_float(year, "NetAssets")
         if np_ is not None and net_assets is not None and (net_assets + ibd_m) != 0:
             cd["ROIC"] = np_ / (net_assets + ibd_m) * PERCENT
             _set_metric_source(cd, "ROIC", source="derived", unit="percent", method="NP / (NetAssets + InterestBearingDebt)")
@@ -369,25 +377,24 @@ def _apply_gross_profit(
         gp_m = gross_profit / MILLION_YEN
         gp_method = raw.get("gross_profit_method", "unknown")
         gp_label = raw.get("gross_profit_label")
+        sales_m = _year_metric_float(year, "Sales")
         # Sales の直後に挿入するため dict を再構築
         old_cd = year["CalculatedData"]
         new_cd: dict[str, Any] = {}
         for k, v in old_cd.items():
             new_cd[k] = v
             if k == "Sales":
-                sales = v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
                 new_cd["GrossProfit"] = gp_m
                 new_cd["GrossProfitMethod"] = gp_method
                 if gp_label is not None:
                     new_cd["GrossProfitLabel"] = gp_label
-                new_cd["GrossProfitMargin"] = gp_m / sales * PERCENT if sales else None
+                new_cd["GrossProfitMargin"] = gp_m / sales_m * PERCENT if sales_m else None
         if "GrossProfit" not in new_cd:
             new_cd["GrossProfit"] = gp_m
             new_cd["GrossProfitMethod"] = gp_method
             if gp_label is not None:
                 new_cd["GrossProfitLabel"] = gp_label
-            sales = new_cd.get("Sales")
-            new_cd["GrossProfitMargin"] = gp_m / sales * PERCENT if sales else None
+            new_cd["GrossProfitMargin"] = gp_m / sales_m * PERCENT if sales_m else None
         cast_cd = cast(CalculatedData, new_cd)
         _set_metric_source(
             cast_cd,
@@ -415,7 +422,6 @@ def _apply_operating_profit(
             continue
         cd = year["CalculatedData"]
         op_m = operating_profit / MILLION_YEN
-        cd["OP"] = op_m
         year["RawData"]["OP"] = operating_profit
         if raw.get("operating_profit_label") == "経常利益":
             cd["OPLabel"] = "経常利益"
@@ -439,7 +445,7 @@ def _apply_operating_profit(
                 method=raw.get("selling_general_administrative_expenses_method"),
                 doc_id=raw.get("doc_id"),
             )
-        sales = cd.get("Sales")
+        sales = _year_metric_float(year, "Sales")
         if sales:
             cd["OperatingMargin"] = op_m / sales * PERCENT
             _set_metric_source(cd, "OperatingMargin", source="derived", unit="percent", method="OP / Sales")
@@ -459,24 +465,22 @@ def _apply_net_revenue(
         rd = year["RawData"]
         net_revenue = raw.get("net_revenue")
         business_profit = raw.get("business_profit")
-        if cd.get("Sales") is None and net_revenue is not None:
+        if year_metric_value(year, "Sales") is None and net_revenue is not None:
             nr_m = net_revenue / MILLION_YEN
-            cd["Sales"] = nr_m
             rd["Sales"] = net_revenue
-            cd["SalesLabel"] = "純収益"
+            rd["SalesLabel"] = "純収益"
             _set_metric_source(cd, "Sales", source="edinet", unit="million_yen", doc_id=raw.get("doc_id"), label="純収益")
             # GrossProfitMargin を Sales 確定後に再計算
             gp = cd.get("GrossProfit")
             if gp is not None:
                 cd["GrossProfitMargin"] = gp / nr_m * PERCENT
                 _set_metric_source(cd, "GrossProfitMargin", source="derived", unit="percent", method="GrossProfit / Sales")
-        if cd.get("OP") is None and business_profit is not None:
+        if year_metric_value(year, "OP") is None and business_profit is not None:
             bp_m = business_profit / MILLION_YEN
-            cd["OP"] = bp_m
             rd["OP"] = business_profit
             cd["OPLabel"] = "事業利益"
             _set_metric_source(cd, "OP", source="edinet", unit="million_yen", doc_id=raw.get("doc_id"), label="事業利益")
-            sales = cd.get("Sales")
+            sales = _year_metric_float(year, "Sales")
             if sales:
                 cd["OperatingMargin"] = bp_m / sales * PERCENT
                 _set_metric_source(cd, "OperatingMargin", source="derived", unit="percent", method="OP / Sales")
@@ -573,7 +577,7 @@ def _apply_wacc(years: list[YearEntry], rf_rates: dict[str, float]) -> None:
         fy_end = year.get("fy_end") or ""
         rf, rf_source = resolve_rf_for_date(rf_rates, fy_end)
         wacc = calculate_wacc(
-            eq=cd.get("NetAssets"),
+            eq=_year_metric_float(year, "NetAssets"),
             ibd=cd.get("InterestBearingDebt"),
             ie=cd.get("InterestExpense"),
             tc_pct=cd.get("EffectiveTaxRate"),

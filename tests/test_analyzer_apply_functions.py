@@ -21,6 +21,7 @@ from blue_ticker.services.analyzer import (
     _apply_wacc,
 )
 from blue_ticker.utils.metrics_types import YearEntry
+from blue_ticker.utils.metrics_access import metric_view
 from blue_ticker.constants.financial import (
     MILLION_YEN,
     PERCENT,
@@ -335,7 +336,8 @@ class TestApplyOperatingProfit:
         _apply_operating_profit(years, op_by_year)
         cd = years[0]["CalculatedData"]
         op_m = 100_000_000 / MILLION_YEN
-        assert cd["OP"] == pytest.approx(op_m)
+        assert years[0]["RawData"]["OP"] == 100_000_000
+        assert metric_view(years[0])["OP"] == pytest.approx(op_m)
         assert cd["OperatingMargin"] == pytest.approx(op_m / 1000.0 * PERCENT)
 
     def test_sets_direct_sga_when_extracted(self):
@@ -357,7 +359,8 @@ class TestApplyOperatingProfit:
         op_by_year = {"20240331": {"current": 999_999_999, "label": "営業利益"}}
         _apply_operating_profit(years, op_by_year)
         op_m = 999_999_999 / MILLION_YEN
-        assert years[0]["CalculatedData"]["OP"] == pytest.approx(op_m)
+        assert years[0]["RawData"]["OP"] == 999_999_999
+        assert metric_view(years[0])["OP"] == pytest.approx(op_m)
         assert years[0]["CalculatedData"]["OperatingMargin"] == pytest.approx(op_m / 1000.0 * PERCENT)
 
     def test_sets_label_and_margin_when_op_already_set(self):
@@ -365,7 +368,8 @@ class TestApplyOperatingProfit:
         op_by_year = {"20240331": {"current": 60_000_000, "label": "経常利益"}}
         _apply_operating_profit(years, op_by_year)
         cd = years[0]["CalculatedData"]
-        assert cd["OP"] == pytest.approx(60.0)
+        assert years[0]["RawData"]["OP"] == 60_000_000
+        assert metric_view(years[0])["OP"] == pytest.approx(60.0)
         assert cd["OPLabel"] == "経常利益"
         assert cd["OperatingMargin"] == pytest.approx(6.0)
 
@@ -403,8 +407,9 @@ class TestApplyNetRevenue:
         nr_by_year = {"20240331": {"found": True, "net_revenue": 2_000_000_000, "business_profit": None}}
         _apply_net_revenue(years, nr_by_year)
         cd = years[0]["CalculatedData"]
-        assert cd["Sales"] == pytest.approx(2_000_000_000 / MILLION_YEN)
-        assert cd["SalesLabel"] == "純収益"
+        assert years[0]["RawData"]["Sales"] == 2_000_000_000
+        assert metric_view(years[0])["Sales"] == pytest.approx(2_000_000_000 / MILLION_YEN)
+        assert years[0]["RawData"]["SalesLabel"] == "純収益"
         assert cd["MetricSources"]["Sales"]["label"] == "純収益"
 
     def test_does_not_overwrite_existing_sales(self):
@@ -427,7 +432,8 @@ class TestApplyNetRevenue:
         _apply_net_revenue(years, nr_by_year)
         cd = years[0]["CalculatedData"]
         bp_m = 300_000_000 / MILLION_YEN
-        assert cd["OP"] == pytest.approx(bp_m)
+        assert years[0]["RawData"]["OP"] == 300_000_000
+        assert metric_view(years[0])["OP"] == pytest.approx(bp_m)
         assert cd["OPLabel"] == "事業利益"
         assert cd["OperatingMargin"] == pytest.approx(bp_m / 2000.0 * PERCENT)
 

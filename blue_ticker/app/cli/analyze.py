@@ -7,6 +7,7 @@ from blue_ticker.infrastructure.helpers import validate_stock_code
 from blue_ticker.infrastructure.settings import settings_store
 from blue_ticker.services.master_data import master_data_manager
 from blue_ticker.utils.converters import extract_year_month
+from blue_ticker.utils.metrics_access import metric_view
 from blue_ticker.constants.api import EDINET_FILINGS_DEFAULT_YEARS
 from blue_ticker.constants.financial import MILLION_YEN
 
@@ -213,13 +214,13 @@ async def cmd_analyze(args):
             return value / MILLION_YEN if value is not None else None
 
         # IFRS金融会社は純収益・事業利益ラベルを使う（最新年度のラベルで判定）
-        latest_cd = periods[-1].get("CalculatedData", {}) if periods else {}
-        sales_label = latest_cd.get("SalesLabel", "売上高") + " (百万)"
+        latest_display_data = metric_view(periods[-1]) if periods else {}
+        sales_label = latest_display_data.get("SalesLabel", "売上高") + " (百万)"
         gross_profit_label, gross_profit_margin_label, gross_margin_change_label = (
-            _gross_profit_labels(latest_cd)
+            _gross_profit_labels(latest_display_data)
         )
-        op_label = latest_cd.get("OPLabel", "営業利益") + " (百万)"
-        op_margin_label = latest_cd.get("OPLabel", "営業利益") + "率 (%)"
+        op_label = latest_display_data.get("OPLabel", "営業利益") + " (百万)"
+        op_margin_label = latest_display_data.get("OPLabel", "営業利益") + "率 (%)"
 
         metrics_to_show = [
             (sales_label,             lambda c: c.get("Sales")),
@@ -269,7 +270,7 @@ async def cmd_analyze(args):
         for metric_def in metrics_to_show:
             label, func = metric_def[0], metric_def[1]
             fmt_hint = metric_def[2] if len(metric_def) > 2 else None
-            values = [func(p.get("CalculatedData", {})) for p in periods]
+            values = [func(metric_view(p)) for p in periods]
             if all(v is None for v in values):
                 continue
             row = [label]

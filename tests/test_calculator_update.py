@@ -7,6 +7,7 @@ project_root = Path(__file__).parent.parent
 sys.path.append(str(project_root))
 
 from blue_ticker.analysis.calculator import calculate_metrics_flexible
+from blue_ticker.utils.metrics_access import metric_view
 
 
 def test_calculate_metrics_preserves_sales_label_from_xbrl_record():
@@ -27,8 +28,11 @@ def test_calculate_metrics_preserves_sales_label_from_xbrl_record():
     years = metrics.get("years")
     assert years is not None
     cd = cast(dict[str, Any], years[0]["CalculatedData"])
-    assert cd["Sales"] == 2_922_428
-    assert cd["SalesLabel"] == "経常収益"
+    rd = cast(dict[str, Any], years[0]["RawData"])
+    assert rd["Sales"] == 2_922_428_000_000
+    assert metric_view(years[0])["Sales"] == 2_922_428
+    assert rd["SalesLabel"] == "経常収益"
+    assert metric_view(years[0])["SalesLabel"] == "経常収益"
     assert cd["MetricSources"]["Sales"]["label"] == "経常収益"
     assert cd["MetricSources"]["Sales"]["source"] == "edinet"
 

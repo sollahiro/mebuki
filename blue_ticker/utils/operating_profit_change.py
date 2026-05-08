@@ -9,6 +9,7 @@ from collections.abc import Mapping
 from typing import Any, cast
 
 from blue_ticker.constants.financial import MILLION_YEN
+from blue_ticker.utils.metrics_access import metric_view
 from blue_ticker.utils.metrics_types import YearEntry
 
 
@@ -20,6 +21,15 @@ _SGA_IMPACT_KEY = "SGAChangeImpact"
 _RECONCILIATION_DIFF_KEY = "OperatingProfitChangeReconciliationDiff"
 _FINANCIAL_OP_LABELS = frozenset(("経常利益", "事業利益"))
 _BUSINESS_GROSS_PROFIT_LABEL = "業務粗利益"
+_DERIVED_KEYS = (
+    _SGA_KEY,
+    _OP_CHANGE_KEY,
+    _SALES_IMPACT_KEY,
+    _GM_IMPACT_KEY,
+    _SGA_IMPACT_KEY,
+    _RECONCILIATION_DIFF_KEY,
+    "MetricSources",
+)
 
 
 def _gross_margin(gross_profit: float | None, sales: float | None) -> float | None:
@@ -160,8 +170,11 @@ def _apply_change(current: dict[str, Any], prior: dict[str, Any]) -> None:
 
 def apply_operating_profit_change_to_years(years: list[YearEntry]) -> None:
     """年次データへ営業利益前年差分解を付与する。"""
+    views_by_fy_end: dict[str, dict[str, Any]] = {}
     for year in years:
-        _apply_sga(cast(dict[str, Any], year["CalculatedData"]))
+        view = metric_view(year)
+        _apply_sga(view)
+        views_by_fy_end[str(year.get("fy_end") or "")] = view
 
     chronological = sorted(
         years,
@@ -169,9 +182,15 @@ def apply_operating_profit_change_to_years(years: list[YearEntry]) -> None:
     )
     for prior, current in zip(chronological, chronological[1:]):
         _apply_change(
-            cast(dict[str, Any], current["CalculatedData"]),
-            cast(dict[str, Any], prior["CalculatedData"]),
+            views_by_fy_end[str(current.get("fy_end") or "")],
+            views_by_fy_end[str(prior.get("fy_end") or "")],
         )
+    for year in years:
+        view = views_by_fy_end[str(year.get("fy_end") or "")]
+        calculated = cast(dict[str, Any], year["CalculatedData"])
+        for key in _DERIVED_KEYS:
+            if key in view:
+                calculated[key] = view[key]
 
 
 def apply_operating_profit_change_to_periods(periods: list[dict[str, Any]]) -> None:

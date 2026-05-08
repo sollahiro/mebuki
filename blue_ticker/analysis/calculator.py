@@ -18,6 +18,7 @@ from blue_ticker.constants.financial import (
     STOCK_SPLIT_SNAP_REL_TOLERANCE,
 )
 from blue_ticker.utils.metrics_types import RawData, CalculatedData, YearEntry, MetricsResult
+from blue_ticker.utils.metrics_access import raw_metric_millions
 
 
 def to_millions(value: float | None) -> float | None:
@@ -163,20 +164,13 @@ def _extract_raw_values(year_data: dict[str, Any]) -> RawData:
 
 
 def _calculate_base_values(raw_values: RawData) -> CalculatedData:
-    """百万円単位への変換とFCF(CFC)を計算する"""
+    """RawData を元に派生値を計算する。"""
     cfo = raw_values.get('CFO')
     cfi = raw_values.get('CFI')
     payout_ratio_ann = raw_values.get('PayoutRatioAnn')
     cfo_m = to_millions(cfo)
     cfi_m = to_millions(cfi)
     values: CalculatedData = {
-        'Sales': to_millions(raw_values.get('Sales')),
-        'OP': to_millions(raw_values.get('OP')),
-        'NP': to_millions(raw_values.get('NP')),
-        'NetAssets': to_millions(raw_values.get('NetAssets')),
-        'CFO': cfo_m,
-        'CFI': cfi_m,
-        'CashEq': to_millions(raw_values.get('CashEq')),
         'PayoutRatio': payout_ratio_ann * PERCENT if payout_ratio_ann is not None else None,
         'CFC': (cfo_m + cfi_m) if (cfo_m is not None and cfi_m is not None) else None
     }
@@ -194,7 +188,6 @@ def _calculate_base_values(raw_values: RawData) -> CalculatedData:
     }
     sales_label = raw_values.get("SalesLabel")
     if isinstance(sales_label, str) and sales_label:
-        values["SalesLabel"] = sales_label
         values["MetricSources"]["Sales"]["label"] = sales_label
         values["MetricSources"]["Sales"]["source"] = "edinet"
     return values
@@ -225,10 +218,10 @@ def _build_year_entry(
 
     # 収益性指標
     profit_metrics = _calculate_profitability_metrics(
-        calc_values.get('NP'),
-        calc_values.get('OP'),
-        calc_values.get('NetAssets'),
-        calc_values.get('CFO'),
+        raw_metric_millions(raw_values, "NP"),
+        raw_metric_millions(raw_values, "OP"),
+        raw_metric_millions(raw_values, "NetAssets"),
+        raw_metric_millions(raw_values, "CFO"),
     )
     calc_values.update({
         'ROE': profit_metrics['roe'],
