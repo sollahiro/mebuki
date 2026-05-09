@@ -91,12 +91,14 @@ def validate_metrics_for_analysis(
     latest_year = years[0] if isinstance(years, list) and years and isinstance(years[0], dict) else {}
     calculated = latest_year.get("CalculatedData") if isinstance(latest_year, dict) else {}
     latest_metrics = calculated if isinstance(calculated, Mapping) else {}
+    raw = latest_year.get("RawData") if isinstance(latest_year, dict) else {}
+    latest_raw = raw if isinstance(raw, Mapping) else {}
 
     # 主要指標（FCF、ROE、EPS）のデータが存在するか確認
     if (
         latest_metrics.get("CFC") is None
         and latest_metrics.get("ROE") is None
-        and latest_metrics.get("AdjustedEPS") is None
+        and latest_raw.get("EPS") is None
     ):
         return False, "主要指標（FCF、ROE、EPS）のデータが不足しています"
     

@@ -55,7 +55,7 @@ def test_annual_financial_period():
     print("Annual test passed!")
 
 
-def test_adjustment_ratio_uses_year_end_issued_shares():
+def test_eps_bps_remain_raw_values_without_share_adjustment():
     metrics = calculate_metrics_flexible(
         [
             {
@@ -80,75 +80,17 @@ def test_adjustment_ratio_uses_year_end_issued_shares():
 
     years = metrics.get("years")
     assert years is not None
-    current = cast(dict[str, Any], years[0]["CalculatedData"])
-    prior = cast(dict[str, Any], years[1]["CalculatedData"])
-    assert current["AdjustmentRatio"] == 1.0
-    assert current["AdjustedEPS"] == 50.0
-    assert prior["AdjustmentRatio"] == 0.5
-    assert prior["AdjustedEPS"] == 50.0
-    assert prior["AdjustedBPS"] == 400.0
-
-
-def test_adjustment_ratio_ignores_share_count_drift_without_split():
-    metrics = calculate_metrics_flexible(
-        [
-            {
-                "CurFYEn": "2025-03-31",
-                "CurPerType": "FY",
-                "Sales": 1_000_000_000,
-                "EPS": 70.0,
-                "BPS": 360.0,
-                "ShOutFY": 502_818_808,
-            },
-            {
-                "CurFYEn": "2024-03-31",
-                "CurPerType": "FY",
-                "Sales": 900_000_000,
-                "EPS": 167.44,
-                "BPS": 790.28,
-                "ShOutFY": 521_430_854,
-            },
-        ],
-        analysis_years=2,
-    )
-
-    years = metrics.get("years")
-    assert years is not None
-    prior = cast(dict[str, Any], years[1]["CalculatedData"])
-    assert prior["AdjustmentRatio"] == 1.0
-    assert prior["AdjustedEPS"] == 167.44
-    assert prior["AdjustedBPS"] == 790.28
-
-
-def test_adjustment_ratio_snaps_near_split_ratio():
-    metrics = calculate_metrics_flexible(
-        [
-            {
-                "CurFYEn": "2025-03-31",
-                "CurPerType": "FY",
-                "Sales": 1_000_000_000,
-                "EPS": 50.0,
-                "BPS": 500.0,
-                "ShOutFY": 2_000,
-            },
-            {
-                "CurFYEn": "2024-03-31",
-                "CurPerType": "FY",
-                "Sales": 900_000_000,
-                "EPS": 100.0,
-                "BPS": 800.0,
-                "ShOutFY": 1_070,
-            },
-        ],
-        analysis_years=2,
-    )
-
-    years = metrics.get("years")
-    assert years is not None
-    prior = cast(dict[str, Any], years[1]["CalculatedData"])
-    assert prior["AdjustmentRatio"] == 0.5
-    assert prior["AdjustedEPS"] == 50.0
-    assert prior["AdjustedBPS"] == 400.0
+    current_raw = cast(dict[str, Any], years[0]["RawData"])
+    prior_raw = cast(dict[str, Any], years[1]["RawData"])
+    current_calc = cast(dict[str, Any], years[0]["CalculatedData"])
+    prior_calc = cast(dict[str, Any], years[1]["CalculatedData"])
+    assert current_raw["EPS"] == 50.0
+    assert current_raw["BPS"] == 500.0
+    assert prior_raw["EPS"] == 100.0
+    assert prior_raw["BPS"] == 800.0
+    assert "AdjustmentRatio" not in current_calc
+    assert "AdjustedEPS" not in prior_calc
+    assert "AdjustedBPS" not in prior_calc
 
 if __name__ == "__main__":
     try:

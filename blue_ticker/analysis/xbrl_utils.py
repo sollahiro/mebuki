@@ -11,6 +11,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
+from blue_ticker.utils.xbrl_result_types import XbrlFact, XbrlFactIndex, XbrlTagElements
+
 
 def parse_html_int_attribute(element: Any, attr: str, default: int = 1) -> int:
     """HTML要素の整数属性を安全に読む。BeautifulSoup の型定義は list/None も返し得る。"""
@@ -56,56 +58,243 @@ def parse_xbrl_value(text: str | None) -> float | None:
 
 
 _XSI_NIL = "{http://www.w3.org/2001/XMLSchema-instance}nil"
+_XML_LANG = "{http://www.w3.org/XML/1998/namespace}lang"
+_XLINK = "{http://www.w3.org/1999/xlink}"
+_ROLE_LABEL = "http://www.xbrl.org/2003/role/label"
 
 
-def collect_numeric_elements(
+def _local_name(tag: str) -> str:
+    return tag.split("}", 1)[1] if "}" in tag else tag
+
+
+def _xlink_attr(name: str) -> str:
+    return f"{_XLINK}{name}"
+
+
+def _concept_local_name(concept: str) -> str:
+    """linkbase の concept id / href fragment から XBRL 要素の local name を取り出す。"""
+    fragment = concept.rsplit("#", 1)[-1]
+    if ":" in fragment:
+        return fragment.rsplit(":", 1)[-1]
+    parts = fragment.split("_")
+    for part in parts:
+        if part and part[0].isupper():
+            return part
+    return fragment
+
+
+def _section_name_from_role(role: str) -> str:
+    section = role.rstrip("/").rsplit("/", 1)[-1]
+    return section[4:] if section.startswith("rol_") else section
+
+
+def _infer_consolidation(context_ref: str, roles: list[str]) -> str:
+    role_text = " ".join(_section_name_from_role(role) for role in roles)
+    if "_NonConsolidated" in context_ref or "ReportingCompany" in role_text:
+        return "non_consolidated"
+    if "Consolidated" in role_text:
+        return "consolidated"
+    return "unknown"
+
+
+def _linkbase_xml_files(xbrl_dir: Path, suffix: str) -> list[Path]:
+    return [
+        f for f in xbrl_dir.rglob(f"*{suffix}*.xml")
+        if suffix in f.name
+    ]
+
+
+def _load_labels_by_tag(xbrl_dir: Path) -> dict[str, str]:
+    """ラベルリンクベースから {local_tag: Japanese label} を作る。"""
+    labels_by_tag: dict[str, str] = {}
+    for xml_file in _linkbase_xml_files(xbrl_dir, "_lab"):
+        try:
+            root = ET.parse(xml_file).getroot()
+        except ET.ParseError:
+            continue
+
+        loc_by_label: dict[str, str] = {}
+        label_text_by_resource: dict[str, tuple[str, str]] = {}
+
+        for elem in root.iter():
+            local = _local_name(elem.tag)
+            if local == "loc":
+                locator_label = elem.attrib.get(_xlink_attr("label"))
+                href = elem.attrib.get(_xlink_attr("href"))
+                if locator_label and href:
+                    loc_by_label[locator_label] = _concept_local_name(href)
+            elif local == "label":
+                lang = elem.attrib.get(_XML_LANG)
+                if lang is not None and lang != "ja":
+                    continue
+                resource_label = elem.attrib.get(_xlink_attr("label"))
+                role = elem.attrib.get(_xlink_attr("role"), "")
+                text = "".join(elem.itertext()).strip()
+                if resource_label and text:
+                    label_text_by_resource[resource_label] = (role, text)
+
+        for elem in root.iter():
+            if _local_name(elem.tag) != "labelArc":
+                continue
+            from_label = elem.attrib.get(_xlink_attr("from"))
+            to_label = elem.attrib.get(_xlink_attr("to"))
+            if not from_label or not to_label:
+                continue
+            tag = loc_by_label.get(from_label)
+            label_pair = label_text_by_resource.get(to_label)
+            if tag is None or label_pair is None:
+                continue
+            role, text = label_pair
+            if role == _ROLE_LABEL or tag not in labels_by_tag:
+                labels_by_tag[tag] = text
+    return labels_by_tag
+
+
+def _load_roles_by_tag(xbrl_dir: Path) -> dict[str, list[str]]:
+    """プレゼンテーションリンクベースから {local_tag: roleURI list} を作る。"""
+    role_sets_by_tag: dict[str, set[str]] = {}
+    for xml_file in _linkbase_xml_files(xbrl_dir, "_pre"):
+        try:
+            root = ET.parse(xml_file).getroot()
+        except ET.ParseError:
+            continue
+        for link in root.iter():
+            if _local_name(link.tag) != "presentationLink":
+                continue
+            role = link.attrib.get(_xlink_attr("role"))
+            if not role:
+                continue
+            for elem in link.iter():
+                if _local_name(elem.tag) != "loc":
+                    continue
+                href = elem.attrib.get(_xlink_attr("href"))
+                if not href:
+                    continue
+                tag = _concept_local_name(href)
+                role_sets_by_tag.setdefault(tag, set()).add(role)
+    return {
+        tag: sorted(roles)
+        for tag, roles in role_sets_by_tag.items()
+    }
+
+
+def fact_index_to_numeric_elements(facts: XbrlFactIndex) -> XbrlTagElements:
+    """メタ付き fact index を既存抽出器互換の {tag: {contextRef: value}} に変換する。"""
+    return {
+        tag: {
+            context_ref: fact["value"]
+            for context_ref, fact in ctx_map.items()
+        }
+        for tag, ctx_map in facts.items()
+    }
+
+
+def collect_numeric_facts(
     xml_file: Path,
     allowed_tags: frozenset[str] | None = None,
     nil_as_zero: bool = False,
-) -> dict[str, dict[str, float]]:
-    """XMLファイルから {local_tag: {contextRef: value}} の辞書を返す。
-
-    allowed_tags を指定すると、そのセット外のタグをスキップして高速化できる。
-    nil_as_zero=True のとき xsi:nil="true" の要素を 0.0 として記録する。
-    """
-    results: dict[str, dict[str, float]] = {}
+    *,
+    labels_by_tag: dict[str, str] | None = None,
+    roles_by_tag: dict[str, list[str]] | None = None,
+) -> XbrlFactIndex:
+    """XMLファイルから {local_tag: {contextRef: XbrlFact}} の辞書を返す。"""
+    results: XbrlFactIndex = {}
+    labels_by_tag = labels_by_tag or {}
+    roles_by_tag = roles_by_tag or {}
     try:
         tree = ET.parse(xml_file)
         root = tree.getroot()
         for elem in root.iter():
-            tag = elem.tag
-            local_tag = tag.split("}")[1] if "}" in tag else tag
+            local_tag = _local_name(elem.tag)
             if allowed_tags is not None and local_tag not in allowed_tags:
                 continue
             ctx = elem.attrib.get("contextRef", "")
             value = parse_xbrl_value(elem.text)
             if value is None and nil_as_zero and elem.attrib.get(_XSI_NIL, "").lower() == "true":
                 value = 0.0
-            if value is not None and ctx:
-                if local_tag not in results:
-                    results[local_tag] = {}
-                results[local_tag][ctx] = value
+            if value is None or not ctx:
+                continue
+
+            roles = roles_by_tag.get(local_tag, [])
+            sections = [_section_name_from_role(role) for role in roles]
+            fact: XbrlFact = {
+                "tag": local_tag,
+                "contextRef": ctx,
+                "value": value,
+                "consolidation": _infer_consolidation(ctx, roles),
+                "source_file": xml_file.name,
+            }
+            unit_ref = elem.attrib.get("unitRef")
+            decimals = elem.attrib.get("decimals")
+            label = labels_by_tag.get(local_tag)
+            if unit_ref is not None:
+                fact["unitRef"] = unit_ref
+            if decimals is not None:
+                fact["decimals"] = decimals
+            if roles:
+                fact["role"] = roles[0]
+                fact["roles"] = roles
+            if sections:
+                fact["section"] = sections[0]
+                fact["sections"] = sections
+            if label is not None:
+                fact["label"] = label
+
+            if local_tag not in results:
+                results[local_tag] = {}
+            results[local_tag][ctx] = fact
     except ET.ParseError:
         pass
     return results
 
 
+def collect_numeric_elements(
+    xml_file: Path,
+    allowed_tags: frozenset[str] | None = None,
+    nil_as_zero: bool = False,
+) -> XbrlTagElements:
+    """XMLファイルから {local_tag: {contextRef: value}} の辞書を返す。
+
+    allowed_tags を指定すると、そのセット外のタグをスキップして高速化できる。
+    nil_as_zero=True のとき xsi:nil="true" の要素を 0.0 として記録する。
+    """
+    return fact_index_to_numeric_elements(
+        collect_numeric_facts(xml_file, allowed_tags, nil_as_zero)
+    )
+
+
+def collect_all_numeric_facts(
+    xbrl_dir: Path,
+    nil_as_zero: bool = True,
+) -> XbrlFactIndex:
+    """XBRLディレクトリ内の全数値 fact をメタ情報付きで返す。"""
+    all_facts: XbrlFactIndex = {}
+    labels_by_tag = _load_labels_by_tag(xbrl_dir)
+    roles_by_tag = _load_roles_by_tag(xbrl_dir)
+    for f in find_xbrl_files(xbrl_dir):
+        for tag, ctx_map in collect_numeric_facts(
+            f,
+            allowed_tags=None,
+            nil_as_zero=nil_as_zero,
+            labels_by_tag=labels_by_tag,
+            roles_by_tag=roles_by_tag,
+        ).items():
+            if tag not in all_facts:
+                all_facts[tag] = {}
+            all_facts[tag].update(ctx_map)
+    return all_facts
+
+
 def collect_all_numeric_elements(
     xbrl_dir: Path,
     nil_as_zero: bool = True,
-) -> dict[str, dict[str, float]]:
+) -> XbrlTagElements:
     """XBRLディレクトリ内の全ファイルを一括パースし、全タグの数値要素を返す。
 
     nil_as_zero=True（デフォルト）は有利子負債の nil 明示ゼロ検出に必要なため、
     一括パースではデフォルトで有効にする。
     """
-    all_elements: dict[str, dict[str, float]] = {}
-    for f in find_xbrl_files(xbrl_dir):
-        for tag, ctx_map in collect_numeric_elements(f, allowed_tags=None, nil_as_zero=nil_as_zero).items():
-            if tag not in all_elements:
-                all_elements[tag] = {}
-            all_elements[tag].update(ctx_map)
-    return all_elements
+    return fact_index_to_numeric_elements(collect_all_numeric_facts(xbrl_dir, nil_as_zero))
 
 
 def find_xbrl_files(xbrl_dir: Path) -> list[Path]:

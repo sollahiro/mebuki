@@ -263,8 +263,6 @@ async def cmd_analyze(args):
             # ── 従業員数 ──
             ("従業員数 (人)",           lambda c: c.get("Employees"),   "int"),
             ("DocID",                  lambda c: c.get("DocID")),
-            ("調整後EPS (円)",          lambda c: c.get("AdjustedEPS")),
-            ("調整後BPS (円)",          lambda c: c.get("AdjustedBPS")),
         ]
 
         for metric_def in metrics_to_show:

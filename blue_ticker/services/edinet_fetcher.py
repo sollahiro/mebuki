@@ -72,7 +72,7 @@ def _infer_fy_end_from_period_start(period_start: str) -> str:
         return ""
 
 
-_XBRL_PARSE_CACHE_VERSION = f"{__version__}:xbrl-parse"
+_XBRL_PARSE_CACHE_VERSION = f"{__version__}:xbrl-facts-v1"
 
 _PreParsedMap: TypeAlias = dict[str, tuple[Path, XbrlTagElements]]
 
@@ -197,15 +197,44 @@ def _docs_from_xbrl_records(records: list[dict[str, Any]]) -> list[dict[str, Any
 
 
 def _is_valid_xbrl_parse_cache(data: object) -> bool:
-    """dict[str, dict[str, float]] 相当の shape を簡易検証する。"""
+    """dict[str, dict[str, XbrlFact]] 相当の shape を簡易検証する。"""
     if not isinstance(data, dict):
         return False
     for value in data.values():
         if not isinstance(value, dict):
             return False
-        if not all(isinstance(number, (int, float)) and not isinstance(number, bool) for number in value.values()):
-            return False
+        for fact in value.values():
+            if not isinstance(fact, dict):
+                return False
+            if not isinstance(fact.get("tag"), str):
+                return False
+            if not isinstance(fact.get("contextRef"), str):
+                return False
+            fact_value = fact.get("value")
+            if not isinstance(fact_value, (int, float)) or isinstance(fact_value, bool):
+                return False
+            if not isinstance(fact.get("consolidation"), str):
+                return False
     return True
+
+
+def _numeric_elements_from_xbrl_parse_cache(data: object) -> XbrlTagElements | None:
+    """メタ付き fact キャッシュを既存抽出器向けの数値索引へ変換する。"""
+    if not _is_valid_xbrl_parse_cache(data) or not isinstance(data, dict):
+        return None
+    numeric: XbrlTagElements = {}
+    for tag, ctx_map in data.items():
+        if not isinstance(tag, str) or not isinstance(ctx_map, dict):
+            return None
+        numeric[tag] = {}
+        for context_ref, fact in ctx_map.items():
+            if not isinstance(context_ref, str) or not isinstance(fact, dict):
+                return None
+            value = fact.get("value")
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                return None
+            numeric[tag][context_ref] = float(value)
+    return numeric
 
 
 @dataclass(frozen=True)
@@ -483,7 +512,10 @@ class EdinetFetcher:
         code: str,
     ) -> _PreParsedMap:
         """XBRL文書を一括ダウンロード・パースする。"""
-        from blue_ticker.analysis.xbrl_utils import collect_all_numeric_elements
+        from blue_ticker.analysis.xbrl_utils import (
+            collect_all_numeric_facts,
+            fact_index_to_numeric_elements,
+        )
 
         if self.edinet_client is None:
             return {}
@@ -505,17 +537,23 @@ class EdinetFetcher:
                 xbrl_path = Path(xbrl_dir)
                 if self.cache_manager is not None:
                     cached = self.cache_manager.get(parse_cache_key)
+                    cached_numeric = (
+                        _numeric_elements_from_xbrl_parse_cache(cached.get("data"))
+                        if isinstance(cached, dict)
+                        else None
+                    )
                     if (
                         isinstance(cached, dict)
                         and cached.get("_cache_version") == _XBRL_PARSE_CACHE_VERSION
-                        and _is_valid_xbrl_parse_cache(cached.get("data"))
+                        and cached_numeric is not None
                     ):
-                        return fy_end_8, (xbrl_path, cached["data"])
-                pre_parsed = collect_all_numeric_elements(xbrl_path)
+                        return fy_end_8, (xbrl_path, cached_numeric)
+                pre_parsed_facts = collect_all_numeric_facts(xbrl_path)
+                pre_parsed = fact_index_to_numeric_elements(pre_parsed_facts)
                 if self.cache_manager is not None:
                     self.cache_manager.set(parse_cache_key, {
                         "_cache_version": _XBRL_PARSE_CACHE_VERSION,
-                        "data": pre_parsed,
+                        "data": pre_parsed_facts,
                     })
                 return fy_end_8, (xbrl_path, pre_parsed)
             except asyncio.TimeoutError:

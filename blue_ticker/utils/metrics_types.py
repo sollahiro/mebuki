@@ -62,10 +62,6 @@ class CalculatedData(TypedDict, total=False):
     # ── calculator.py: _calculate_profitability_metrics ──
     ROE: float | None
     CFCVR: float | None
-    # ── calculator.py: 株式分割調整 ──
-    AdjustmentRatio: float | None
-    AdjustedEPS: float | None
-    AdjustedBPS: float | None
     # ── analyzer.py: _apply_gross_profit ──
     GrossProfit: float | None
     GrossProfitMargin: float | None

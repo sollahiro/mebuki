@@ -5,6 +5,28 @@ XBRL 抽出結果の TypedDict 定義
 from typing import NotRequired, TypedDict
 
 XbrlTagElements = dict[str, dict[str, float]]
+XbrlFactIndex = dict[str, dict[str, "XbrlFact"]]
+
+
+class XbrlFact(TypedDict):
+    """XBRL fact value with source metadata.
+
+    value は数値抽出器互換の float。unitRef / decimals / role / label は
+    開示上存在しない場合があるため NotRequired にする。
+    """
+
+    tag: str
+    contextRef: str
+    value: float
+    consolidation: str
+    unitRef: NotRequired[str]
+    decimals: NotRequired[str]
+    role: NotRequired[str]
+    section: NotRequired[str]
+    roles: NotRequired[list[str]]
+    sections: NotRequired[list[str]]
+    label: NotRequired[str]
+    source_file: NotRequired[str]
 
 
 class MetricComponent(TypedDict):

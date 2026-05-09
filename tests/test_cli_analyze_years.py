@@ -101,8 +101,6 @@ def test_cmd_analyze_table_shows_net_profit_and_cash_equivalents(capsys):
                         "OP": 5_352_934.0,
                         "NP": 4_944_933.0,
                         "CashEq": 9_412_060.0,
-                        "AdjustedEPS": 160.25,
-                        "AdjustedBPS": 1_050.75,
                     },
                 },
             ]
@@ -125,8 +123,6 @@ def test_cmd_analyze_table_shows_net_profit_and_cash_equivalents(capsys):
     assert "現金及び現金同等物 (百万)" in captured.err
     assert "EPS (円)" in captured.err
     assert "BPS (円)" in captured.err
-    assert "調整後EPS (円)" in captured.err
-    assert "調整後BPS (円)" in captured.err
     assert "期末発行済株式数 (株)" in captured.err
     assert "年間配当総額 (百万)" in captured.err
     assert "年間配当 (円)" in captured.err
@@ -135,8 +131,6 @@ def test_cmd_analyze_table_shows_net_profit_and_cash_equivalents(capsys):
     assert "9412060.00" in captured.err
     assert "320.50" in captured.err
     assert "2100.25" in captured.err
-    assert "160.25" in captured.err
-    assert "1050.75" in captured.err
     assert "1,234,567" in captured.err
     assert "12000.00" in captured.err
 
