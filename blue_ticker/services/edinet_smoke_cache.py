@@ -61,6 +61,8 @@ DEFAULT_SMOKE_COMPANIES: tuple[SmokeCompany, ...] = (
     SmokeCompany("6326", "クボタ", "IFRS"),
     SmokeCompany("2802", "味の素", "IFRS"),
     SmokeCompany("7269", "スズキ", "IFRS/J-GAAP boundary"),
+    SmokeCompany("7422", "東邦レマック", "J-GAAP nonconsolidated"),
+    SmokeCompany("3490", "アズ企画設計", "J-GAAP nonconsolidated/consolidated boundary"),
 )
 
 

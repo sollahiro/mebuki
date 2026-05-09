@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 
 from blue_ticker.analysis.balance_sheet import extract_balance_sheet
+from blue_ticker.analysis.context_helpers import has_nonconsolidated_contexts
 from blue_ticker.analysis.gross_profit import extract_gross_profit
 from blue_ticker.analysis.income_statement import extract_income_statement
 from blue_ticker.analysis.interest_bearing_debt import extract_interest_bearing_debt
@@ -18,6 +19,7 @@ from blue_ticker.utils.fiscal_year import normalize_date_format
 
 _DEFAULT_SMOKE_CACHE_DIR = Path("tmp_cache") / "edinet"
 _ExpectedStandards = frozenset[str] | Callable[[str], frozenset[str]]
+_ExpectedConsolidated = bool | Callable[[str], bool] | None
 
 
 @dataclass(frozen=True)
@@ -26,6 +28,7 @@ class SmokeCompany:
     name: str
     category: str
     expected_standards: _ExpectedStandards
+    expected_has_consolidated_contexts: _ExpectedConsolidated = None
 
 
 def _suzuki_expected_standards(fy_end: str) -> frozenset[str]:
@@ -40,6 +43,11 @@ def _canon_expected_standards(fy_end: str) -> frozenset[str]:
     if normalized <= "2026-12-31":
         return frozenset({"US-GAAP"})
     return frozenset({"IFRS"})
+
+
+def _azplanning_expected_has_consolidated_contexts(fy_end: str) -> bool:
+    normalized = normalize_date_format(fy_end) or fy_end
+    return normalized >= "2024-02-29"
 
 
 # 実企業スモークの対象。会計基準変更やテスト対象の見直しはこの表だけを更新する。
@@ -92,6 +100,20 @@ SMOKE_COMPANIES: tuple[SmokeCompany, ...] = (
         _SMOKE_COMPANY_BY_CODE["7269"].name,
         _SMOKE_COMPANY_BY_CODE["7269"].category,
         _suzuki_expected_standards,
+    ),
+    SmokeCompany(
+        _SMOKE_COMPANY_BY_CODE["7422"].code,
+        _SMOKE_COMPANY_BY_CODE["7422"].name,
+        _SMOKE_COMPANY_BY_CODE["7422"].category,
+        frozenset({"J-GAAP"}),
+        False,
+    ),
+    SmokeCompany(
+        _SMOKE_COMPANY_BY_CODE["3490"].code,
+        _SMOKE_COMPANY_BY_CODE["3490"].name,
+        _SMOKE_COMPANY_BY_CODE["3490"].category,
+        frozenset({"J-GAAP"}),
+        _azplanning_expected_has_consolidated_contexts,
     ),
 )
 
@@ -166,6 +188,13 @@ def _expected_standards(company: SmokeCompany, fy_end: str) -> frozenset[str]:
     return company.expected_standards
 
 
+def _expected_has_consolidated_contexts(company: SmokeCompany, fy_end: str) -> bool | None:
+    expected = company.expected_has_consolidated_contexts
+    if callable(expected):
+        return expected(fy_end)
+    return expected
+
+
 @pytest.mark.parametrize("company", SMOKE_COMPANIES, ids=lambda company: f"{company.code}-{company.name}")
 def test_edinet_only_smoke_from_cached_search_and_xbrl(company: SmokeCompany) -> None:
     """日次検索キャッシュから書類を選び、展開済みXBRLをparseするEDINET-onlyスモーク。
@@ -193,6 +222,10 @@ def test_edinet_only_smoke_from_cached_search_and_xbrl(company: SmokeCompany) ->
 
     xbrl_dir, pre_parsed = pre_parsed_map[fy_key]
     assert pre_parsed
+
+    expected_consolidated_contexts = _expected_has_consolidated_contexts(company, str(doc["edinet_fy_end"]))
+    if expected_consolidated_contexts is not None:
+        assert has_nonconsolidated_contexts(pre_parsed) is expected_consolidated_contexts
 
     income = extract_income_statement(xbrl_dir, pre_parsed=pre_parsed)
     assert income["accounting_standard"] in _expected_standards(company, str(doc["edinet_fy_end"]))

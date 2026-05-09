@@ -311,7 +311,30 @@ def _find_nearest(target_col):
 
 ## 6. 実装ガイドライン
 
-### 新規モジュールを追加する場合
+### 6.1 EDINET-onlyスモークの対象企業
+
+EDINET-onlyスモークは、実企業の `search_*.json` と展開済み `{docID}_xbrl/` だけを使い、ネットワークや通常の分析結果キャッシュに依存せずに XBRL parse と主要抽出器を検証します。
+
+対象企業の正本は `blue_ticker/services/edinet_smoke_cache.py` の `DEFAULT_SMOKE_COMPANIES` です。実テスト側では `tests/test_edinet_only_cached_smoke.py` が同じ一覧を参照し、会計基準の期待値だけを付与します。会計基準変更やテスト対象の見直しは、原則としてこの企業一覧と期待値表をあわせて更新してください。
+
+| コード | 企業 | 区分 | 調べること |
+|---|---|---|---|
+| `4901` | 富士フイルム | `US-GAAP` | US-GAAP企業の制約確認。連結財務諸表側に通常の `ix:nonFraction` がなく、売上総利益・有利子負債を HTML パースで補う経路を検証する。 |
+| `7751` | キヤノン | `US-GAAP/IFRS boundary` | US-GAAP から IFRS への会計基準移行境界を確認する。テストでは期末が `2026-12-31` 以前なら US-GAAP、それ以降なら IFRS を期待する。 |
+| `8306` | 三菱UFJ | `J-GAAP financial` | J-GAAP金融会社の確認。銀行系は通常事業会社と財務諸表構造が異なるため、PL/BS抽出と会計基準判定を通しつつ、売上総利益・有利子負債の未検出を許容する。 |
+| `8316` | 三井住友 | `J-GAAP financial` | J-GAAP金融会社の確認。銀行系の実企業データで、PL/BS抽出と会計基準判定が崩れないことを見る。 |
+| `6103` | オークマ | `J-GAAP operating` | 通常のJ-GAAP事業会社を確認する。標準的な営業会社で、PL/BS/売上総利益/有利子負債抽出が通ることを見る。 |
+| `6326` | クボタ | `IFRS` | IFRS事業会社の確認。IFRSタグ体系でPL/BS/売上総利益/有利子負債抽出が通ることを見る。 |
+| `2802` | 味の素 | `IFRS` | IFRS事業会社の確認。`GrossProfitIFRS` の直接取得と、IFRS有利子負債でリース債務など一部タグ粒度が不足するケースを意識して検証する。 |
+| `7269` | スズキ | `IFRS/J-GAAP boundary` | J-GAAP から IFRS への会計基準移行境界を確認する。テストでは期末が `2024-03-31` 以前なら J-GAAP、それ以降なら IFRS を期待する。 |
+| `7422` | 東邦レマック | `J-GAAP nonconsolidated` | 連結財務諸表がないJ-GAAP企業の確認。`has_nonconsolidated_contexts` が False になり、単体のみ企業として個別財務諸表へフォールバックできることを見る。 |
+| `3490` | アズ企画設計 | `J-GAAP nonconsolidated/consolidated boundary` | 連結財務諸表の作成開始境界を確認する。2024年2月期から連結作成のため、期末が `2024-02-29` 以降なら `has_nonconsolidated_contexts` が True になることを見る。 |
+
+スモークで必ず確認する抽出器は、損益計算書、貸借対照表、売上総利益、有利子負債です。損益計算書と貸借対照表は少なくとも主要値のいずれかが取れることを確認し、売上総利益と有利子負債は金融会社だけ `not_found` を許容します。連結/個別判定の実データ回帰対象では、抽出器を呼ぶ前に `has_nonconsolidated_contexts(pre_parsed)` の期待値も検証します。
+
+---
+
+### 6.2 新規モジュールを追加する場合
 
 1. `xbrl_utils` の共通関数（`find_xbrl_files`, `collect_numeric_elements`）を使う
 2. コンテキスト判定・会計基準判定はモジュール内に定義する（`xbrl_utils` には置かない）
@@ -326,7 +349,7 @@ except ImportError:
     _BS4_AVAILABLE = False
 ```
 
-### 連結・個別のフォールバック
+### 6.3 連結・個別のフォールバック
 
 連結値が取得できなかった場合のみ個別値にフォールバックします。両者を混在させないため、「連結値が1件でも存在したら連結のみ使用する」という判定を行ってください。
 
@@ -337,7 +360,7 @@ if not has_consolidated:
     ...
 ```
 
-### 抽出結果の共通フォーマット
+### 6.4 抽出結果の共通フォーマット
 
 各モジュールの主要関数は以下の形式で返します。
 
