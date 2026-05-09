@@ -40,7 +40,7 @@ def test_main_cache_status_reports_missing_prepare_cache(monkeypatch, capsys, tm
 def test_main_cache_status_reports_ready_prepare_cache(monkeypatch, capsys, tmp_path) -> None:
     store = EdinetCacheStore(edinet_cache_dir(tmp_path))
     current_year = datetime.now().year
-    for offset in range(3):
+    for offset in range(5):
         year = current_year - offset
         store.save_document_index(year, [{"docID": f"S100{year}"}], built_through=f"{year}-12-31")
 
@@ -52,7 +52,7 @@ def test_main_cache_status_reports_ready_prepare_cache(monkeypatch, capsys, tmp_
     captured = capsys.readouterr()
     data = json.loads(captured.out)
     assert data["edinet_index_status"] == "ready"
-    assert data["edinet_index_prepared_years"] == 3
+    assert data["edinet_index_prepared_years"] == 5
 
 
 def test_main_search_outputs_json(monkeypatch, capsys) -> None:
