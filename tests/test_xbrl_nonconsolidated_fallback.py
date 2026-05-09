@@ -8,6 +8,7 @@
   → 連結タグが見つからなくても単体へフォールバックしない（None を返す）
 """
 
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -84,11 +85,18 @@ def test_balance_sheet_single_entity_uses_plain_context() -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _consolidated_company_base() -> dict:
-    """_NonConsolidatedMember コンテキストを持つ最小限の pre_parsed ベース。"""
+    """連結グループあり企業の最小限 pre_parsed ベース。
+
+    実際の連結有報では同一財務タグに「純粋な連結コンテキスト」と
+    「_NonConsolidatedMember コンテキスト」の両方が存在する。
+    ここでは ProfitLossAttributableToOwnersOfParent を使う。
+    income_statement / balance_sheet / cash_flow のどのテストとも干渉しない
+    （income_statement が net_profit を見つけるが、各テストは sales / cfo / assets を検証）。
+    """
     return {
-        # このタグの存在が「連結グループあり」を示すシグナル
-        "NetSales": {
-            "CurrentYearDuration_NonConsolidatedMember": 1_000_000.0,
+        "ProfitLossAttributableToOwnersOfParent": {
+            "CurrentYearDuration": 800_000_000.0,                       # 連結純利益（シグナル）
+            "CurrentYearDuration_NonConsolidatedMember": 600_000_000.0, # 個別純利益
         },
     }
 
@@ -125,7 +133,9 @@ def test_balance_sheet_consolidated_company_blocks_nonconsolidated_fallback() ->
     pre_parsed["TotalAssets"] = {
         "CurrentYearInstant_NonConsolidatedMember": 6_705_070_000.0,
     }
-    result = extract_balance_sheet(Path("."), pre_parsed=pre_parsed)
+    # 空ディレクトリを渡すことで HTML フォールバックが実ファイルを走査しないようにする
+    with tempfile.TemporaryDirectory() as tmp:
+        result = extract_balance_sheet(Path(tmp), pre_parsed=pre_parsed)
 
     assert result["net_assets"] is None
     assert result["total_assets"] is None

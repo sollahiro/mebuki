@@ -317,8 +317,9 @@ OPERATING_REVENUE_TAGS: list[str] = [
 # 売上総利益合計タグ（直接法）
 # EDINET XBRL では IFRS連結は "IFRS" サフィックス付き、J-GAAP連結はサフィックスなし
 GROSS_PROFIT_DIRECT_TAGS: list[str] = [
-    "GrossProfitIFRS",  # IFRS連結（例: 味の素, 日立）
-    "GrossProfit",      # J-GAAP連結（例: ニチレイ）
+    "GrossProfitIFRS",                          # IFRS連結（例: 味の素, 日立）
+    "GrossProfit",                              # J-GAAP連結（例: ニチレイ）
+    "GrossProfitOnCompletedConstructionContractsCNS",  # 建設業: 完成工事総利益
 ]
 
 OPERATING_GROSS_PROFIT_DIRECT_TAGS: list[str] = [
@@ -337,6 +338,7 @@ GROSS_PROFIT_COMPONENT_DEFINITIONS: list[_ComponentDef] = [
             "Revenue",          # IFRS代替
             "Revenues",         # US-GAAP
             "RevenuesUSGAAPSummaryOfBusinessResults",  # US-GAAP 要約情報
+            "NetSalesOfCompletedConstructionContractsCNS",  # 建設業: 完成工事高
             *OPERATING_REVENUE_TAGS,
         ],
     },
@@ -346,7 +348,8 @@ GROSS_PROFIT_COMPONENT_DEFINITIONS: list[_ComponentDef] = [
             "CostOfSalesIFRS",  # IFRS連結
             "CostOfSales",      # J-GAAP連結
             "CostOfRevenue",    # US-GAAP
-            "OperatingCost",     # J-GAAP 営業原価
+            "OperatingCost",    # J-GAAP 営業原価
+            "CostOfSalesOfCompletedConstructionContractsCNS",  # 建設業: 完成工事原価
         ],
     },
 ]
@@ -539,6 +542,8 @@ NET_SALES_TAGS: list[str] = [
     "RevenuesUSGAAPSummaryOfBusinessResults",   # US-GAAP 要約情報
     "NetSales",                                 # J-GAAP連結
     "NetSalesSummaryOfBusinessResults",         # J-GAAP 要約情報（決算短信）
+    "NetSalesOfCompletedConstructionContractsCNS",                           # 建設業: 完成工事高
+    "NetSalesOfCompletedConstructionContractsSummaryOfBusinessResults",      # 建設業: 完成工事高（決算短信）
     *OPERATING_REVENUE_TAGS,
 ]
 

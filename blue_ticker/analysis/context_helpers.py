@@ -68,16 +68,22 @@ def _is_nonconsolidated_prior_instant(ctx: str) -> bool:
 
 
 def has_nonconsolidated_contexts(tag_elements: XbrlTagElements) -> bool:
-    """tag_elements に単体コンテキスト (_NonConsolidated) が存在するかを返す。
+    """連結財務諸表あり（＋個別財務諸表も添付）の書類かどうかを返す。
 
     True の場合、この書類は連結グループを持つため、単体フォールバックを抑止すべき。
     False の場合、単体のみ企業であり、単体フォールバックを使ってよい。
 
-    既存の _is_consolidated_duration / _is_nonconsolidated_duration 等と同様に
-    "_NonConsolidated" で判定し、Member サフィックスの有無に依存しない。
+    判定条件: 同一タグに「純粋な連結コンテキスト（DURATION/INSTANT パターン完全一致）」と
+    「_NonConsolidated コンテキスト」の両方が存在する場合のみ True。
+
+    これにより、連結財務諸表なし・単体のみ申告で _NonConsolidatedMember コンテキストを
+    使う企業（EDINET XBRL の一部）を誤って「連結グループあり」と判定しなくなる。
     """
-    return any(
-        "_NonConsolidated" in ctx
-        for ctx_map in tag_elements.values()
-        for ctx in ctx_map
+    _pure_consolidated: frozenset[str] = (
+        frozenset(DURATION_CONTEXT_PATTERNS) | frozenset(INSTANT_CONTEXT_PATTERNS)
     )
+    for ctx_map in tag_elements.values():
+        ctxs = set(ctx_map.keys())
+        if any("_NonConsolidated" in c for c in ctxs) and any(c in _pure_consolidated for c in ctxs):
+            return True
+    return False

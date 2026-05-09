@@ -86,6 +86,11 @@ def _sales_label_for_tag(tag: str | None) -> str:
         return "営業収益"
     if tag in ("NetSalesIFRS", "RevenueIFRS", "Revenue"):
         return "売上収益"
+    if tag in (
+        "NetSalesOfCompletedConstructionContractsCNS",
+        "NetSalesOfCompletedConstructionContractsSummaryOfBusinessResults",
+    ):
+        return "完成工事高"
     return "売上高"
 
 
