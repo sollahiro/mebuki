@@ -31,6 +31,26 @@ _BPS_TAGS: list[str] = [
     "NetAssetsPerShareSummaryOfBusinessResults",
 ]
 
+_PARENT_EQUITY_TAGS: list[str] = [
+    "EquityAttributableToOwnersOfParentIFRS",
+    "EquityAttributableToOwnersOfParentIFRSSummaryOfBusinessResults",
+    "EquityAttributableToOwnersOfParentUSGAAP",
+    "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
+]
+
+_AVERAGE_SHARES_TAGS: list[str] = [
+    "AverageNumberOfSharesDuringPeriodBasicEarningsLossPerShareInformation",
+    "AverageNumberOfSharesDuringTheFiscalYearBasicEarningsLossPerShareInformation",
+    "AverageNumberOfShares",
+    "WeightedAverageNumberOfSharesOutstandingBasic",
+    "WeightedAverageNumberOfOrdinarySharesOutstandingBasicIFRS",
+]
+
+_TREASURY_SHARES_TAGS: list[str] = [
+    "TotalNumberOfSharesHeldTreasurySharesEtc",
+    "NumberOfSharesHeldInOwnNameTreasurySharesEtc",
+]
+
 _RATIO_LIKE_BPS_TAGS: frozenset[str] = frozenset(
     {
         "EquityToAssetRatioIFRSSummaryOfBusinessResults",
@@ -64,6 +84,9 @@ _RELEVANT_TAGS: frozenset[str] = frozenset(
     _CASH_EQ_TAGS
     + _EPS_TAGS
     + _BPS_TAGS
+    + _PARENT_EQUITY_TAGS
+    + _AVERAGE_SHARES_TAGS
+    + _TREASURY_SHARES_TAGS
     + _ISSUED_SHARES_TAGS
     + _DIVIDEND_PER_SHARE_TAGS
     + _INTERIM_DIVIDEND_PER_SHARE_TAGS
@@ -221,6 +244,30 @@ def _sum_filing_rows(tag_elements: XbrlTagElements, tags: list[str]) -> float | 
     return None
 
 
+def _sum_current_rows_or_current(tag_elements: XbrlTagElements, tags: list[str]) -> float | None:
+    for tag in tags:
+        ctx_map = tag_elements.get(tag)
+        if not ctx_map:
+            continue
+        row_values = [
+            abs(value)
+            for ctx, value in ctx_map.items()
+            if ctx.startswith("CurrentYearInstant_Row")
+        ]
+        if row_values:
+            return sum(row_values)
+        current = _first_reporting_company_current_value(tag_elements, [tag])
+        if current is not None:
+            return abs(current)
+    return None
+
+
+def _calculated_per_share(numerator: float | None, denominator: float | None) -> float | None:
+    if numerator is None or denominator is None or denominator <= 0:
+        return None
+    return numerator / denominator
+
+
 def extract_shareholder_metrics(
     xbrl_dir: Path,
     *,
@@ -252,14 +299,46 @@ def extract_shareholder_metrics(
     payout_ratio = _first_reporting_company_current_value(tag_elements, _PAYOUT_RATIO_TAGS)
     if payout_ratio is None:
         payout_ratio = round(div_ann / eps, 3) if div_ann is not None and eps else None
+    bps = _first_bps_value(tag_elements)
+    average_shares = _first_reporting_company_current_value(
+        tag_elements,
+        _AVERAGE_SHARES_TAGS,
+    )
+    issued_shares = _first_reporting_company_current_value(
+        tag_elements,
+        _ISSUED_SHARES_TAGS,
+    )
+    treasury_shares = _sum_current_rows_or_current(tag_elements, _TREASURY_SHARES_TAGS)
+    shares_for_bps = (
+        issued_shares - treasury_shares
+        if issued_shares is not None and treasury_shares is not None
+        else None
+    )
+    if shares_for_bps is not None and shares_for_bps <= 0:
+        shares_for_bps = None
+    parent_equity = _first_consolidated_then_any_current_value(
+        tag_elements,
+        _PARENT_EQUITY_TAGS,
+    )
+    calculated_eps = _calculated_per_share(net_profit, average_shares)
+    calculated_bps = _calculated_per_share(parent_equity, shares_for_bps)
 
     return {
         "CashEq": _first_consolidated_then_any_current_value(tag_elements, _CASH_EQ_TAGS),
         "EPS": eps,
-        "BPS": _first_bps_value(tag_elements),
-        "ShOutFY": _first_reporting_company_current_value(
-            tag_elements,
-            _ISSUED_SHARES_TAGS,
+        "BPS": bps,
+        "ShOutFY": issued_shares,
+        "AverageShares": average_shares,
+        "TreasuryShares": treasury_shares,
+        "SharesForBPS": shares_for_bps,
+        "ParentEquity": parent_equity,
+        "CalculatedEPS": calculated_eps,
+        "CalculatedBPS": calculated_bps,
+        "EPSDirectDiff": (
+            eps - calculated_eps if eps is not None and calculated_eps is not None else None
+        ),
+        "BPSDirectDiff": (
+            bps - calculated_bps if bps is not None and calculated_bps is not None else None
         ),
         "DivAnn": div_ann,
         "Div2Q": _first_reporting_company_current_value(

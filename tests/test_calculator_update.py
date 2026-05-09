@@ -92,6 +92,44 @@ def test_eps_bps_remain_raw_values_without_share_adjustment():
     assert "AdjustedEPS" not in prior_calc
     assert "AdjustedBPS" not in prior_calc
 
+
+def test_calculated_eps_bps_are_exposed_as_verification_values():
+    metrics = calculate_metrics_flexible(
+        [
+            {
+                "CurFYEn": "2024-03-31",
+                "CurPerType": "FY",
+                "Sales": 1_000_000_000,
+                "EPS": 18.25,
+                "BPS": 98.0,
+                "AverageShares": 100.0,
+                "TreasuryShares": 10.0,
+                "SharesForBPS": 100.0,
+                "ParentEquity": 10_000.0,
+                "CalculatedEPS": 20.0,
+                "CalculatedBPS": 100.0,
+                "EPSDirectDiff": -1.75,
+                "BPSDirectDiff": -2.0,
+                "_xbrl_source": True,
+            },
+        ],
+        analysis_years=1,
+    )
+
+    years = metrics.get("years")
+    assert years is not None
+    current_raw = cast(dict[str, Any], years[0]["RawData"])
+    current_calc = cast(dict[str, Any], years[0]["CalculatedData"])
+
+    assert current_raw["EPS"] == 18.25
+    assert current_raw["BPS"] == 98.0
+    assert current_calc["CalculatedEPS"] == 20.0
+    assert current_calc["CalculatedBPS"] == 100.0
+    assert current_calc["EPSDirectDiff"] == -1.75
+    assert current_calc["BPSDirectDiff"] == -2.0
+    assert current_calc["MetricSources"]["EPS"]["method"] == "direct"
+    assert current_calc["MetricSources"]["CalculatedEPS"]["method"] == "NP / AverageShares"
+
 if __name__ == "__main__":
     try:
         test_annual_financial_period()

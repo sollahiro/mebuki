@@ -189,6 +189,48 @@ def fact_index_to_numeric_elements(facts: XbrlFactIndex) -> XbrlTagElements:
     }
 
 
+def _fact_sections(fact: XbrlFact) -> set[str]:
+    sections: set[str] = set()
+    section = fact.get("section")
+    if isinstance(section, str):
+        sections.add(section)
+    for value in fact.get("sections", []):
+        if isinstance(value, str):
+            sections.add(value)
+    return sections
+
+
+def filter_fact_index_by_sections(
+    facts: XbrlFactIndex,
+    preferred_sections: tuple[str, ...],
+    fallback_sections: tuple[str, ...] = (),
+) -> XbrlFactIndex:
+    """statement/role section を優先して fact index を絞り込む。
+
+    preferred_sections に一致する fact があればそれを返し、なければ
+    fallback_sections を試す。どちらも空の場合は空 dict を返す。
+    """
+
+    def _filter(sections: tuple[str, ...]) -> XbrlFactIndex:
+        section_set = set(sections)
+        result: XbrlFactIndex = {}
+        for tag, ctx_map in facts.items():
+            for context_ref, fact in ctx_map.items():
+                if not (_fact_sections(fact) & section_set):
+                    continue
+                if tag not in result:
+                    result[tag] = {}
+                result[tag][context_ref] = fact
+        return result
+
+    preferred = _filter(preferred_sections)
+    if preferred:
+        return preferred
+    if fallback_sections:
+        return _filter(fallback_sections)
+    return {}
+
+
 def collect_numeric_facts(
     xml_file: Path,
     allowed_tags: frozenset[str] | None = None,

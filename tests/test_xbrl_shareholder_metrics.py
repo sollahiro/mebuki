@@ -149,3 +149,57 @@ def test_extract_shareholder_metrics_derives_payout_ratio_when_direct_tag_missin
     )
 
     assert result["PayoutRatioAnn"] == 0.306
+
+
+def test_extract_shareholder_metrics_calculates_eps_bps_for_verification() -> None:
+    result = extract_shareholder_metrics(
+        Path("."),
+        pre_parsed={
+            "BasicEarningsLossPerShareIFRS": {
+                "CurrentYearDuration": 18.25,
+            },
+            "EquityAttributableToOwnersOfParentPerShareIFRSSummaryOfBusinessResults": {
+                "CurrentYearInstant": 98.0,
+            },
+            "AverageNumberOfSharesDuringPeriodBasicEarningsLossPerShareInformation": {
+                "CurrentYearDuration": 100.0,
+            },
+            "EquityAttributableToOwnersOfParentIFRS": {
+                "CurrentYearInstant": 10_000.0,
+            },
+            "NumberOfIssuedSharesAsOfFiscalYearEndIssuedSharesTotalNumberOfSharesEtc": {
+                "FilingDateInstant": 110.0,
+            },
+            "TotalNumberOfSharesHeldTreasurySharesEtc": {
+                "CurrentYearInstant_Row1Member": 10.0,
+            },
+        },
+        net_profit=2_000.0,
+    )
+
+    assert result["AverageShares"] == 100.0
+    assert result["TreasuryShares"] == 10.0
+    assert result["SharesForBPS"] == 100.0
+    assert result["ParentEquity"] == 10_000.0
+    assert result["CalculatedEPS"] == 20.0
+    assert result["CalculatedBPS"] == 100.0
+    assert result["EPSDirectDiff"] == -1.75
+    assert result["BPSDirectDiff"] == -2.0
+
+
+def test_extract_shareholder_metrics_does_not_calculate_bps_without_treasury_shares() -> None:
+    result = extract_shareholder_metrics(
+        Path("."),
+        pre_parsed={
+            "EquityAttributableToOwnersOfParentIFRS": {
+                "CurrentYearInstant": 10_000.0,
+            },
+            "NumberOfIssuedSharesAsOfFiscalYearEndIssuedSharesTotalNumberOfSharesEtc": {
+                "FilingDateInstant": 110.0,
+            },
+        },
+    )
+
+    assert result["TreasuryShares"] is None
+    assert result["SharesForBPS"] is None
+    assert result["CalculatedBPS"] is None

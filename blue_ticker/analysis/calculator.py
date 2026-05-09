@@ -120,6 +120,14 @@ def _extract_raw_values(year_data: dict[str, Any]) -> RawData:
         'EPS': to_float(year_data.get("EPS")),
         'BPS': to_float(year_data.get("BPS")),
         'ShOutFY': to_float(year_data.get("ShOutFY")),
+        'AverageShares': to_float(year_data.get("AverageShares")),
+        'TreasuryShares': to_float(year_data.get("TreasuryShares")),
+        'SharesForBPS': to_float(year_data.get("SharesForBPS")),
+        'ParentEquity': to_float(year_data.get("ParentEquity")),
+        'CalculatedEPS': to_float(year_data.get("CalculatedEPS")),
+        'CalculatedBPS': to_float(year_data.get("CalculatedBPS")),
+        'EPSDirectDiff': to_float(year_data.get("EPSDirectDiff")),
+        'BPSDirectDiff': to_float(year_data.get("BPSDirectDiff")),
         'DivTotalAnn': to_float(year_data.get("DivTotalAnn")),
         'PayoutRatioAnn': to_float(year_data.get("PayoutRatioAnn")),
         'CashEq': to_float(year_data.get("CashAndCashEquivalents")) or to_float(year_data.get("CashEq")) or to_float(year_data.get("Cash")),
@@ -127,6 +135,62 @@ def _extract_raw_values(year_data: dict[str, Any]) -> RawData:
         'DivAnn': to_float(year_data.get("DivAnn")),
         '_xbrl_source': bool(year_data.get("_xbrl_source")),
     }
+
+
+def _add_per_share_calculation_values(
+    values: CalculatedData,
+    raw_values: RawData,
+    base_source: str,
+) -> None:
+    metric_sources = values.setdefault("MetricSources", {})
+    metric_sources["EPS"] = {
+        "source": base_source,
+        "unit": "yen_per_share",
+        "method": "direct",
+    }
+    metric_sources["BPS"] = {
+        "source": base_source,
+        "unit": "yen_per_share",
+        "method": "direct",
+    }
+
+    calculated_eps = raw_values.get("CalculatedEPS")
+    if calculated_eps is not None:
+        values["CalculatedEPS"] = calculated_eps
+        values["AverageShares"] = raw_values.get("AverageShares")
+        metric_sources["CalculatedEPS"] = {
+            "source": "calculated",
+            "method": "NP / AverageShares",
+            "unit": "yen_per_share",
+        }
+    eps_direct_diff = raw_values.get("EPSDirectDiff")
+    if eps_direct_diff is not None:
+        values["EPSDirectDiff"] = eps_direct_diff
+        metric_sources["EPSDirectDiff"] = {
+            "source": "derived",
+            "method": "EPS - CalculatedEPS",
+            "unit": "yen_per_share",
+        }
+
+    calculated_bps = raw_values.get("CalculatedBPS")
+    if calculated_bps is not None:
+        values["CalculatedBPS"] = calculated_bps
+        values["ParentEquity"] = raw_values.get("ParentEquity")
+        values["TreasuryShares"] = raw_values.get("TreasuryShares")
+        values["SharesForBPS"] = raw_values.get("SharesForBPS")
+        metric_sources["CalculatedBPS"] = {
+            "source": "calculated",
+            "method": "ParentEquity / SharesForBPS",
+            "unit": "yen_per_share",
+        }
+    bps_direct_diff = raw_values.get("BPSDirectDiff")
+    if bps_direct_diff is not None:
+        values["BPSDirectDiff"] = bps_direct_diff
+        metric_sources["BPSDirectDiff"] = {
+            "source": "derived",
+            "method": "BPS - CalculatedBPS",
+            "unit": "yen_per_share",
+        }
 
 
 def _calculate_base_values(raw_values: RawData) -> CalculatedData:
@@ -156,6 +220,7 @@ def _calculate_base_values(raw_values: RawData) -> CalculatedData:
     if isinstance(sales_label, str) and sales_label:
         values["MetricSources"]["Sales"]["label"] = sales_label
         values["MetricSources"]["Sales"]["source"] = "edinet"
+    _add_per_share_calculation_values(values, raw_values, base_source)
     return values
 
 

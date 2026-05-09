@@ -45,6 +45,14 @@ class RawData(TypedDict, total=False):
     EPS: float | None
     BPS: float | None
     ShOutFY: float | None
+    AverageShares: float | None
+    TreasuryShares: float | None
+    SharesForBPS: float | None
+    ParentEquity: float | None
+    CalculatedEPS: float | None
+    CalculatedBPS: float | None
+    EPSDirectDiff: float | None
+    BPSDirectDiff: float | None
     DivTotalAnn: float | None
     PayoutRatioAnn: float | None
     CashEq: float | None
@@ -62,6 +70,15 @@ class CalculatedData(TypedDict, total=False):
     # ── calculator.py: _calculate_profitability_metrics ──
     ROE: float | None
     CFCVR: float | None
+    # ── shareholder_metrics.py: EPS/BPS formula verification ──
+    CalculatedEPS: float | None
+    CalculatedBPS: float | None
+    EPSDirectDiff: float | None
+    BPSDirectDiff: float | None
+    AverageShares: float | None
+    TreasuryShares: float | None
+    SharesForBPS: float | None
+    ParentEquity: float | None
     # ── analyzer.py: _apply_gross_profit ──
     GrossProfit: float | None
     GrossProfitMargin: float | None

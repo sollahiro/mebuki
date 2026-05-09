@@ -323,7 +323,7 @@ async def test_build_xbrl_half_year_records_builds_2q_record(monkeypatch) -> Non
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
     fetcher = EdinetFetcher(edinet_client=edinet_client)
-    fetcher._download_and_parse_docs = AsyncMock(return_value={"20250331": (Path("."), {})})  # type: ignore[method-assign]
+    fetcher._download_and_parse_docs = AsyncMock(return_value={"20250331": (Path("."), {}, {})})  # type: ignore[method-assign]
 
     monkeypatch.setattr(
         "blue_ticker.services.edinet_fetcher.extract_income_statement",
@@ -405,7 +405,7 @@ async def test_build_xbrl_annual_records_falls_back_to_ordinary_revenue_for_sale
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
     fetcher = EdinetFetcher(edinet_client=edinet_client)
-    fetcher._download_and_parse_docs = AsyncMock(return_value={"20250331": (Path("."), {})})  # type: ignore[method-assign]
+    fetcher._download_and_parse_docs = AsyncMock(return_value={"20250331": (Path("."), {}, {})})  # type: ignore[method-assign]
 
     monkeypatch.setattr(
         "blue_ticker.services.edinet_fetcher.extract_income_statement",
@@ -458,7 +458,7 @@ async def test_build_xbrl_annual_records_uses_operating_profit_fallback(monkeypa
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
     fetcher = EdinetFetcher(edinet_client=edinet_client)
-    fetcher._download_and_parse_docs = AsyncMock(return_value={"20250331": (Path("."), {})})  # type: ignore[method-assign]
+    fetcher._download_and_parse_docs = AsyncMock(return_value={"20250331": (Path("."), {}, {})})  # type: ignore[method-assign]
 
     monkeypatch.setattr(
         "blue_ticker.services.edinet_fetcher.extract_income_statement",
@@ -510,7 +510,7 @@ async def test_build_xbrl_annual_records_defers_ordinary_income_to_edinet_applie
     edinet_client = Mock()
     edinet_client.api_key = "dummy"
     fetcher = EdinetFetcher(edinet_client=edinet_client)
-    fetcher._download_and_parse_docs = AsyncMock(return_value={"20250331": (Path("."), {})})  # type: ignore[method-assign]
+    fetcher._download_and_parse_docs = AsyncMock(return_value={"20250331": (Path("."), {}, {})})  # type: ignore[method-assign]
 
     monkeypatch.setattr(
         "blue_ticker.services.edinet_fetcher.extract_income_statement",

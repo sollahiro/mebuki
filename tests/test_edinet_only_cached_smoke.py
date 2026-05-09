@@ -220,8 +220,9 @@ def test_edinet_only_smoke_from_cached_search_and_xbrl(company: SmokeCompany) ->
     assert fy_key in pre_parsed_map
     assert client.downloaded_doc_ids == [doc["docID"]]
 
-    xbrl_dir, pre_parsed = pre_parsed_map[fy_key]
+    xbrl_dir, pre_parsed, facts = pre_parsed_map[fy_key]
     assert pre_parsed
+    assert facts
 
     expected_consolidated_contexts = _expected_has_consolidated_contexts(company, str(doc["edinet_fy_end"]))
     if expected_consolidated_contexts is not None:
