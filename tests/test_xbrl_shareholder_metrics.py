@@ -49,6 +49,62 @@ def test_extract_shareholder_metrics_from_ifrs_summary() -> None:
     assert result["PayoutRatioAnn"] == 0.507
 
 
+def test_extract_shareholder_metrics_prefers_consolidated_per_share_values() -> None:
+    result = extract_shareholder_metrics(
+        Path("."),
+        pre_parsed={
+            "BasicEarningsLossPerShareIFRSSummaryOfBusinessResults": {
+                "CurrentYearDuration": 69.77,
+            },
+            "BasicEarningsLossPerShareSummaryOfBusinessResults": {
+                "CurrentYearDuration_NonConsolidatedMember": 89.44,
+            },
+            "EquityToAssetRatioIFRSSummaryOfBusinessResults": {
+                "CurrentYearInstant": 751.01,
+            },
+            "NetAssetsPerShareSummaryOfBusinessResults": {
+                "CurrentYearInstant_NonConsolidatedMember": 362.64,
+            },
+        },
+    )
+
+    assert result["EPS"] == 69.77
+    assert result["BPS"] == 751.01
+
+
+def test_extract_shareholder_metrics_falls_back_to_non_consolidated_when_needed() -> None:
+    result = extract_shareholder_metrics(
+        Path("."),
+        pre_parsed={
+            "BasicEarningsLossPerShareSummaryOfBusinessResults": {
+                "CurrentYearDuration_NonConsolidatedMember": 89.44,
+            },
+            "NetAssetsPerShareSummaryOfBusinessResults": {
+                "CurrentYearInstant_NonConsolidatedMember": 362.64,
+            },
+        },
+    )
+
+    assert result["EPS"] == 89.44
+    assert result["BPS"] == 362.64
+
+
+def test_extract_shareholder_metrics_ignores_ratio_like_bps_values() -> None:
+    result = extract_shareholder_metrics(
+        Path("."),
+        pre_parsed={
+            "EquityToAssetRatioIFRSSummaryOfBusinessResults": {
+                "CurrentYearInstant": 0.42,
+            },
+            "NetAssetsPerShareSummaryOfBusinessResults": {
+                "CurrentYearInstant_NonConsolidatedMember": 500.0,
+            },
+        },
+    )
+
+    assert result["BPS"] == 500.0
+
+
 def test_extract_shareholder_metrics_derives_payout_ratio_when_direct_tag_missing() -> None:
     result = extract_shareholder_metrics(
         Path("."),
