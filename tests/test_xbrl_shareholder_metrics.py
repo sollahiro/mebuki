@@ -72,6 +72,36 @@ def test_extract_shareholder_metrics_prefers_consolidated_per_share_values() -> 
     assert result["BPS"] == 751.01
 
 
+def test_extract_shareholder_metrics_prefers_consolidated_cash_equivalents() -> None:
+    result = extract_shareholder_metrics(
+        Path("."),
+        pre_parsed={
+            "CashAndCashEquivalentsIFRSSummaryOfBusinessResults": {
+                "CurrentYearInstant": 100.0,
+                "CurrentYearInstant_NonConsolidatedMember": 10.0,
+            },
+        },
+    )
+
+    assert result["CashEq"] == 100.0
+
+
+def test_extract_shareholder_metrics_prefers_explicit_bps_tag_over_ratio_named_tag() -> None:
+    result = extract_shareholder_metrics(
+        Path("."),
+        pre_parsed={
+            "EquityAttributableToOwnersOfParentPerShareIFRSSummaryOfBusinessResults": {
+                "CurrentYearInstant": 2306.8,
+            },
+            "EquityToAssetRatioIFRSSummaryOfBusinessResults": {
+                "CurrentYearInstant": 751.01,
+            },
+        },
+    )
+
+    assert result["BPS"] == 2306.8
+
+
 def test_extract_shareholder_metrics_falls_back_to_non_consolidated_when_needed() -> None:
     result = extract_shareholder_metrics(
         Path("."),

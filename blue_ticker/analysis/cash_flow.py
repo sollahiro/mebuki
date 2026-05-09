@@ -21,6 +21,7 @@ from blue_ticker.analysis.context_helpers import (
     _is_nonconsolidated_prior_duration,
     _is_pure_context,
     _is_pure_nonconsolidated_context,
+    has_nonconsolidated_contexts,
 )
 from blue_ticker.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
 from blue_ticker.utils.xbrl_result_types import CashFlowResult, XbrlTagElements
@@ -99,6 +100,9 @@ def extract_cash_flow(
                     tag_elements[tag] = {}
                 tag_elements[tag].update(ctx_map)
 
+    check_elements = pre_parsed if pre_parsed is not None else tag_elements
+    _blocks_nc = has_nonconsolidated_contexts(check_elements)
+
     # 会計基準判定
     if any(t in tag_elements for t in USGAAP_MARKER_TAGS) and not any(
         t in tag_elements for t in IFRS_PL_MARKER_TAGS
@@ -113,7 +117,7 @@ def extract_cash_flow(
     cfo_current = cfo_prior = None
     for tag in CF_OPERATING_TAGS:
         c, p = _find_duration_value(tag_elements, tag)
-        if c is None and p is None:
+        if c is None and p is None and not _blocks_nc:
             c, p = _find_duration_value(tag_elements, tag, consolidated=False)
         if c is not None or p is not None:
             cfo_current, cfo_prior = c, p
@@ -123,7 +127,7 @@ def extract_cash_flow(
     cfi_current = cfi_prior = None
     for tag in CF_INVESTING_TAGS:
         c, p = _find_duration_value(tag_elements, tag)
-        if c is None and p is None:
+        if c is None and p is None and not _blocks_nc:
             c, p = _find_duration_value(tag_elements, tag, consolidated=False)
         if c is not None or p is not None:
             cfi_current, cfi_prior = c, p

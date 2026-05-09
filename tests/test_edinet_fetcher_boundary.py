@@ -106,6 +106,44 @@ async def test_get_annual_docs_reads_from_persistent_cache(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_annual_docs_filters_half_docs_from_persistent_cache(tmp_path) -> None:
+    code = "65010"
+    cache_manager = CacheManager(cache_dir=str(tmp_path))
+    cached_docs = [
+        {
+            "docID": "S100HALF",
+            "docTypeCode": "160",
+            "period_type": "2Q",
+            "edinet_fy_end": "2025-03-31",
+        },
+        {
+            "docID": "S100ANNUAL",
+            "docTypeCode": "120",
+            "period_type": "FY",
+            "edinet_fy_end": "2025-03-31",
+        },
+        {
+            "docID": "S100AMEND",
+            "docTypeCode": "130",
+            "period_type": "FY",
+            "edinet_fy_end": "2025-03-31",
+            "_is_amendment": True,
+        },
+    ]
+    cache_manager.set(
+        f"edinet_docs_{code}",
+        {"_cache_version": __version__, "docs": cached_docs},
+    )
+    edinet_client = Mock()
+    edinet_client.api_key = "dummy"
+    fetcher = EdinetFetcher(edinet_client=edinet_client, cache_manager=cache_manager)
+
+    docs = await fetcher._get_annual_docs(code, [], 1)
+
+    assert [doc["docID"] for doc in docs] == ["S100ANNUAL", "S100AMEND"]
+
+
+@pytest.mark.asyncio
 async def test_get_annual_docs_saves_to_persistent_cache_after_api_call(tmp_path) -> None:
     code = "72030"
     cache_manager = CacheManager(cache_dir=str(tmp_path))
@@ -174,6 +212,34 @@ async def test_get_annual_docs_reuses_xbrl_record_doc_ids() -> None:
         "period_type": "FY",
         "submitDateTime": "2024-06-01",
     }]
+
+
+@pytest.mark.asyncio
+async def test_doc_id_maps_split_primary_and_amendment_doc_ids() -> None:
+    edinet_client = Mock()
+    edinet_client.api_key = "dummy"
+    fetcher = EdinetFetcher(edinet_client=edinet_client)
+    docs = [
+        {
+            "docID": "S100W56G",
+            "docTypeCode": "120",
+            "edinet_fy_end": "2025-03-31",
+        },
+        {
+            "docID": "S100WFSJ",
+            "docTypeCode": "130",
+            "edinet_fy_end": "2025-03-31",
+            "_is_amendment": True,
+            "parentDocID": "S100W56G",
+        },
+    ]
+    fetcher._get_annual_docs = AsyncMock(return_value=docs)  # type: ignore[method-assign]
+
+    doc_ids = await fetcher.get_doc_ids_by_year("65010", [], 1)
+    amendment_doc_ids = await fetcher.get_amendment_doc_ids_by_year("65010", [], 1)
+
+    assert doc_ids == {"20250331": "S100W56G"}
+    assert amendment_doc_ids == {"20250331": "S100WFSJ"}
 
 
 @pytest.mark.asyncio

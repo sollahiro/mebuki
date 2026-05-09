@@ -13,6 +13,7 @@ from blue_ticker.analysis.context_helpers import (
     _is_consolidated_prior_instant,
     _is_nonconsolidated_instant,
     _is_nonconsolidated_prior_instant,
+    has_nonconsolidated_contexts,
     _is_pure_nonconsolidated_context,
 )
 from blue_ticker.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files, parse_html_number
@@ -334,9 +335,12 @@ def extract_balance_sheet(
     else:
         tag_elements = _collect_tag_elements(xbrl_dir)
 
+    check_elements = pre_parsed if pre_parsed is not None else tag_elements
+    _blocks_nc = has_nonconsolidated_contexts(check_elements)
+
     accounting_standard = _detect_accounting_standard(tag_elements)
     components = _extract_components(tag_elements, consolidated=True)
-    if not any(c["current"] is not None or c["prior"] is not None for c in components):
+    if not any(c["current"] is not None or c["prior"] is not None for c in components) and not _blocks_nc:
         components = _extract_components(tag_elements, consolidated=False)
 
     if not any(c["current"] is not None or c["prior"] is not None for c in components):

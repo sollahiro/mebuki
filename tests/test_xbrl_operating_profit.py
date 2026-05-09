@@ -254,10 +254,10 @@ class TestOperatingProfitFallbacks(unittest.TestCase):
         self.assertAlmostEqual(result["current"], 900_000_000_000)
         self.assertAlmostEqual(result["prior"], 850_000_000_000)
 
-    def test_nonconsolidated_fallback_when_no_consolidated(self):
-        """連結タグがない場合は個別タグにフォールバックする"""
+    def test_single_entity_uses_plain_context(self):
+        """単体のみ企業（_NonConsolidatedMember なし）は plain context の値を返す"""
         xml = _make_xbrl("""
-            <jppfs_cor:OperatingIncomeLoss contextRef="CurrentYearDuration_NonConsolidatedMember"
+            <jppfs_cor:OperatingIncomeLoss contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">150000000000</jppfs_cor:OperatingIncomeLoss>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
@@ -265,16 +265,16 @@ class TestOperatingProfitFallbacks(unittest.TestCase):
         self.assertEqual(result["method"], "direct")
         self.assertAlmostEqual(result["current"], 150_000_000_000)
 
-    def test_pure_nonconsolidated_context_over_segment_context(self):
-        """個別フォールバックでもセグメント修飾値より純コンテキストを優先する"""
+    def test_single_entity_pure_context_over_segment_context(self):
+        """単体のみ企業でもセグメント修飾値より純コンテキストを優先する"""
         xml = _make_xbrl("""
-            <jppfs_cor:OperatingIncomeLoss contextRef="CurrentYearDuration_NonConsolidatedMember"
+            <jppfs_cor:OperatingIncomeLoss contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">150000000000</jppfs_cor:OperatingIncomeLoss>
-            <jppfs_cor:OperatingIncomeLoss contextRef="CurrentYearDuration_NonConsolidatedMember_SomeSegmentMember"
+            <jppfs_cor:OperatingIncomeLoss contextRef="CurrentYearDuration_SomeSegmentMember"
                 unitRef="JPY" decimals="-6">25000000000</jppfs_cor:OperatingIncomeLoss>
-            <jppfs_cor:OperatingIncomeLoss contextRef="Prior1YearDuration_NonConsolidatedMember"
+            <jppfs_cor:OperatingIncomeLoss contextRef="Prior1YearDuration"
                 unitRef="JPY" decimals="-6">140000000000</jppfs_cor:OperatingIncomeLoss>
-            <jppfs_cor:OperatingIncomeLoss contextRef="Prior1YearDuration_NonConsolidatedMember_SomeSegmentMember"
+            <jppfs_cor:OperatingIncomeLoss contextRef="Prior1YearDuration_SomeSegmentMember"
                 unitRef="JPY" decimals="-6">20000000000</jppfs_cor:OperatingIncomeLoss>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")

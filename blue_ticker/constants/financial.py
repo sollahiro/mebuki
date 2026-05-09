@@ -9,6 +9,10 @@ KNOWN_STOCK_SPLIT_MULTIPLIERS = (1.0, 1.05, 2.0, 3.0, 4.0, 5.0, 6.0, 10.0)
 STOCK_SPLIT_SNAP_REL_TOLERANCE = 0.12
 STOCK_SPLIT_NO_SPLIT_REL_TOLERANCE = 0.15
 
+# BPS候補タグのうち、分類上は比率に見えるタグが1株当たり円単位で使われた
+# 場合だけ採用するための下限値。0.x は自己資本比率として扱う。
+BPS_PER_SHARE_MIN_VALUE = 1.0
+
 # WACC 計算用定数（暫定値）
 WACC_MARKET_RISK_PREMIUM = 0.055   # 日本株MRP標準値 5.5%
 WACC_DEFAULT_BETA        = 1.0     # 暫定β（市場平均）

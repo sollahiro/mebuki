@@ -24,6 +24,7 @@ from blue_ticker.analysis.context_helpers import (
     _is_nonconsolidated_prior_duration,
     _is_pure_context,
     _is_pure_nonconsolidated_context,
+    has_nonconsolidated_contexts,
 )
 from blue_ticker.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
 from blue_ticker.constants.xbrl import (
@@ -110,6 +111,8 @@ def extract_income_statement(
                     tag_elements[tag] = {}
                 tag_elements[tag].update(ctx_map)
 
+    _blocks_nc = has_nonconsolidated_contexts(tag_elements)
+
     is_ifrs = any(t in tag_elements for t in IFRS_PL_MARKER_TAGS)
     is_usgaap = any(t in tag_elements for t in USGAAP_MARKER_TAGS)
     if is_ifrs:
@@ -123,15 +126,15 @@ def extract_income_statement(
     _, op_cur, op_prior = _find_first_duration_value(tag_elements, OPERATING_PROFIT_DIRECT_TAGS)
     _, np_cur, np_prior = _find_first_duration_value(tag_elements, NET_PROFIT_TAGS)
 
-    if sales_cur is None:
+    if sales_cur is None and not _blocks_nc:
         sales_tag, sales_cur, sales_prior = _find_first_duration_value(
             tag_elements, NET_SALES_TAGS, consolidated=False
         )
-    if op_cur is None:
+    if op_cur is None and not _blocks_nc:
         _, op_cur, op_prior = _find_first_duration_value(
             tag_elements, OPERATING_PROFIT_DIRECT_TAGS, consolidated=False
         )
-    if np_cur is None:
+    if np_cur is None and not _blocks_nc:
         _, np_cur, np_prior = _find_first_duration_value(tag_elements, NET_PROFIT_TAGS, consolidated=False)
 
     found_tags = [

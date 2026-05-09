@@ -36,6 +36,7 @@ from blue_ticker.analysis.context_helpers import (
     _is_nonconsolidated_prior_duration,
     _is_pure_context,
     _is_pure_nonconsolidated_context,
+    has_nonconsolidated_contexts,
 )
 from blue_ticker.analysis.xbrl_utils import (
     parse_xbrl_value,
@@ -120,17 +121,23 @@ def _find_nonconsolidated_duration_value(
     )
 
 
-def _extract_sales_for_yoy(tag_elements: XbrlTagElements) -> tuple[float | None, float | None]:
+def _extract_sales_for_yoy(
+    tag_elements: XbrlTagElements,
+    blocks_nc: bool = False,
+) -> tuple[float | None, float | None]:
     """売上高の当期・前期値を返す（YoY比較用）。連結優先、個別フォールバック。
 
     当期・前期が両方揃うタグを優先する。両方揃うタグがなければ、
     最初に見つかった片側候補を返す。
+    blocks_nc=True のとき単体フォールバックを抑止する。
     """
     sales_tags = next(
         (comp["tags"] for comp in GROSS_PROFIT_COMPONENT_DEFINITIONS if comp["label"] == "売上高"),
         [],
     ) + ORDINARY_REVENUE_TAGS
     for consolidated in (True, False):
+        if not consolidated and blocks_nc:
+            continue
         partial_c: float | None = None
         partial_p: float | None = None
         for tag in sales_tags:
@@ -147,7 +154,10 @@ def _extract_sales_for_yoy(tag_elements: XbrlTagElements) -> tuple[float | None,
     return None, None
 
 
-def _extract_business_gross_profit(tag_elements: XbrlTagElements) -> GrossProfitResult | None:
+def _extract_business_gross_profit(
+    tag_elements: XbrlTagElements,
+    blocks_nc: bool = False,
+) -> GrossProfitResult | None:
     """銀行等の連結業務粗利益を構成要素から算出する。"""
     comp_results: list[MetricComponent] = []
     current_total = prior_total = 0.0
@@ -180,7 +190,7 @@ def _extract_business_gross_profit(tag_elements: XbrlTagElements) -> GrossProfit
     if not has_current and not has_prior:
         return None
 
-    sales_c, sales_p = _extract_sales_for_yoy(tag_elements)
+    sales_c, sales_p = _extract_sales_for_yoy(tag_elements, blocks_nc=blocks_nc)
     result: GrossProfitResult = {
         "current": current_total if has_current else None,
         "prior": prior_total if has_prior else None,
@@ -344,13 +354,16 @@ def extract_gross_profit(
                     tag_elements[tag] = {}
                 tag_elements[tag].update(ctx_map)
 
+    check_elements = pre_parsed if pre_parsed is not None else tag_elements
+    _blocks_nc = has_nonconsolidated_contexts(check_elements)
+
     accounting_standard = _detect_accounting_standard(tag_elements)
 
     # US-GAAP 企業: 連結損益計算書HTML(0105010)から直接解析
     if accounting_standard == "US-GAAP":
         usgaap_result = _extract_usgaap_gp_from_html(xbrl_dir)
         if usgaap_result is not None:
-            sales_c, sales_p = _extract_sales_for_yoy(tag_elements)
+            sales_c, sales_p = _extract_sales_for_yoy(tag_elements, blocks_nc=_blocks_nc)
             if sales_c is not None or sales_p is not None:
                 usgaap_result["current_sales"] = sales_c
                 usgaap_result["prior_sales"] = sales_p
@@ -364,10 +377,10 @@ def extract_gross_profit(
     # 直接法: GrossProfit タグを検索
     for gp_tag in GROSS_PROFIT_DIRECT_TAGS:
         current, prior = _find_consolidated_duration_value(tag_elements, gp_tag)
-        if current is None and prior is None:
+        if current is None and prior is None and not _blocks_nc:
             current, prior = _find_nonconsolidated_duration_value(tag_elements, gp_tag)
         if current is not None or prior is not None:
-            sales_c, sales_p = _extract_sales_for_yoy(tag_elements)
+            sales_c, sales_p = _extract_sales_for_yoy(tag_elements, blocks_nc=_blocks_nc)
             result: GrossProfitResult = {
                 "current": current,
                 "prior": prior,
@@ -382,17 +395,17 @@ def extract_gross_profit(
                 result["prior_sales"] = sales_p
             return result
 
-    business_gross_profit = _extract_business_gross_profit(tag_elements)
+    business_gross_profit = _extract_business_gross_profit(tag_elements, blocks_nc=_blocks_nc)
     if business_gross_profit is not None:
         return business_gross_profit
 
     # 直接法: OperatingGrossProfit タグを検索
     for gp_tag in OPERATING_GROSS_PROFIT_DIRECT_TAGS:
         current, prior = _find_consolidated_duration_value(tag_elements, gp_tag)
-        if current is None and prior is None:
+        if current is None and prior is None and not _blocks_nc:
             current, prior = _find_nonconsolidated_duration_value(tag_elements, gp_tag)
         if current is not None or prior is not None:
-            sales_c, sales_p = _extract_sales_for_yoy(tag_elements)
+            sales_c, sales_p = _extract_sales_for_yoy(tag_elements, blocks_nc=_blocks_nc)
             result: GrossProfitResult = {
                 "current": current,
                 "prior": prior,
@@ -425,9 +438,9 @@ def extract_gross_profit(
             "prior": prior,
         })
 
-    # 連結値が全くなければ個別にフォールバック
+    # 連結値が全くなければ個別にフォールバック（単体のみ企業に限る）
     has_consolidated = any(c["current"] is not None or c["prior"] is not None for c in comp_results)
-    if not has_consolidated:
+    if not has_consolidated and not _blocks_nc:
         comp_results = []
         for comp_def in GROSS_PROFIT_COMPONENT_DEFINITIONS:
             found_tag = None

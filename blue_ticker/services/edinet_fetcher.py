@@ -15,7 +15,13 @@ from typing import Any, TypeAlias
 
 from blue_ticker import __version__
 from blue_ticker.api.edinet_client import EdinetAPIClient
-from blue_ticker.constants.api import EDINET_DOC_DISCOVERY_LIMIT
+from blue_ticker.constants.api import (
+    EDINET_DOC_DISCOVERY_LIMIT,
+    EDINET_DOC_TYPE_AMENDMENT,
+    EDINET_DOC_TYPE_ANNUAL_REPORT,
+    EDINET_DOC_TYPE_HALF_YEAR_REPORT,
+    EDINET_DOC_TYPE_QUARTERLY_REPORT,
+)
 from blue_ticker.analysis.balance_sheet import extract_balance_sheet
 from blue_ticker.analysis.cash_flow import extract_cash_flow
 from blue_ticker.analysis.depreciation import extract_depreciation
@@ -80,14 +86,21 @@ def _slice_docs_preserving_amendments(
     build_document_index_for_code() は末尾に訂正書類を追加する場合がある。
     単純な docs[:max_years] だと訂正書類が落ちて XBRL 上書き処理が効かなくなる。
     """
-    regular = [d for d in docs if not d.get("_is_amendment")]
+    regular = [d for d in docs if _is_primary_annual_doc(d)]
     sliced = regular[:max_years]
     selected_fy_ends = {_fy_end_key(d.get("edinet_fy_end")) for d in sliced}
     amendments = [
         d for d in docs
-        if d.get("_is_amendment") and _fy_end_key(d.get("edinet_fy_end")) in selected_fy_ends
+        if _is_annual_amendment_doc(d)
+        and _fy_end_key(d.get("edinet_fy_end")) in selected_fy_ends
     ]
     return sliced + amendments
+
+
+def _slice_half_year_docs(docs: list[dict[str, Any]], max_years: int) -> list[dict[str, Any]]:
+    return [d for d in docs if not d.get("_is_amendment")][:max_years]
+
+
 _MetricByYear: TypeAlias = dict[str, dict[str, Any]]
 _AllMetrics: TypeAlias = dict[str, dict[str, Any]]
 _DocCacheKey: TypeAlias = tuple[str, int] | tuple[str, int, str] | tuple[str, str]
@@ -95,6 +108,64 @@ _DocCacheKey: TypeAlias = tuple[str, int] | tuple[str, int, str] | tuple[str, st
 
 def _fy_end_key(value: object) -> str:
     return value.replace("-", "") if isinstance(value, str) else ""
+
+
+def _doc_type_code(doc: dict[str, Any]) -> str:
+    value = doc.get("docTypeCode")
+    return value if isinstance(value, str) else ""
+
+
+def _is_half_year_doc(doc: dict[str, Any]) -> bool:
+    return (
+        doc.get("period_type") == "2Q"
+        or _doc_type_code(doc) in {
+            EDINET_DOC_TYPE_QUARTERLY_REPORT,
+            EDINET_DOC_TYPE_HALF_YEAR_REPORT,
+        }
+    )
+
+
+def _is_annual_amendment_doc(doc: dict[str, Any]) -> bool:
+    return not _is_half_year_doc(doc) and (
+        bool(doc.get("_is_amendment"))
+        or _doc_type_code(doc) == EDINET_DOC_TYPE_AMENDMENT
+    )
+
+
+def _is_primary_annual_doc(doc: dict[str, Any]) -> bool:
+    if _is_half_year_doc(doc) or _is_annual_amendment_doc(doc):
+        return False
+    doc_type = _doc_type_code(doc)
+    return doc_type in ("", EDINET_DOC_TYPE_ANNUAL_REPORT)
+
+
+def _primary_annual_docs(docs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    primary = [doc for doc in docs if _is_primary_annual_doc(doc)]
+    if primary:
+        return primary
+    return [doc for doc in docs if not _is_half_year_doc(doc)]
+
+
+def _doc_ids_by_year(docs: list[dict[str, Any]]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for doc in _primary_annual_docs(docs):
+        fy_end = _fy_end_key(doc.get("edinet_fy_end"))
+        doc_id = doc.get("docID")
+        if fy_end and isinstance(doc_id, str) and doc_id:
+            result.setdefault(fy_end, doc_id)
+    return result
+
+
+def _amendment_doc_ids_by_year(docs: list[dict[str, Any]]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for doc in docs:
+        if not _is_annual_amendment_doc(doc):
+            continue
+        fy_end = _fy_end_key(doc.get("edinet_fy_end"))
+        doc_id = doc.get("docID")
+        if fy_end and isinstance(doc_id, str) and doc_id:
+            result[fy_end] = doc_id
+    return result
 
 
 def _docs_from_xbrl_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -218,7 +289,7 @@ class EdinetFetcher:
             # メモリキャッシュが十分な通常書類を持っていれば即返す
             mem = self._doc_cache.get(lock_key)
             if mem is not None:
-                regular_mem = [d for d in mem if not d.get("_is_amendment")]
+                regular_mem = [d for d in mem if _is_primary_annual_doc(d)]
                 if len(regular_mem) >= max_years:
                     return _slice_docs_preserving_amendments(mem, max_years)
 
@@ -230,7 +301,9 @@ class EdinetFetcher:
                     and cached.get("_cache_version") == _EDINET_DOCS_CACHE_VERSION
                     and isinstance(cached.get("docs"), list)
                 ):
-                    cached_regular = [d for d in cached["docs"] if not d.get("_is_amendment")]
+                    cached_regular = [
+                        d for d in cached["docs"] if _is_primary_annual_doc(d)
+                    ]
                     if len(cached_regular) >= max_years:
                         self._doc_cache[lock_key] = cached["docs"]
                         return _slice_docs_preserving_amendments(cached["docs"], max_years)
@@ -341,7 +414,7 @@ class EdinetFetcher:
             if mem is not None:
                 regular_mem = [d for d in mem if not d.get("_is_amendment")]
                 if len(regular_mem) >= max_years:
-                    return _slice_docs_preserving_amendments(mem, max_years)
+                    return _slice_half_year_docs(mem, max_years)
 
             # 永続キャッシュが十分な通常書類を持っていれば使う
             if self.cache_manager is not None:
@@ -354,7 +427,7 @@ class EdinetFetcher:
                     cached_regular = [d for d in cached["docs"] if not d.get("_is_amendment")]
                     if len(cached_regular) >= max_years:
                         self._doc_cache[lock_key] = cached["docs"]
-                        return _slice_docs_preserving_amendments(cached["docs"], max_years)
+                        return _slice_half_year_docs(cached["docs"], max_years)
 
             if not self.edinet_client:
                 return []
@@ -374,7 +447,7 @@ class EdinetFetcher:
                     persistent_key,
                     {"_cache_version": _EDINET_DOCS_CACHE_VERSION, "docs": docs},
                 )
-            return _slice_docs_preserving_amendments(docs, max_years)
+            return _slice_half_year_docs(docs, max_years)
 
     async def fetch_latest_annual_report(
         self,
@@ -382,7 +455,9 @@ class EdinetFetcher:
     ) -> dict[str, Any] | None:
         """最新の有価証券報告書(120)を1件取得する。"""
         docs = await self._search_edinet_annual_docs(code, 10)
-        annual_reports = [doc for doc in docs if doc.get("docTypeCode") == "120"]
+        annual_reports = [
+            doc for doc in docs if doc.get("docTypeCode") == EDINET_DOC_TYPE_ANNUAL_REPORT
+        ]
         if annual_reports:
             return sorted(annual_reports, key=lambda x: x.get("submitDateTime", ""), reverse=True)[0]
         return None
@@ -568,7 +643,14 @@ class EdinetFetcher:
             for doc in all_docs:
                 doc_id = doc["docID"]
                 dt = doc.get("docTypeCode")
-                label = "有価証券報告書" if dt == "120" else "半期報告書"
+                if dt == EDINET_DOC_TYPE_ANNUAL_REPORT:
+                    label = "有価証券報告書"
+                elif dt == EDINET_DOC_TYPE_AMENDMENT:
+                    label = "訂正有価証券報告書"
+                elif dt in {EDINET_DOC_TYPE_QUARTERLY_REPORT, EDINET_DOC_TYPE_HALF_YEAR_REPORT}:
+                    label = "半期報告書"
+                else:
+                    label = str(doc.get("docDescription") or "")
                 year = doc.get("fiscal_year")
                 fy_key = doc.get("edinet_fy_end") or str(year)
 
@@ -628,11 +710,20 @@ class EdinetFetcher:
         client = self.edinet_client
         docs = await self._get_annual_docs(code, financial_data, max_years)
         result: dict[str, str] = {}
-        for doc in docs:
-            fy_end = _fy_end_key(doc.get("edinet_fy_end"))
-            if fy_end:
-                result[fy_end] = doc["docID"]
+        result.update(_doc_ids_by_year(docs))
         return result
+
+    async def get_amendment_doc_ids_by_year(
+        self,
+        code: str,
+        financial_data: list[dict[str, Any]],
+        max_years: int,
+    ) -> dict[str, str]:
+        """年度別に訂正有価証券報告書のdocIDを返す。Returns: { "YYYYMMDD": docID }"""
+        if not self.edinet_client or not self.edinet_client.api_key:
+            return {}
+        docs = await self._get_annual_docs(code, financial_data, max_years)
+        return _amendment_doc_ids_by_year(docs)
 
     async def _extract_metric_by_year(
         self,
@@ -645,7 +736,9 @@ class EdinetFetcher:
     ) -> _MetricByYear:
         if not self.edinet_client or not self.edinet_client.api_key:
             return {}
-        docs = await self._get_annual_docs(code, financial_data, max_years)
+        docs = _primary_annual_docs(
+            await self._get_annual_docs(code, financial_data, max_years)
+        )
         logger.info(f"[{spec.label}] {code}: {len(docs)}件のEDINET文書を検索")
         _t0 = time.perf_counter()
         results = await asyncio.gather(
@@ -679,12 +772,16 @@ class EdinetFetcher:
             self._extract_metric_by_year(spec, code, financial_data, max_years, pre_parsed_map=pre_parsed_map)
             for spec in _EXTRACTOR_SPECS
         ])
-        doc_ids = await self.get_doc_ids_by_year(code, financial_data, max_years)
+        doc_ids, amendment_doc_ids = await asyncio.gather(
+            self.get_doc_ids_by_year(code, financial_data, max_years),
+            self.get_amendment_doc_ids_by_year(code, financial_data, max_years),
+        )
         out: _AllMetrics = {
             spec.key: result
             for spec, result in zip(_EXTRACTOR_SPECS, metric_results)
         }
         out["doc_ids"] = doc_ids
+        out["amendment_doc_ids"] = amendment_doc_ids
         return out
 
     async def extract_ibd_by_year(

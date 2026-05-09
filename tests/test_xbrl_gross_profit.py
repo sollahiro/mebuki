@@ -350,10 +350,10 @@ class TestGrossProfitConsolidatedPriority(unittest.TestCase):
         self.assertAlmostEqual(result["current"], 200_000_000_000)
         self.assertAlmostEqual(result["prior"], 180_000_000_000)
 
-    def test_falls_back_to_nonconsolidated(self):
-        """連結値がなく個別値のみの場合、個別値を返す"""
+    def test_single_entity_uses_plain_context(self):
+        """単体のみ企業（_NonConsolidatedMember なし）は plain context の値を返す"""
         xml = _make_xbrl_duration("""
-            <jppfs_cor:GrossProfit contextRef="CurrentYearDuration_NonConsolidatedMember"
+            <jppfs_cor:GrossProfit contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">50000000000</jppfs_cor:GrossProfit>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
@@ -361,16 +361,16 @@ class TestGrossProfitConsolidatedPriority(unittest.TestCase):
         self.assertEqual(result["method"], "direct")
         self.assertAlmostEqual(result["current"], 50_000_000_000)
 
-    def test_pure_nonconsolidated_context_over_segment_context(self):
-        """個別フォールバックでもセグメント修飾値より純コンテキストを優先する"""
+    def test_single_entity_pure_context_over_segment_context(self):
+        """単体のみ企業でもセグメント修飾値より純コンテキストを優先する"""
         xml = _make_xbrl_duration("""
-            <jppfs_cor:GrossProfit contextRef="CurrentYearDuration_NonConsolidatedMember"
+            <jppfs_cor:GrossProfit contextRef="CurrentYearDuration"
                 unitRef="JPY" decimals="-6">50000000000</jppfs_cor:GrossProfit>
-            <jppfs_cor:GrossProfit contextRef="CurrentYearDuration_NonConsolidatedMember_SomeSegmentMember"
+            <jppfs_cor:GrossProfit contextRef="CurrentYearDuration_SomeSegmentMember"
                 unitRef="JPY" decimals="-6">10000000000</jppfs_cor:GrossProfit>
-            <jppfs_cor:GrossProfit contextRef="Prior1YearDuration_NonConsolidatedMember"
+            <jppfs_cor:GrossProfit contextRef="Prior1YearDuration"
                 unitRef="JPY" decimals="-6">45000000000</jppfs_cor:GrossProfit>
-            <jppfs_cor:GrossProfit contextRef="Prior1YearDuration_NonConsolidatedMember_SomeSegmentMember"
+            <jppfs_cor:GrossProfit contextRef="Prior1YearDuration_SomeSegmentMember"
                 unitRef="JPY" decimals="-6">9000000000</jppfs_cor:GrossProfit>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")

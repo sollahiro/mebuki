@@ -82,6 +82,22 @@ class TestApplyIbd:
         assert cd["DocID"] == "S100YYYY"
         assert "InterestBearingDebt" not in cd
 
+    def test_sets_amendment_doc_id_separately(self):
+        years = [_make_year("2024-03-31")]
+        _apply_ibd(
+            years,
+            {
+                "20240331": {
+                    "doc_id": "S100ANNUAL",
+                    "amendment_doc_id": "S100AMEND",
+                },
+            },
+        )
+        cd = years[0]["CalculatedData"]
+        assert cd["DocID"] == "S100ANNUAL"
+        assert cd["AmendmentDocID"] == "S100AMEND"
+        assert cd["MetricSources"]["AmendmentDocID"]["docID"] == "S100AMEND"
+
     def test_calculates_roic(self):
         years = [_make_year("2024-03-31", NP=100.0, NetAssets=800.0)]
         ibd_by_year = {"20240331": {"current": 200_000_000, "components": [], "accounting_standard": "J-GAAP"}}

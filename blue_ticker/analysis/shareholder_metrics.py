@@ -4,6 +4,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from blue_ticker.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
+from blue_ticker.constants.financial import BPS_PER_SHARE_MIN_VALUE
 from blue_ticker.utils.xbrl_result_types import XbrlTagElements
 
 _CASH_EQ_TAGS: list[str] = [
@@ -70,7 +71,7 @@ _RELEVANT_TAGS: frozenset[str] = frozenset(
     + _PAYOUT_RATIO_TAGS
 )
 
-_CURRENT_CONTEXTS: tuple[str, ...] = (
+_CONSOLIDATED_FIRST_CONTEXTS: tuple[str, ...] = (
     "CurrentYearInstant",
     "CurrentYearDuration",
     "InterimInstant",
@@ -82,36 +83,48 @@ _CURRENT_CONTEXTS: tuple[str, ...] = (
     "InterimInstant_NonConsolidatedMember",
     "InterimDuration_NonConsolidatedMember",
     "CurrentYTDDuration_NonConsolidatedMember",
+    "FilingDateInstant_NonConsolidatedMember",
+)
+
+# 配当・発行済株式数・配当性向は、連結財務諸表そのものではなく
+# 報告会社/親会社の株式関連情報として開示されることが多い。
+# 既存の取得順を維持し、EPS/BPS/CashEq の連結優先順序とは分ける。
+_REPORTING_COMPANY_CONTEXTS: tuple[str, ...] = (
+    "CurrentYearInstant",
+    "CurrentYearInstant_NonConsolidatedMember",
+    "CurrentYearDuration",
+    "CurrentYearDuration_NonConsolidatedMember",
+    "InterimInstant",
+    "InterimInstant_NonConsolidatedMember",
+    "InterimDuration",
+    "InterimDuration_NonConsolidatedMember",
+    "CurrentYTDDuration",
+    "CurrentYTDDuration_NonConsolidatedMember",
+    "FilingDateInstant",
+    "FilingDateInstant_NonConsolidatedMember",
 )
 
 _NON_CONSOLIDATED_MEMBER = "_NonConsolidatedMember"
+
+# 既知の基底コンテキスト名（セグメント修飾なし）。
+# _CONSOLIDATED_FIRST_CONTEXTS と _REPORTING_COMPANY_CONTEXTS の合成集合。
+# fallback loop はこのセットへの完全一致のみ許容し、
+# FilingDateInstant_ClassAPreferredSharesMember のようなセグメント付き
+# コンテキストを誤採用しないようにする。
+_KNOWN_PLAIN_CONTEXTS: frozenset[str] = frozenset(
+    _CONSOLIDATED_FIRST_CONTEXTS
+) | frozenset(_REPORTING_COMPANY_CONTEXTS)
 
 
 def _is_non_consolidated_context(context_ref: str) -> bool:
     return _NON_CONSOLIDATED_MEMBER in context_ref
 
 
-def _is_current_context(context_ref: str) -> bool:
-    return (
-        context_ref.startswith("CurrentYear")
-        or context_ref.startswith("Interim")
-        or context_ref.startswith("CurrentYTD")
-        or context_ref.startswith("FilingDateInstant")
-    )
-
-
-def _passes_value_filter(
-    tag: str,
-    value: float,
-    value_filter: Callable[[str, float], bool] | None,
-) -> bool:
-    return value_filter is None or value_filter(tag, value)
-
-
 def _first_current_value(
     tag_elements: XbrlTagElements,
     tags: list[str],
     *,
+    context_order: tuple[str, ...],
     include_non_consolidated: bool = True,
     value_filter: Callable[[str, float], bool] | None = None,
 ) -> float | None:
@@ -119,18 +132,18 @@ def _first_current_value(
         ctx_map = tag_elements.get(tag)
         if not ctx_map:
             continue
-        for ctx in _CURRENT_CONTEXTS:
+        for ctx in context_order:
             if (
                 ctx in ctx_map
                 and (include_non_consolidated or not _is_non_consolidated_context(ctx))
-                and _passes_value_filter(tag, ctx_map[ctx], value_filter)
+                and (value_filter is None or value_filter(tag, ctx_map[ctx]))
             ):
                 return ctx_map[ctx]
         for ctx, value in ctx_map.items():
             if (
-                _is_current_context(ctx)
+                ctx in _KNOWN_PLAIN_CONTEXTS
                 and (include_non_consolidated or not _is_non_consolidated_context(ctx))
-                and _passes_value_filter(tag, value, value_filter)
+                and (value_filter is None or value_filter(tag, value))
             ):
                 return value
     return None
@@ -145,6 +158,7 @@ def _first_consolidated_then_any_current_value(
     value = _first_current_value(
         tag_elements,
         tags,
+        context_order=_CONSOLIDATED_FIRST_CONTEXTS,
         include_non_consolidated=False,
         value_filter=value_filter,
     )
@@ -153,14 +167,27 @@ def _first_consolidated_then_any_current_value(
     return _first_current_value(
         tag_elements,
         tags,
+        context_order=_CONSOLIDATED_FIRST_CONTEXTS,
         include_non_consolidated=True,
         value_filter=value_filter,
     )
 
 
+def _first_reporting_company_current_value(
+    tag_elements: XbrlTagElements,
+    tags: list[str],
+) -> float | None:
+    return _first_current_value(
+        tag_elements,
+        tags,
+        context_order=_REPORTING_COMPANY_CONTEXTS,
+        include_non_consolidated=True,
+    )
+
+
 def _bps_value_filter(tag: str, value: float) -> bool:
     if tag in _RATIO_LIKE_BPS_TAGS:
-        return value > 1.0
+        return value > BPS_PER_SHARE_MIN_VALUE
     return True
 
 
@@ -176,35 +203,6 @@ def _first_eps_value(tag_elements: XbrlTagElements) -> float | None:
     return _first_consolidated_then_any_current_value(tag_elements, _EPS_TAGS)
 
 
-_LEGACY_CURRENT_CONTEXTS: tuple[str, ...] = (
-    "CurrentYearInstant",
-    "CurrentYearInstant_NonConsolidatedMember",
-    "CurrentYearDuration",
-    "CurrentYearDuration_NonConsolidatedMember",
-    "InterimInstant",
-    "InterimInstant_NonConsolidatedMember",
-    "InterimDuration",
-    "InterimDuration_NonConsolidatedMember",
-    "CurrentYTDDuration",
-    "CurrentYTDDuration_NonConsolidatedMember",
-    "FilingDateInstant",
-)
-
-
-def _first_any_current_value(tag_elements: XbrlTagElements, tags: list[str]) -> float | None:
-    for tag in tags:
-        ctx_map = tag_elements.get(tag)
-        if not ctx_map:
-            continue
-        for ctx in _LEGACY_CURRENT_CONTEXTS:
-            if ctx in ctx_map:
-                return ctx_map[ctx]
-        for ctx, value in ctx_map.items():
-            if _is_current_context(ctx):
-                return value
-    return None
-
-
 def _sum_filing_rows(tag_elements: XbrlTagElements, tags: list[str]) -> float | None:
     for tag in tags:
         ctx_map = tag_elements.get(tag)
@@ -217,7 +215,7 @@ def _sum_filing_rows(tag_elements: XbrlTagElements, tags: list[str]) -> float | 
         ]
         if row_values:
             return sum(row_values)
-        current = _first_any_current_value(tag_elements, [tag])
+        current = _first_reporting_company_current_value(tag_elements, [tag])
         if current is not None:
             return abs(current)
     return None
@@ -247,8 +245,11 @@ def extract_shareholder_metrics(
                 tag_elements[tag].update(ctx_map)
 
     eps = _first_eps_value(tag_elements)
-    div_ann = _first_any_current_value(tag_elements, _DIVIDEND_PER_SHARE_TAGS)
-    payout_ratio = _first_any_current_value(tag_elements, _PAYOUT_RATIO_TAGS)
+    div_ann = _first_reporting_company_current_value(
+        tag_elements,
+        _DIVIDEND_PER_SHARE_TAGS,
+    )
+    payout_ratio = _first_reporting_company_current_value(tag_elements, _PAYOUT_RATIO_TAGS)
     if payout_ratio is None:
         payout_ratio = round(div_ann / eps, 3) if div_ann is not None and eps else None
 
@@ -256,9 +257,15 @@ def extract_shareholder_metrics(
         "CashEq": _first_consolidated_then_any_current_value(tag_elements, _CASH_EQ_TAGS),
         "EPS": eps,
         "BPS": _first_bps_value(tag_elements),
-        "ShOutFY": _first_any_current_value(tag_elements, _ISSUED_SHARES_TAGS),
+        "ShOutFY": _first_reporting_company_current_value(
+            tag_elements,
+            _ISSUED_SHARES_TAGS,
+        ),
         "DivAnn": div_ann,
-        "Div2Q": _first_any_current_value(tag_elements, _INTERIM_DIVIDEND_PER_SHARE_TAGS),
+        "Div2Q": _first_reporting_company_current_value(
+            tag_elements,
+            _INTERIM_DIVIDEND_PER_SHARE_TAGS,
+        ),
         "DivTotalAnn": _sum_filing_rows(tag_elements, _DIVIDEND_TOTAL_TAGS),
         "PayoutRatioAnn": payout_ratio,
     }

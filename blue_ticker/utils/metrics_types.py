@@ -110,6 +110,7 @@ class CalculatedData(TypedDict, total=False):
     OrderBacklog: float | None
     # ── analyzer.py: _apply_ibd / half_year_data_service.py ──
     DocID: str | None
+    AmendmentDocID: str | None
     # ── wacc.py: calculate_wacc ──
     CostOfEquity: float | None
     CostOfDebt: float | None
@@ -128,6 +129,7 @@ class RawXbrlExtraction(TypedDict, total=False):
     """XBRLから直接抽出した年度別の生値。金額は円単位で保持する。"""
 
     doc_id: str
+    amendment_doc_id: str
     gross_profit: float | None
     gross_profit_method: str
     gross_profit_label: str | None

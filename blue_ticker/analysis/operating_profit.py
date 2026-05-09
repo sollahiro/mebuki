@@ -21,6 +21,7 @@ from blue_ticker.analysis.context_helpers import (
     _is_consolidated_prior_duration,
     _is_nonconsolidated_duration,
     _is_nonconsolidated_prior_duration,
+    has_nonconsolidated_contexts,
     _is_pure_context,
     _is_pure_nonconsolidated_context,
 )
@@ -95,9 +96,14 @@ def _try_tags(
     return None, None, None
 
 
-def _extract_ordinary_revenue(tag_elements: XbrlTagElements) -> tuple[float | None, float | None]:
+def _extract_ordinary_revenue(
+    tag_elements: XbrlTagElements,
+    blocks_nc: bool = False,
+) -> tuple[float | None, float | None]:
     """金融機関向けに経常収益の当期・前期値を返す。"""
     for consolidated in (True, False):
+        if not consolidated and blocks_nc:
+            continue
         for tag in ORDINARY_REVENUE_TAGS:
             current, prior = _find_duration_value(tag_elements, tag, consolidated)
             if current is not None or prior is not None:
@@ -278,6 +284,9 @@ def extract_operating_profit(
                     tag_elements[tag] = {}
                 tag_elements[tag].update(ctx_map)
 
+    check_elements = pre_parsed if pre_parsed is not None else tag_elements
+    _blocks_nc = has_nonconsolidated_contexts(check_elements)
+
     accounting_standard = _detect_accounting_standard(tag_elements)
 
     if accounting_standard == "US-GAAP":
@@ -291,9 +300,11 @@ def extract_operating_profit(
             "reason": "US-GAAP 連結損益計算書 HTML で営業利益・経常利益を取得できない",
         }
 
-    # 連結優先、非連結フォールバック。
+    # 連結優先、非連結フォールバック（単体のみ企業に限る）。
     # 各スコープで: 直接法 → 計算法(GP-SGA) → 経常利益 の順に試みる。
     for consolidated in (True, False):
+        if not consolidated and _blocks_nc:
+            continue
         _, current, prior = _try_tags(tag_elements, OPERATING_PROFIT_DIRECT_TAGS, consolidated)
         if current is not None or prior is not None:
             sga_c, sga_p = _try_sga(tag_elements, consolidated)
@@ -326,7 +337,7 @@ def extract_operating_profit(
                 "method": "ordinary_income", "label": "経常利益",
                 "accounting_standard": accounting_standard,
             }
-            sales_c, sales_p = _extract_ordinary_revenue(tag_elements)
+            sales_c, sales_p = _extract_ordinary_revenue(tag_elements, blocks_nc=_blocks_nc)
             if sales_c is not None or sales_p is not None:
                 ordinary_result["current_sales"] = sales_c
                 ordinary_result["prior_sales"] = sales_p

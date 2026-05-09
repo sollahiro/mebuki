@@ -186,17 +186,18 @@ class TestBalanceSheetExtraction:
 
         assert result["components"][2]["label"] == "OtherAssetsUSGAAP"
 
-    def test_falls_back_to_nonconsolidated_when_no_consolidated_values(self):
+    def test_single_entity_uses_plain_context(self):
+        """単体のみ企業（_NonConsolidatedMember なし）は plain context のBS値を返す"""
         with tempfile.TemporaryDirectory() as tmp:
             xbrl_dir = Path(tmp)
             _write_xbrl(
                 xbrl_dir,
                 """
-                <jppfs_cor:CurrentAssets contextRef="CurrentYearInstant_NonConsolidatedMember" unitRef="JPY">184600000000</jppfs_cor:CurrentAssets>
-                <jppfs_cor:NoncurrentAssets contextRef="CurrentYearInstant_NonConsolidatedMember" unitRef="JPY">113568000000</jppfs_cor:NoncurrentAssets>
-                <jppfs_cor:CurrentLiabilities contextRef="CurrentYearInstant_NonConsolidatedMember" unitRef="JPY">42737000000</jppfs_cor:CurrentLiabilities>
-                <jppfs_cor:NoncurrentLiabilities contextRef="CurrentYearInstant_NonConsolidatedMember" unitRef="JPY">60103000000</jppfs_cor:NoncurrentLiabilities>
-                <jppfs_cor:NetAssets contextRef="CurrentYearInstant_NonConsolidatedMember" unitRef="JPY">238065000000</jppfs_cor:NetAssets>
+                <jppfs_cor:CurrentAssets contextRef="CurrentYearInstant" unitRef="JPY">184600000000</jppfs_cor:CurrentAssets>
+                <jppfs_cor:NoncurrentAssets contextRef="CurrentYearInstant" unitRef="JPY">113568000000</jppfs_cor:NoncurrentAssets>
+                <jppfs_cor:CurrentLiabilities contextRef="CurrentYearInstant" unitRef="JPY">42737000000</jppfs_cor:CurrentLiabilities>
+                <jppfs_cor:NoncurrentLiabilities contextRef="CurrentYearInstant" unitRef="JPY">60103000000</jppfs_cor:NoncurrentLiabilities>
+                <jppfs_cor:NetAssets contextRef="CurrentYearInstant" unitRef="JPY">238065000000</jppfs_cor:NetAssets>
                 """,
             )
 

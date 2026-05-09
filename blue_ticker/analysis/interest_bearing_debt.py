@@ -28,6 +28,7 @@ from blue_ticker.analysis.context_helpers import (
     _is_consolidated_prior_instant,
     _is_nonconsolidated_instant,
     _is_nonconsolidated_prior_instant,
+    has_nonconsolidated_contexts,
 )
 from blue_ticker.analysis.ibd_usgaap_html import _extract_usgaap_from_html
 from blue_ticker.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
@@ -148,6 +149,9 @@ def extract_interest_bearing_debt(
                     tag_elements[tag] = {}
                 tag_elements[tag].update(ctx_map)
 
+    check_elements = pre_parsed if pre_parsed is not None else tag_elements
+    _blocks_nc = has_nonconsolidated_contexts(check_elements)
+
     accounting_standard = _detect_accounting_standard(tag_elements)
 
     # US-GAAP 企業: HTML解析にフォールバック
@@ -215,8 +219,8 @@ def extract_interest_bearing_debt(
                 has_consolidated = True
                 break
 
-    # Pass 2: 連結値が全くない場合のみ単体にフォールバック（単体のみ企業への対応）
-    if not has_consolidated:
+    # Pass 2: 単体のみ企業に限り単体にフォールバック
+    if not has_consolidated and not _blocks_nc:
         components: list[MetricComponent] = []
         for comp_def in COMPONENT_DEFINITIONS:
             found_tag = None

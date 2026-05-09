@@ -88,9 +88,13 @@ def _raw_by_year(all_metrics: dict[str, dict[str, Any]]) -> dict[str, RawXbrlExt
         if isinstance(doc_id, str) and doc_id:
             raw_for(fy_end_key)["doc_id"] = doc_id
 
+    for fy_end_key, doc_id in all_metrics.get("amendment_doc_ids", {}).items():
+        if isinstance(doc_id, str) and doc_id:
+            raw_for(fy_end_key)["amendment_doc_id"] = doc_id
+
     for fy_end_key, gp in all_metrics.get("gp", {}).items():
         raw = raw_for(fy_end_key)
-        if (doc_id := _metric_doc_id(gp)) is not None:
+        if (doc_id := _metric_doc_id(gp)) is not None and "doc_id" not in raw:
             raw["doc_id"] = doc_id
         raw["gross_profit"] = gp.get("current")
         raw["gross_profit_method"] = str(gp.get("method", "unknown"))
@@ -104,7 +108,7 @@ def _raw_by_year(all_metrics: dict[str, dict[str, Any]]) -> dict[str, RawXbrlExt
 
     for fy_end_key, op in all_metrics.get("op", {}).items():
         raw = raw_for(fy_end_key)
-        if (doc_id := _metric_doc_id(op)) is not None:
+        if (doc_id := _metric_doc_id(op)) is not None and "doc_id" not in raw:
             raw["doc_id"] = doc_id
         raw["operating_profit"] = op.get("current")
         raw["operating_profit_method"] = str(op.get("method", "unknown"))
@@ -119,14 +123,14 @@ def _raw_by_year(all_metrics: dict[str, dict[str, Any]]) -> dict[str, RawXbrlExt
         if not nr.get("found"):
             continue
         raw = raw_for(fy_end_key)
-        if (doc_id := _metric_doc_id(nr)) is not None:
+        if (doc_id := _metric_doc_id(nr)) is not None and "doc_id" not in raw:
             raw["doc_id"] = doc_id
         raw["net_revenue"] = nr.get("net_revenue")
         raw["business_profit"] = nr.get("business_profit")
 
     for fy_end_key, ibd in all_metrics.get("ibd", {}).items():
         raw = raw_for(fy_end_key)
-        if (doc_id := _metric_doc_id(ibd)) is not None:
+        if (doc_id := _metric_doc_id(ibd)) is not None and "doc_id" not in raw:
             raw["doc_id"] = doc_id
         raw["interest_bearing_debt"] = ibd.get("current")
         raw["ibd_components"] = [
@@ -142,7 +146,7 @@ def _raw_by_year(all_metrics: dict[str, dict[str, Any]]) -> dict[str, RawXbrlExt
 
     for fy_end_key, bs in all_metrics.get("bs", {}).items():
         raw = raw_for(fy_end_key)
-        if (doc_id := _metric_doc_id(bs)) is not None:
+        if (doc_id := _metric_doc_id(bs)) is not None and "doc_id" not in raw:
             raw["doc_id"] = doc_id
         raw["current_assets"] = bs.get("current_assets")
         raw["total_assets"] = bs.get("total_assets")
@@ -163,7 +167,7 @@ def _raw_by_year(all_metrics: dict[str, dict[str, Any]]) -> dict[str, RawXbrlExt
 
     for fy_end_key, ie in all_metrics.get("ie", {}).items():
         raw = raw_for(fy_end_key)
-        if (doc_id := _metric_doc_id(ie)) is not None:
+        if (doc_id := _metric_doc_id(ie)) is not None and "doc_id" not in raw:
             raw["doc_id"] = doc_id
         raw["interest_expense"] = ie.get("current")
         raw["interest_expense_method"] = str(ie.get("method", "unknown"))
@@ -172,7 +176,7 @@ def _raw_by_year(all_metrics: dict[str, dict[str, Any]]) -> dict[str, RawXbrlExt
         if tax.get("method") not in ("computed", "usgaap_html"):
             continue
         raw = raw_for(fy_end_key)
-        if (doc_id := _metric_doc_id(tax)) is not None:
+        if (doc_id := _metric_doc_id(tax)) is not None and "doc_id" not in raw:
             raw["doc_id"] = doc_id
         raw["pretax_income"] = tax.get("pretax_income")
         raw["income_tax"] = tax.get("income_tax")
@@ -183,7 +187,7 @@ def _raw_by_year(all_metrics: dict[str, dict[str, Any]]) -> dict[str, RawXbrlExt
         if emp.get("current") is None:
             continue
         raw = raw_for(fy_end_key)
-        if (doc_id := _metric_doc_id(emp)) is not None:
+        if (doc_id := _metric_doc_id(emp)) is not None and "doc_id" not in raw:
             raw["doc_id"] = doc_id
         raw["employees"] = int(emp["current"])
         raw["employees_method"] = str(emp.get("method", "unknown"))
@@ -191,14 +195,14 @@ def _raw_by_year(all_metrics: dict[str, dict[str, Any]]) -> dict[str, RawXbrlExt
 
     for fy_end_key, da in all_metrics.get("da", {}).items():
         raw = raw_for(fy_end_key)
-        if (doc_id := _metric_doc_id(da)) is not None:
+        if (doc_id := _metric_doc_id(da)) is not None and "doc_id" not in raw:
             raw["doc_id"] = doc_id
         raw["depreciation_amortization"] = da.get("current")
         raw["depreciation_method"] = str(da.get("method", "unknown"))
 
     for fy_end_key, ob in all_metrics.get("ob", {}).items():
         raw = raw_for(fy_end_key)
-        if (doc_id := _metric_doc_id(ob)) is not None:
+        if (doc_id := _metric_doc_id(ob)) is not None and "doc_id" not in raw:
             raw["doc_id"] = doc_id
         raw["order_intake"] = ob.get("order_intake")
         raw["order_backlog"] = ob.get("order_backlog")
@@ -218,6 +222,7 @@ def _ensure_raw_by_year(
         or "gross_profit" in item
         or "balance_sheet_method" in item
         or "doc_id" in item
+        or "amendment_doc_id" in item
         for item in data.values()
     ):
         return cast(dict[str, RawXbrlExtraction], data)
@@ -237,10 +242,20 @@ def _apply_ibd(
         fy_end_key = _fy_end_key(year)
         raw = raw_by_year.get(fy_end_key, {})
         doc_id = raw.get("doc_id")
+        amendment_doc_id = raw.get("amendment_doc_id")
         cd = year["CalculatedData"]
         if doc_id:
             cd["DocID"] = doc_id
             _set_metric_source(cd, "DocID", source="edinet", unit="id", doc_id=doc_id)
+        if amendment_doc_id:
+            cd["AmendmentDocID"] = amendment_doc_id
+            _set_metric_source(
+                cd,
+                "AmendmentDocID",
+                source="edinet",
+                unit="id",
+                doc_id=amendment_doc_id,
+            )
         ibd_value = raw.get("interest_bearing_debt")
         if ibd_value is None:
             continue
