@@ -9,7 +9,6 @@ smoke企業全社での連結財政状態計算書プロトタイプ実行
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import NotRequired, TypedDict
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -22,7 +21,16 @@ from blue_ticker.analysis.field_parser import (
     resolve_aggregate,
     resolve_item,
 )
+from blue_ticker.analysis.interest_bearing_debt import resolve_ibd
 from blue_ticker.constants.financial import MILLION_YEN
+from blue_ticker.constants.xbrl import (
+    ALL_STANDARD_BS_ITEMS,
+    IBD_CURRENT_COMPONENTS as _IBD_CURRENT_COMPONENTS,
+    IBD_IFRS_CL_TAGS as _IBD_IFRS_CL_TAGS,
+    IBD_IFRS_NCL_TAGS as _IBD_IFRS_NCL_TAGS,
+    IBD_NON_CURRENT_COMPONENTS as _IBD_NON_CURRENT_COMPONENTS,
+    USGAAP_HTML_NCA_COMPONENTS as _USGAAP_HTML_NCA_COMPONENTS,
+)
 
 CACHE_DIR = Path("tmp_cache/edinet")
 
@@ -50,143 +58,6 @@ SMOKE_ENTRIES: list[SmokeEntry] = [
 ]
 
 
-class _BSItemDef(TypedDict):
-    label: str
-    tags: list[str]
-    derive: NotRequired[dict[str, list[str]]]
-
-
-# J-GAAP / IFRS / US-GAAP 共通の項目定義（優先順: J-GAAP → IFRS → US-GAAP → HTML仮想タグ）
-ALL_STANDARD_BS_ITEMS: list[_BSItemDef] = [
-    {
-        "label": "資産合計",
-        "tags": [
-            "TotalAssets", "Assets",                                   # J-GAAP
-            "TotalAssetsIFRS", "AssetsIFRS",                           # IFRS
-            "TotalAssetsUSGAAP",                                        # US-GAAP
-            "TotalAssetsSummaryOfBusinessResults",
-            "TotalAssetsUSGAAPSummaryOfBusinessResults",
-        ],
-    },
-    {
-        "label": "流動資産",
-        "tags": [
-            "CurrentAssets",              # J-GAAP
-            "CurrentAssetsIFRS",          # IFRS
-            "CurrentAssetsUSGAAP",        # US-GAAP
-            "USGAAP_HTML_CurrentAssets",  # US-GAAP HTML
-        ],
-    },
-    {
-        "label": "非流動資産",
-        "tags": [
-            "NoncurrentAssets", "NonCurrentAssets",  # J-GAAP
-            "NonCurrentAssetsIFRS",                   # IFRS
-            "NonCurrentAssetsUSGAAP",                 # US-GAAP
-        ],
-        "derive": {
-            "minuend_tags": [
-                "TotalAssets", "Assets", "TotalAssetsIFRS", "AssetsIFRS", "TotalAssetsUSGAAP",
-                "TotalAssetsUSGAAPSummaryOfBusinessResults",
-            ],
-            "subtrahend_tags": [
-                "CurrentAssets", "CurrentAssetsIFRS", "CurrentAssetsUSGAAP",
-                "USGAAP_HTML_CurrentAssets",
-            ],
-        },
-    },
-    {
-        "label": "流動負債",
-        "tags": [
-            "CurrentLiabilities",                                        # J-GAAP
-            "TotalCurrentLiabilitiesIFRS", "CurrentLiabilitiesIFRS",    # IFRS
-            "CurrentLiabilitiesUSGAAP",                                  # US-GAAP
-            "USGAAP_HTML_CurrentLiabilities",                            # US-GAAP HTML
-        ],
-    },
-    {
-        "label": "非流動負債",
-        "tags": [
-            "NoncurrentLiabilities", "NonCurrentLiabilities",           # J-GAAP
-            "NonCurrentLiabilitiesIFRS",                                 # IFRS
-            "LongTermLiabilitiesUSGAAP", "NonCurrentLiabilitiesUSGAAP", # US-GAAP
-            "USGAAP_HTML_NonCurrentLiabilities",                         # US-GAAP HTML
-        ],
-        "derive": {
-            "minuend_tags": [
-                "Liabilities", "LiabilitiesIFRS", "TotalLiabilitiesUSGAAP",
-                "USGAAP_HTML_TotalLiabilities",
-            ],
-            "subtrahend_tags": [
-                "CurrentLiabilities",
-                "TotalCurrentLiabilitiesIFRS", "CurrentLiabilitiesIFRS",
-                "CurrentLiabilitiesUSGAAP",
-                "USGAAP_HTML_CurrentLiabilities",
-            ],
-        },
-    },
-    {
-        "label": "純資産/資本合計",
-        "tags": [
-            "NetAssets",                                               # J-GAAP（直接BS）
-            "EquityIFRS", "TotalEquityIFRS",                          # IFRS（合計）
-            "EquityIncludingPortionAttributableToNonControllingInterestIFRSSummaryOfBusinessResults",
-            "NetAssetsUSGAAP", "TotalEquityUSGAAP",                   # US-GAAP（合計）
-            "EquityIncludingPortionAttributableToNonControllingInterestUSGAAPSummaryOfBusinessResults",
-            "USGAAP_HTML_NetAssets",                                   # US-GAAP HTML
-            # サマリータグは直接BSタグが取れない場合のフォールバック
-            "NetAssetsSummaryOfBusinessResults",
-            "EquityAttributableToOwnersOfParentIFRS",
-            "EquityAttributableToOwnersOfParentUSGAAP",
-            "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
-        ],
-    },
-]
-
-# US-GAAP 非流動資産コンポーネント（HTML 仮想タグ）
-_USGAAP_HTML_NCA_COMPONENTS: list[list[str]] = [
-    ["USGAAP_HTML_PPENet"],
-    ["USGAAP_HTML_InvestmentsLTReceivables"],
-    ["USGAAP_HTML_OtherNCA"],
-]
-
-
-# 有利子負債（IBD）コンポーネント定義
-# 各要素は「1コンポーネントの候補タグリスト（優先順）」
-_IBD_CURRENT_COMPONENTS: list[list[str]] = [
-    ["ShortTermLoansPayable", "BorrowingsCLIFRS"],                                              # 短期借入金
-    ["CommercialPapersLiabilities", "CommercialPapersCLIFRS"],                                 # CP
-    ["ShortTermBondsPayable"],                                                                  # 短期社債
-    ["CurrentPortionOfBonds", "RedeemableBondsWithinOneYear", "CurrentPortionOfBondsCLIFRS"],  # 1年内社債
-    ["CurrentPortionOfLongTermLoansPayable", "CurrentPortionOfLongTermBorrowingsCLIFRS"],       # 1年内長期借入金
-]
-_IBD_NON_CURRENT_COMPONENTS: list[list[str]] = [
-    ["BondsPayable", "BondsPayableNCLIFRS"],       # 社債
-    ["LongTermLoansPayable", "BorrowingsNCLIFRS"],  # 長期借入金
-]
-# IFRS 集約タグ（流動・非流動それぞれ1タグで全コンポーネントを集約）
-_IBD_IFRS_CL_TAGS = ["InterestBearingLiabilitiesCLIFRS", "BondsAndBorrowingsCLIFRS"]
-_IBD_IFRS_NCL_TAGS = ["InterestBearingLiabilitiesNCLIFRS", "BondsAndBorrowingsNCLIFRS"]
-
-
-def resolve_ibd(field_set: FieldSet) -> ResolvedItem:
-    """有利子負債合計を解決する: 直接法 → IFRS集約 → コンポーネント積み上げ → HTML仮想タグ"""
-    # 1. 直接法
-    direct = resolve_item(field_set, ["InterestBearingDebt", "InterestBearingLiabilities"])
-    if direct["tag"]:
-        return direct
-    # 2. IFRS 集約タグ（流動 + 非流動）
-    ifrs_agg = resolve_aggregate(field_set, [_IBD_IFRS_CL_TAGS, _IBD_IFRS_NCL_TAGS])
-    if ifrs_agg["tag"]:
-        return ifrs_agg
-    # 3. コンポーネント積み上げ
-    comp = resolve_aggregate(field_set, _IBD_CURRENT_COMPONENTS + _IBD_NON_CURRENT_COMPONENTS)
-    if comp["tag"]:
-        return comp
-    # 4. US-GAAP HTML 仮想タグ（流動 + 非流動）
-    return resolve_aggregate(field_set, [["USGAAP_HTML_IBDCurrent"], ["USGAAP_HTML_IBDNonCurrent"]])
-
-
 def resolve_bs(field_set: FieldSet) -> list[tuple[str, ResolvedItem]]:
     results: list[tuple[str, ResolvedItem]] = []
     for item_def in ALL_STANDARD_BS_ITEMS:
@@ -194,8 +65,7 @@ def resolve_bs(field_set: FieldSet) -> list[tuple[str, ResolvedItem]]:
         if resolved["tag"] is None and "derive" in item_def:
             d = item_def["derive"]
             resolved = derive_subtraction(field_set, d["minuend_tags"], d["subtrahend_tags"])
-        # 非流動資産: 直接・差引きが両方 None → US-GAAP HTML コンポーネント積み上げ
-        if item_def["label"] == "非流動資産" and resolved["current"] is None:
+        if item_def["field"] == "NonCurrentAssets" and resolved["current"] is None:
             resolved = resolve_aggregate(field_set, _USGAAP_HTML_NCA_COMPONENTS)
         results.append((item_def["label"], resolved))
     return results

@@ -24,18 +24,10 @@ from blue_ticker.analysis.field_parser import (
     resolve_item,
     derive_subtraction,
 )
-from blue_ticker.analysis.interest_bearing_debt import extract_interest_bearing_debt
+from blue_ticker.analysis.interest_bearing_debt import extract_interest_bearing_debt, resolve_ibd
 from blue_ticker.constants.financial import MILLION_YEN
-from scripts.smoke_bs import (
-    ALL_STANDARD_BS_ITEMS,
-    SMOKE_ENTRIES,
-    _IBD_CURRENT_COMPONENTS,
-    _IBD_IFRS_CL_TAGS,
-    _IBD_IFRS_NCL_TAGS,
-    _IBD_NON_CURRENT_COMPONENTS,
-    _is_usgaap,
-    resolve_ibd,
-)
+from blue_ticker.constants.xbrl import ALL_STANDARD_BS_ITEMS
+from scripts.smoke_bs import SMOKE_ENTRIES, _is_usgaap
 
 CACHE_DIR = Path("tmp_cache/edinet")
 THRESHOLD_M = 10  # 差異を「実質一致」とみなす閾値（百万円）

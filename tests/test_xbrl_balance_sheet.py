@@ -67,7 +67,7 @@ class TestBalanceSheetExtraction:
             result = extract_balance_sheet(xbrl_dir)
 
         assert result["accounting_standard"] == "J-GAAP"
-        assert result["method"] == "direct"
+        assert result["method"] == "field_parser"
         assert result["current_assets"] == pytest.approx(2_923_181 * MILLION_YEN)
         assert result["non_current_assets"] == pytest.approx(3_281_728 * MILLION_YEN)
         assert result["total_assets"] == pytest.approx(6_204_909 * MILLION_YEN)
@@ -122,7 +122,7 @@ class TestBalanceSheetExtraction:
         assert result["current_liabilities"] == pytest.approx(1_125_940 * MILLION_YEN)
         assert result["non_current_liabilities"] == pytest.approx(771_286 * MILLION_YEN)
         assert result["net_assets"] == pytest.approx(3_352_682 * MILLION_YEN)
-        assert result["components"][2]["label"] == "投資及び長期債権合計＋有形固定資産合計＋その他の資産合計"
+        assert "InvestmentsAndLongTermReceivablesUSGAAP" in (result["components"][2]["tag"] or "")
 
     def test_uses_usgaap_html_balance_sheet_rows_when_xbrl_has_only_summary(self):
         html = """
@@ -184,7 +184,7 @@ class TestBalanceSheetExtraction:
 
             result = extract_balance_sheet(xbrl_dir)
 
-        assert result["components"][2]["label"] == "OtherAssetsUSGAAP"
+        assert result["components"][2]["tag"] == "OtherAssetsUSGAAP"
 
     def test_single_entity_uses_plain_context(self):
         """単体のみ企業（_NonConsolidatedMember なし）は plain context のBS値を返す"""

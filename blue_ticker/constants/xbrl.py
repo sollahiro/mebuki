@@ -257,6 +257,13 @@ class _IFRSBSItemDef(TypedDict):
     derive: NotRequired[dict[str, list[str]]]
 
 
+class _StandardBSItemDef(TypedDict):
+    field: str
+    label: str
+    tags: list[str]
+    derive: NotRequired[dict[str, list[str]]]
+
+
 IFRS_BS_ITEM_DEFINITIONS: list[_IFRSBSItemDef] = [
     {
         "label": "資産合計",
@@ -632,3 +639,133 @@ IFRS_DEPRECIATION_MARKER_TAGS: list[str] = (
     IFRS_PL_MARKER_TAGS
     + CF_DEPRECIATION_IFRS_TAGS
 )
+
+# ──────────────────────────────────────────────────────────────────────────────
+# field_parser ベース BS・IBD 項目定義
+# analysis/balance_sheet.py / interest_bearing_debt.py で使用
+# ──────────────────────────────────────────────────────────────────────────────
+
+# J-GAAP / IFRS / US-GAAP 共通 BS 項目定義
+# 各 tags リストは優先順（最初に値が取れたタグを採用）
+ALL_STANDARD_BS_ITEMS: list[_StandardBSItemDef] = [
+    {
+        "field": "TotalAssets",
+        "label": "資産合計",
+        "tags": [
+            "TotalAssets", "Assets",
+            "TotalAssetsIFRS", "AssetsIFRS",
+            "TotalAssetsUSGAAP",
+            "TotalAssetsSummaryOfBusinessResults",
+            "TotalAssetsUSGAAPSummaryOfBusinessResults",
+        ],
+    },
+    {
+        "field": "CurrentAssets",
+        "label": "流動資産",
+        "tags": [
+            "CurrentAssets",
+            "CurrentAssetsIFRS",
+            "CurrentAssetsUSGAAP",
+            "USGAAP_HTML_CurrentAssets",
+        ],
+    },
+    {
+        "field": "NonCurrentAssets",
+        "label": "非流動資産",
+        "tags": [
+            "NoncurrentAssets", "NonCurrentAssets",
+            "NonCurrentAssetsIFRS",
+            "NonCurrentAssetsUSGAAP",
+        ],
+        "derive": {
+            "minuend_tags": [
+                "TotalAssets", "Assets", "TotalAssetsIFRS", "AssetsIFRS", "TotalAssetsUSGAAP",
+                "TotalAssetsUSGAAPSummaryOfBusinessResults",
+            ],
+            "subtrahend_tags": [
+                "CurrentAssets", "CurrentAssetsIFRS", "CurrentAssetsUSGAAP",
+                "USGAAP_HTML_CurrentAssets",
+            ],
+        },
+    },
+    {
+        "field": "CurrentLiabilities",
+        "label": "流動負債",
+        "tags": [
+            "CurrentLiabilities",
+            "TotalCurrentLiabilitiesIFRS", "CurrentLiabilitiesIFRS",
+            "CurrentLiabilitiesUSGAAP",
+            "USGAAP_HTML_CurrentLiabilities",
+        ],
+    },
+    {
+        "field": "NonCurrentLiabilities",
+        "label": "非流動負債",
+        "tags": [
+            "NoncurrentLiabilities", "NonCurrentLiabilities",
+            "NonCurrentLiabilitiesIFRS",
+            "LongTermLiabilitiesUSGAAP", "NonCurrentLiabilitiesUSGAAP",
+            "USGAAP_HTML_NonCurrentLiabilities",
+        ],
+        "derive": {
+            "minuend_tags": [
+                "Liabilities", "LiabilitiesIFRS", "TotalLiabilitiesUSGAAP",
+                "USGAAP_HTML_TotalLiabilities",
+            ],
+            "subtrahend_tags": [
+                "CurrentLiabilities",
+                "TotalCurrentLiabilitiesIFRS", "CurrentLiabilitiesIFRS",
+                "CurrentLiabilitiesUSGAAP",
+                "USGAAP_HTML_CurrentLiabilities",
+            ],
+        },
+    },
+    {
+        "field": "NetAssets",
+        "label": "純資産/資本合計",
+        "tags": [
+            "NetAssets",
+            "EquityIFRS", "TotalEquityIFRS",
+            "EquityIncludingPortionAttributableToNonControllingInterestIFRSSummaryOfBusinessResults",
+            "NetAssetsUSGAAP", "TotalEquityUSGAAP",
+            "EquityIncludingPortionAttributableToNonControllingInterestUSGAAPSummaryOfBusinessResults",
+            "USGAAP_HTML_NetAssets",
+            "NetAssetsSummaryOfBusinessResults",
+            "EquityAttributableToOwnersOfParentIFRS",
+            "EquityAttributableToOwnersOfParentUSGAAP",
+            "EquityAttributableToOwnersOfParentUSGAAPSummaryOfBusinessResults",
+        ],
+    },
+]
+
+# US-GAAP 非流動資産コンポーネント（HTML 仮想タグ積み上げ）
+USGAAP_HTML_NCA_COMPONENTS: list[list[str]] = [
+    ["USGAAP_HTML_PPENet"],
+    ["USGAAP_HTML_InvestmentsLTReceivables"],
+    ["USGAAP_HTML_OtherNCA"],
+]
+
+# US-GAAP 非流動資産コンポーネント（XBRL タグ積み上げ — HTML が存在しない場合のフォールバック）
+USGAAP_XBRL_NCA_COMPONENTS: list[list[str]] = [
+    ["InvestmentsAndLongTermReceivablesUSGAAP"],
+    ["PropertyPlantAndEquipmentNetUSGAAP"],
+    ["OtherAssetsUSGAAP"],
+]
+
+# 有利子負債（IBD）コンポーネント定義
+# 各要素は「1コンポーネントの候補タグリスト（優先順）」
+IBD_CURRENT_COMPONENTS: list[list[str]] = [
+    ["ShortTermLoansPayable", "BorrowingsCLIFRS"],
+    ["CommercialPapersLiabilities", "CommercialPapersCLIFRS"],
+    ["ShortTermBondsPayable"],
+    ["CurrentPortionOfBonds", "RedeemableBondsWithinOneYear", "CurrentPortionOfBondsCLIFRS"],
+    ["CurrentPortionOfLongTermLoansPayable", "CurrentPortionOfLongTermBorrowingsCLIFRS"],
+]
+IBD_NON_CURRENT_COMPONENTS: list[list[str]] = [
+    ["BondsPayable", "BondsPayableNCLIFRS"],
+    ["LongTermLoansPayable", "BorrowingsNCLIFRS"],
+]
+
+# IFRS 集約タグ（流動・非流動それぞれ1タグで全コンポーネントを集約）
+IBD_IFRS_CL_TAGS: list[str] = ["InterestBearingLiabilitiesCLIFRS", "BondsAndBorrowingsCLIFRS"]
+IBD_IFRS_NCL_TAGS: list[str] = ["InterestBearingLiabilitiesNCLIFRS", "BondsAndBorrowingsNCLIFRS"]

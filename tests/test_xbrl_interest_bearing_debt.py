@@ -585,8 +585,10 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# テスト
+# テスト（本番実装を使用）
 # ---------------------------------------------------------------------------
+
+from blue_ticker.analysis.interest_bearing_debt import extract_interest_bearing_debt  # noqa: E402
 
 NS_XBRLI = "http://www.xbrl.org/2003/instance"
 NS_JPPFS = "http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2022-11-01/jppfs_cor"
@@ -652,7 +654,7 @@ class TestDirectExtraction(unittest.TestCase):
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
         result = extract_interest_bearing_debt(self.xbrl_dir)
-        self.assertEqual(result["method"], "direct")
+        self.assertEqual(result["method"], "field_parser")
         self.assertEqual(result["accounting_standard"], "J-GAAP")
         self.assertAlmostEqual(result["current"], 500_000_000_000)
         self.assertAlmostEqual(result["prior"], 450_000_000_000)
@@ -685,7 +687,7 @@ class TestJGaapComponents(unittest.TestCase):
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
         result = extract_interest_bearing_debt(self.xbrl_dir)
-        self.assertEqual(result["method"], "computed")
+        self.assertEqual(result["method"], "field_parser")
         self.assertEqual(result["accounting_standard"], "J-GAAP")
         # 合計: 10+5+3+8+50+30 = 106 十億円
         self.assertAlmostEqual(result["current"], 106_000_000_000)
@@ -725,7 +727,7 @@ class TestIfrsComponents(unittest.TestCase):
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
         result = extract_interest_bearing_debt(self.xbrl_dir)
-        self.assertEqual(result["method"], "computed")
+        self.assertEqual(result["method"], "field_parser")
         self.assertEqual(result["accounting_standard"], "IFRS")
         # 合計: 5923+10000+24989+8234+204412+211795 = 465353 百万円
         self.assertAlmostEqual(result["current"], 465_353_000_000)
@@ -760,11 +762,17 @@ class TestConsolidatedPriority(unittest.TestCase):
 
     def test_ifrs_tag_preferred_over_jgaap_nonconsolidated(self):
         """IFRS連結タグが J-GAAP 個別タグより優先される。"""
+        # 実際のXBRL書類では NetAssets 等のタグが連結・個別両コンテキストに存在し
+        # has_nonconsolidated_contexts が True になる。それを再現して非連結フォールバックを抑止する。
         xml = _make_xbrl("""
             <jppfs_cor:BorrowingsCLIFRS contextRef="CurrentYearInstant"
                 unitRef="JPY">5923000000</jppfs_cor:BorrowingsCLIFRS>
             <jppfs_cor:ShortTermLoansPayable contextRef="CurrentYearInstant_NonConsolidatedMember"
                 unitRef="JPY">116294000000</jppfs_cor:ShortTermLoansPayable>
+            <jppfs_cor:NetAssets contextRef="CurrentYearInstant"
+                unitRef="JPY">1000000000000</jppfs_cor:NetAssets>
+            <jppfs_cor:NetAssets contextRef="CurrentYearInstant_NonConsolidatedMember"
+                unitRef="JPY">800000000000</jppfs_cor:NetAssets>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
         result = extract_interest_bearing_debt(self.xbrl_dir)
