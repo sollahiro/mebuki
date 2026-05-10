@@ -5,16 +5,29 @@
 """
 
 import logging
-from typing import Any
 from collections.abc import Sequence
 from datetime import datetime
+from typing import Any, cast
 
 from ..utils.converters import to_float, is_valid_value, is_valid_financial_record, extract_year_month
+from ..utils.errors import (
+    check_data_availability,
+    get_data_availability_message,
+    validate_metrics_for_analysis,
+    DataAvailability
+)
 from blue_ticker.constants.financial import (
     MILLION_YEN,
     PERCENT,
 )
-from blue_ticker.utils.metrics_types import RawData, CalculatedData, YearEntry, MetricsResult
+from blue_ticker.utils.metrics_types import (
+    RawData,
+    CalculatedData,
+    YearEntry,
+    MetricsResult,
+    MetricSource,
+    StockSplitEvent,
+)
 from blue_ticker.utils.metrics_access import raw_metric_millions
 
 
@@ -40,13 +53,6 @@ def _calculate_profitability_metrics(np: float | None, op: float | None, eq: flo
         "cf_conversion_rate": cf_conversion_rate
     }
 
-
-from ..utils.errors import (
-    check_data_availability,
-    get_data_availability_message,
-    validate_metrics_for_analysis,
-    DataAvailability
-)
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +111,8 @@ def _filter_annual_data(annual_data: list[dict[str, Any]], analysis_years: int) 
 
 def _extract_raw_values(year_data: dict[str, Any]) -> RawData:
     """年度データから生値を抽出する"""
+    shareholder_metric_sources = year_data.get("ShareholderMetricSources")
+    stock_split_events = year_data.get("StockSplitEvents")
     return {
         'CurPerType': year_data.get("CurPerType", ""),
         'CurFYSt': year_data.get("CurFYSt", ""),
@@ -124,6 +132,13 @@ def _extract_raw_values(year_data: dict[str, Any]) -> RawData:
         'TreasuryShares': to_float(year_data.get("TreasuryShares")),
         'SharesForBPS': to_float(year_data.get("SharesForBPS")),
         'ParentEquity': to_float(year_data.get("ParentEquity")),
+        'StockSplitRatio': to_float(year_data.get("StockSplitRatio")),
+        'CumulativeStockSplitRatio': to_float(year_data.get("CumulativeStockSplitRatio")),
+        'StockSplitEvents': (
+            cast(list[StockSplitEvent], stock_split_events)
+            if isinstance(stock_split_events, list)
+            else []
+        ),
         'CalculatedEPS': to_float(year_data.get("CalculatedEPS")),
         'CalculatedBPS': to_float(year_data.get("CalculatedBPS")),
         'EPSDirectDiff': to_float(year_data.get("EPSDirectDiff")),
@@ -133,8 +148,26 @@ def _extract_raw_values(year_data: dict[str, Any]) -> RawData:
         'CashEq': to_float(year_data.get("CashAndCashEquivalents")) or to_float(year_data.get("CashEq")) or to_float(year_data.get("Cash")),
         'Div2Q': to_float(year_data.get("Div2Q")),
         'DivAnn': to_float(year_data.get("DivAnn")),
+        'ShareholderMetricSources': (
+            cast(dict[str, MetricSource], shareholder_metric_sources)
+            if isinstance(shareholder_metric_sources, dict)
+            else {}
+        ),
         '_xbrl_source': bool(year_data.get("_xbrl_source")),
     }
+
+
+def _shareholder_metric_source(
+    raw_values: RawData,
+    metric: str,
+    default: MetricSource,
+) -> MetricSource:
+    sources = raw_values.get("ShareholderMetricSources", {})
+    source = sources.get(metric)
+    merged = cast(MetricSource, dict(default))
+    if source is not None:
+        merged.update(source)
+    return merged
 
 
 def _add_per_share_calculation_values(
@@ -143,54 +176,144 @@ def _add_per_share_calculation_values(
     base_source: str,
 ) -> None:
     metric_sources = values.setdefault("MetricSources", {})
-    metric_sources["EPS"] = {
-        "source": base_source,
-        "unit": "yen_per_share",
-        "method": "direct",
-    }
-    metric_sources["BPS"] = {
-        "source": base_source,
-        "unit": "yen_per_share",
-        "method": "direct",
-    }
+    default_statement = "summary" if raw_values.get("_xbrl_source") else "external"
+    metric_sources["EPS"] = _shareholder_metric_source(
+        raw_values,
+        "EPS",
+        {
+            "source": base_source,
+            "statement": default_statement,
+            "confidence": 0.9 if raw_values.get("EPS") is not None else 0.0,
+            "unit": "yen_per_share",
+            "method": "direct",
+        },
+    )
+    metric_sources["BPS"] = _shareholder_metric_source(
+        raw_values,
+        "BPS",
+        {
+            "source": base_source,
+            "statement": default_statement,
+            "confidence": 0.9 if raw_values.get("BPS") is not None else 0.0,
+            "unit": "yen_per_share",
+            "method": "direct",
+        },
+    )
+
+    for metric in ("AverageShares", "TreasuryShares", "SharesForBPS", "ParentEquity"):
+        value = raw_values.get(metric)
+        if value is None:
+            continue
+        values[metric] = value
+        metric_sources[metric] = _shareholder_metric_source(
+            raw_values,
+            metric,
+            {
+                "source": base_source,
+                "statement": default_statement,
+                "confidence": 0.9,
+                "unit": "shares" if metric != "ParentEquity" else "yen",
+            },
+        )
+
+    stock_split_ratio = raw_values.get("StockSplitRatio")
+    if stock_split_ratio is not None:
+        values["StockSplitRatio"] = stock_split_ratio
+        metric_sources["StockSplitRatio"] = _shareholder_metric_source(
+            raw_values,
+            "StockSplitRatio",
+            {
+                "source": "fallback",
+                "statement": "notes",
+                "confidence": 0.65,
+            },
+        )
+
+    cumulative_stock_split_ratio = raw_values.get("CumulativeStockSplitRatio")
+    if cumulative_stock_split_ratio is not None:
+        values["CumulativeStockSplitRatio"] = cumulative_stock_split_ratio
+        metric_sources["CumulativeStockSplitRatio"] = _shareholder_metric_source(
+            raw_values,
+            "CumulativeStockSplitRatio",
+            {
+                "source": "fallback",
+                "statement": "notes",
+                "confidence": 0.65,
+                "method": "textblock_events",
+            },
+        )
+
+    stock_split_events = raw_values.get("StockSplitEvents", [])
+    if stock_split_events:
+        values["StockSplitEvents"] = stock_split_events
+        metric_sources["StockSplitEvents"] = _shareholder_metric_source(
+            raw_values,
+            "StockSplitEvents",
+            {
+                "source": "fallback",
+                "statement": "notes",
+                "confidence": 0.65,
+                "method": "textblock_events",
+            },
+        )
 
     calculated_eps = raw_values.get("CalculatedEPS")
     if calculated_eps is not None:
         values["CalculatedEPS"] = calculated_eps
-        values["AverageShares"] = raw_values.get("AverageShares")
-        metric_sources["CalculatedEPS"] = {
-            "source": "calculated",
-            "method": "NP / AverageShares",
-            "unit": "yen_per_share",
-        }
+        metric_sources["CalculatedEPS"] = _shareholder_metric_source(
+            raw_values,
+            "CalculatedEPS",
+            {
+                "source": "calculated",
+                "statement": "consolidated",
+                "confidence": 0.8,
+                "method": "NP / AverageShares",
+                "unit": "yen_per_share",
+            },
+        )
     eps_direct_diff = raw_values.get("EPSDirectDiff")
     if eps_direct_diff is not None:
         values["EPSDirectDiff"] = eps_direct_diff
-        metric_sources["EPSDirectDiff"] = {
-            "source": "derived",
-            "method": "EPS - CalculatedEPS",
-            "unit": "yen_per_share",
-        }
+        metric_sources["EPSDirectDiff"] = _shareholder_metric_source(
+            raw_values,
+            "EPSDirectDiff",
+            {
+                "source": "calculated",
+                "statement": default_statement,
+                "confidence": 0.9,
+                "method": "EPS - CalculatedEPS",
+                "unit": "yen_per_share",
+            },
+        )
 
     calculated_bps = raw_values.get("CalculatedBPS")
     if calculated_bps is not None:
         values["CalculatedBPS"] = calculated_bps
-        values["ParentEquity"] = raw_values.get("ParentEquity")
-        values["TreasuryShares"] = raw_values.get("TreasuryShares")
-        values["SharesForBPS"] = raw_values.get("SharesForBPS")
-        metric_sources["CalculatedBPS"] = {
-            "source": "calculated",
-            "method": "ParentEquity / SharesForBPS",
-            "unit": "yen_per_share",
-        }
+        metric_sources["CalculatedBPS"] = _shareholder_metric_source(
+            raw_values,
+            "CalculatedBPS",
+            {
+                "source": "calculated",
+                "statement": "consolidated",
+                "confidence": 0.8,
+                "method": "ParentEquity / SharesForBPS",
+                "unit": "yen_per_share",
+            },
+        )
     bps_direct_diff = raw_values.get("BPSDirectDiff")
     if bps_direct_diff is not None:
         values["BPSDirectDiff"] = bps_direct_diff
-        metric_sources["BPSDirectDiff"] = {
-            "source": "derived",
-            "method": "BPS - CalculatedBPS",
-            "unit": "yen_per_share",
-        }
+        metric_sources["BPSDirectDiff"] = _shareholder_metric_source(
+            raw_values,
+            "BPSDirectDiff",
+            {
+                "source": "calculated",
+                "statement": default_statement,
+                "confidence": 0.9,
+                "method": "BPS - CalculatedBPS",
+                "unit": "yen_per_share",
+            },
+        )
 
 
 def _calculate_base_values(raw_values: RawData) -> CalculatedData:

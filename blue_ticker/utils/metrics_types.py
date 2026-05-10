@@ -26,8 +26,21 @@ class MetricSource(TypedDict, total=False):
     docID: str | None
     unit: str
     label: str
+    statement: str
+    confidence: float
     rf: float
     rf_source: str
+
+
+class StockSplitEvent(TypedDict, total=False):
+    ratio: float
+    effective_date: str | None
+    scope: str
+    already_reflected: bool
+    applies_to: str
+    dividend_basis: str | None
+    source_statement: str
+    context_excerpt: str
 
 
 class RawData(TypedDict, total=False):
@@ -49,6 +62,9 @@ class RawData(TypedDict, total=False):
     TreasuryShares: float | None
     SharesForBPS: float | None
     ParentEquity: float | None
+    StockSplitRatio: float | None
+    CumulativeStockSplitRatio: float | None
+    StockSplitEvents: list[StockSplitEvent]
     CalculatedEPS: float | None
     CalculatedBPS: float | None
     EPSDirectDiff: float | None
@@ -58,6 +74,7 @@ class RawData(TypedDict, total=False):
     CashEq: float | None
     Div2Q: float | None
     DivAnn: float | None
+    ShareholderMetricSources: dict[str, MetricSource]
     _xbrl_source: bool
 
 
@@ -79,6 +96,9 @@ class CalculatedData(TypedDict, total=False):
     TreasuryShares: float | None
     SharesForBPS: float | None
     ParentEquity: float | None
+    StockSplitRatio: float | None
+    CumulativeStockSplitRatio: float | None
+    StockSplitEvents: list[StockSplitEvent]
     # ── analyzer.py: _apply_gross_profit ──
     GrossProfit: float | None
     GrossProfitMargin: float | None

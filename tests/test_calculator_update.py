@@ -1,10 +1,4 @@
-import sys
-from pathlib import Path
 from typing import Any, cast
-
-# プロジェクトルートをパスに追加
-project_root = Path(__file__).parent.parent
-sys.path.append(str(project_root))
 
 from blue_ticker.analysis.calculator import calculate_metrics_flexible
 from blue_ticker.utils.metrics_access import metric_view
@@ -110,6 +104,29 @@ def test_calculated_eps_bps_are_exposed_as_verification_values():
                 "CalculatedBPS": 100.0,
                 "EPSDirectDiff": -1.75,
                 "BPSDirectDiff": -2.0,
+                "ShareholderMetricSources": {
+                    "EPS": {
+                        "source": "direct",
+                        "statement": "summary",
+                        "confidence": 0.9,
+                        "unit": "yen_per_share",
+                        "method": "direct",
+                    },
+                    "AverageShares": {
+                        "source": "fallback",
+                        "statement": "notes",
+                        "confidence": 0.65,
+                        "unit": "shares",
+                        "method": "textblock_table",
+                    },
+                    "CalculatedEPS": {
+                        "source": "calculated",
+                        "statement": "consolidated",
+                        "confidence": 0.8,
+                        "unit": "yen_per_share",
+                        "method": "NP / AverageShares",
+                    },
+                },
                 "_xbrl_source": True,
             },
         ],
@@ -128,16 +145,10 @@ def test_calculated_eps_bps_are_exposed_as_verification_values():
     assert current_calc["EPSDirectDiff"] == -1.75
     assert current_calc["BPSDirectDiff"] == -2.0
     assert current_calc["MetricSources"]["EPS"]["method"] == "direct"
+    assert current_calc["MetricSources"]["EPS"]["source"] == "direct"
+    assert current_calc["MetricSources"]["EPS"]["statement"] == "summary"
+    assert current_calc["MetricSources"]["EPS"]["confidence"] == 0.9
+    assert current_calc["MetricSources"]["AverageShares"]["source"] == "fallback"
+    assert current_calc["MetricSources"]["AverageShares"]["statement"] == "notes"
     assert current_calc["MetricSources"]["CalculatedEPS"]["method"] == "NP / AverageShares"
-
-if __name__ == "__main__":
-    try:
-        test_annual_financial_period()
-        print("\nAll tests passed successfully!")
-        sys.exit(0)
-    except AssertionError as e:
-        print(f"\nTest failed: {e}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"\nAn error occurred: {e}")
-        sys.exit(1)
+    assert current_calc["MetricSources"]["CalculatedEPS"]["statement"] == "consolidated"

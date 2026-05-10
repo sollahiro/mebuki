@@ -126,10 +126,15 @@ _STATEMENT_SECTIONS_BY_KEY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] =
 }
 
 _SHAREHOLDER_CALCULATION_FIELDS: tuple[str, ...] = (
+    # extract_shareholder_metrics() が返す検証・注記fallback由来の値を
+    # 年次レコードへ渡す。新しい株主計算フィールドを追加したらここも更新する。
     "AverageShares",
     "TreasuryShares",
     "SharesForBPS",
     "ParentEquity",
+    "StockSplitRatio",
+    "CumulativeStockSplitRatio",
+    "StockSplitEvents",
     "CalculatedEPS",
     "CalculatedBPS",
     "EPSDirectDiff",
@@ -1196,9 +1201,12 @@ class EdinetFetcher:
                 "_accounting_standard": is_result.get("accounting_standard"),
                 "_docID": doc.get("docID"),
             }
+            shareholder_metric_sources = sh_result.get("MetricSources")
+            if isinstance(shareholder_metric_sources, dict) and shareholder_metric_sources:
+                record["ShareholderMetricSources"] = shareholder_metric_sources
             for key in _SHAREHOLDER_CALCULATION_FIELDS:
                 value = sh_result.get(key)
-                if value is not None:
+                if value is not None and value != []:
                     record[key] = value
             records.append(record)
             logger.info(
@@ -1315,9 +1323,12 @@ class EdinetFetcher:
                 "_accounting_standard": is_result.get("accounting_standard"),
                 "_docID": doc.get("docID"),
             }
+            shareholder_metric_sources = sh_result.get("MetricSources")
+            if isinstance(shareholder_metric_sources, dict) and shareholder_metric_sources:
+                record["ShareholderMetricSources"] = shareholder_metric_sources
             for key in _SHAREHOLDER_CALCULATION_FIELDS:
                 value = sh_result.get(key)
-                if value is not None:
+                if value is not None and value != []:
                     record[key] = value
             records.append(record)
             logger.info(
