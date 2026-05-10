@@ -243,6 +243,63 @@ BALANCE_SHEET_SUBTRACT_DEFINITIONS: list[_BalanceSheetSubtractDef] = [
     },
 ]
 
+# 連結財政状態計算書（IFRS）項目定義
+# analysis/field_parser.py で使用
+#
+# 各エントリは {"tags": [...], "derive": {...}} の形。
+#   tags     : 優先順に試すXBRLタグ。最初に値が見つかったものを採用。
+#   derive   : タグで直接取れない場合の差し引き計算定義。
+#              {"minuend_tags": [...], "subtrahend_tags": [...]}
+
+class _IFRSBSItemDef(TypedDict):
+    label: str
+    tags: list[str]
+    derive: NotRequired[dict[str, list[str]]]
+
+
+IFRS_BS_ITEM_DEFINITIONS: list[_IFRSBSItemDef] = [
+    {
+        "label": "資産合計",
+        "tags": ["AssetsIFRS", "TotalAssetsIFRS"],
+    },
+    {
+        "label": "流動資産",
+        "tags": ["CurrentAssetsIFRS"],
+    },
+    {
+        "label": "非流動資産",
+        "tags": ["NonCurrentAssetsIFRS"],
+        "derive": {
+            "minuend_tags": ["AssetsIFRS", "TotalAssetsIFRS"],
+            "subtrahend_tags": ["CurrentAssetsIFRS"],
+        },
+    },
+    {
+        "label": "負債合計",
+        "tags": ["LiabilitiesIFRS", "TotalLiabilitiesIFRS"],
+    },
+    {
+        "label": "流動負債",
+        "tags": ["TotalCurrentLiabilitiesIFRS", "CurrentLiabilitiesIFRS"],
+    },
+    {
+        "label": "非流動負債",
+        "tags": ["NonCurrentLiabilitiesIFRS"],
+        "derive": {
+            "minuend_tags": ["LiabilitiesIFRS", "TotalLiabilitiesIFRS"],
+            "subtrahend_tags": ["TotalCurrentLiabilitiesIFRS", "CurrentLiabilitiesIFRS"],
+        },
+    },
+    {
+        "label": "資本合計",
+        "tags": ["EquityIFRS", "TotalEquityIFRS"],
+    },
+    {
+        "label": "親会社所有者帰属持分",
+        "tags": ["EquityAttributableToOwnersOfParentIFRS"],
+    },
+]
+
 # 有利子負債（IBD）タグ定義
 # analysis/interest_bearing_debt.py で使用
 
