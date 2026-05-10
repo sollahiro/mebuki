@@ -25,6 +25,7 @@ from blue_ticker.analysis.field_parser import (
     derive_subtraction,
 )
 from blue_ticker.analysis.interest_bearing_debt import extract_interest_bearing_debt, resolve_ibd
+from blue_ticker.analysis.sections import BalanceSheetSection
 from blue_ticker.constants.financial import MILLION_YEN
 from blue_ticker.constants.xbrl import ALL_STANDARD_BS_ITEMS
 from scripts.smoke_bs import SMOKE_ENTRIES, _is_usgaap
@@ -79,7 +80,7 @@ def _build_proto_field_set(xbrl_dir: Path) -> FieldSet:
 
 
 def compare_bs(xbrl_dir: Path) -> list[BSRow]:
-    legacy = extract_balance_sheet(xbrl_dir)
+    legacy = extract_balance_sheet(BalanceSheetSection.from_xbrl(xbrl_dir))
     proto = resolve_bs_proto(_build_proto_field_set(xbrl_dir))
 
     return [
@@ -93,11 +94,12 @@ def compare_bs(xbrl_dir: Path) -> list[BSRow]:
 
 
 def compare_ibd(xbrl_dir: Path) -> tuple[float | None, float | None, str, str]:
-    legacy_result = extract_interest_bearing_debt(xbrl_dir)
+    section = BalanceSheetSection.from_xbrl(xbrl_dir)
+    legacy_result = extract_interest_bearing_debt(section)
     legacy_val = legacy_result["current"]
     legacy_method = legacy_result["method"]
 
-    proto_result = resolve_ibd(_build_proto_field_set(xbrl_dir))
+    proto_result = resolve_ibd(section)
     proto_val = proto_result["current"]
     proto_tag = proto_result["tag"] or "N/A"
 

@@ -15,13 +15,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from blue_ticker.analysis.field_parser import (
     FieldSet,
     ResolvedItem,
-    derive_subtraction,
-    parse_instant_fields,
-    parse_usgaap_html_bs_fields,
-    resolve_aggregate,
-    resolve_item,
 )
 from blue_ticker.analysis.interest_bearing_debt import resolve_ibd
+from blue_ticker.analysis.sections import BalanceSheetSection
 from blue_ticker.constants.financial import MILLION_YEN
 from blue_ticker.constants.xbrl import (
     ALL_STANDARD_BS_ITEMS,
@@ -58,15 +54,15 @@ SMOKE_ENTRIES: list[SmokeEntry] = [
 ]
 
 
-def resolve_bs(field_set: FieldSet) -> list[tuple[str, ResolvedItem]]:
+def resolve_bs(section: BalanceSheetSection) -> list[tuple[str, ResolvedItem]]:
     results: list[tuple[str, ResolvedItem]] = []
     for item_def in ALL_STANDARD_BS_ITEMS:
-        resolved = resolve_item(field_set, item_def["tags"])
+        resolved = section.resolve(item_def["tags"])
         if resolved["tag"] is None and "derive" in item_def:
             d = item_def["derive"]
-            resolved = derive_subtraction(field_set, d["minuend_tags"], d["subtrahend_tags"])
+            resolved = section.derive_subtraction(d["minuend_tags"], d["subtrahend_tags"])
         if item_def["field"] == "NonCurrentAssets" and resolved["current"] is None:
-            resolved = resolve_aggregate(field_set, _USGAAP_HTML_NCA_COMPONENTS)
+            resolved = section.resolve_aggregate(_USGAAP_HTML_NCA_COMPONENTS)
         results.append((item_def["label"], resolved))
     return results
 
@@ -110,12 +106,10 @@ def main() -> None:
             print(f"{entry.name:<14} {entry.standard:<24} [XBRLディレクトリなし]")
             continue
 
-        field_set = parse_instant_fields(xbrl_dir)
-        if _is_usgaap(field_set):
-            field_set.update(parse_usgaap_html_bs_fields(xbrl_dir))
-        items = resolve_bs(field_set)
+        section = BalanceSheetSection.from_xbrl(xbrl_dir)
+        items = resolve_bs(section)
         m = {label: r for label, r in items}
-        ibd = resolve_ibd(field_set)
+        ibd = resolve_ibd(section)
 
         print(
             f"{entry.name:<14} {entry.standard:<24}"

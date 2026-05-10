@@ -161,7 +161,7 @@ def _employees_compat(
         section = EmployeeSection.from_pre_parsed(pre_parsed, std)
     else:
         section = EmployeeSection.from_xbrl(xbrl_path)
-    return extract_employees(section)
+    return cast(dict[str, Any], extract_employees(section))
 
 
 _extract_is_compat = _make_section_wrapper(IncomeStatementSection, extract_income_statement)

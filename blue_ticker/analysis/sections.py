@@ -16,6 +16,7 @@ Section が Duration/Instant の判定・FieldSet 構築・会計基準の管理
   EmployeeSection         - 従業員の状況（Instant）
 """
 
+from collections.abc import Mapping
 from pathlib import Path
 
 from blue_ticker.analysis.field_parser import (
@@ -70,7 +71,7 @@ from blue_ticker.constants.xbrl import (
 from blue_ticker.utils.xbrl_result_types import XbrlTagElements
 
 
-def detect_accounting_standard(tags: dict[str, object]) -> str:
+def detect_accounting_standard(tags: Mapping[str, object]) -> str:
     """会計基準を判定する（J-GAAP / IFRS / US-GAAP）。XbrlTagElements・FieldSet いずれも受け付ける。"""
     has_usgaap = any("USGAAP" in tag for tag in tags)
     has_ifrs = any("IFRS" in tag for tag in tags)
