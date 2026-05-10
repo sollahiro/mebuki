@@ -78,15 +78,16 @@ def extract_interest_bearing_debt(section: BalanceSheetSection) -> InterestBeari
             "reason": "有利子負債タグが見つからない",
         }
 
-    components: list[MetricComponent] = [
-        {
+    def _component(t: str) -> MetricComponent:
+        fv = section.field_value(t)
+        return {
             "label": _TAG_TO_LABEL.get(t, t),
             "tag": t,
-            "current": section.field_value(t)["current"] if section.field_value(t) is not None else None,
-            "prior": section.field_value(t)["prior"] if section.field_value(t) is not None else None,
+            "current": fv["current"] if fv is not None else None,
+            "prior": fv["prior"] if fv is not None else None,
         }
-        for t in (tag.split("+") if tag else [])
-    ]
+
+    components: list[MetricComponent] = [_component(t) for t in (tag.split("+") if tag else [])]
 
     return {
         "current": current,
