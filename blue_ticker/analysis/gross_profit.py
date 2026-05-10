@@ -29,32 +29,24 @@ try:
 except ImportError:
     _BS4_AVAILABLE = False
 
-from blue_ticker.analysis.context_helpers import (
-    _is_consolidated_duration,
-    _is_consolidated_prior_duration,
-    _is_nonconsolidated_duration,
-    _is_nonconsolidated_prior_duration,
-    _is_pure_context,
-    _is_pure_nonconsolidated_context,
-    has_nonconsolidated_contexts,
+from blue_ticker.analysis.field_parser import (
+    FieldSet,
+    field_set_from_pre_parsed_duration,
+    parse_duration_fields,
+    resolve_item,
 )
 from blue_ticker.analysis.xbrl_utils import (
-    parse_xbrl_value,
-    collect_numeric_elements,
-    find_xbrl_files,
     parse_html_int_attribute,
     parse_html_number,
 )
 from blue_ticker.constants.financial import MILLION_YEN
 from blue_ticker.constants.xbrl import (
     BUSINESS_GROSS_PROFIT_COMPONENT_DEFINITIONS,
-    DURATION_CONTEXT_PATTERNS,
     GROSS_PROFIT_COMPONENT_DEFINITIONS,
     GROSS_PROFIT_DIRECT_TAGS,
     IFRS_PL_MARKER_TAGS,
     OPERATING_GROSS_PROFIT_DIRECT_TAGS,
     ORDINARY_REVENUE_TAGS,
-    PRIOR_DURATION_CONTEXT_PATTERNS,
     USGAAP_MARKER_TAGS,
 )
 from blue_ticker.utils.xbrl_result_types import GrossProfitResult, MetricComponent, XbrlTagElements
@@ -71,126 +63,67 @@ _GP_RELEVANT_TAGS: frozenset[str] = frozenset(
 )
 
 
-def _find_consolidated_duration_value(
-    tag_elements: XbrlTagElements, tag: str
-) -> tuple[float | None, float | None]:
-    """指定タグの連結当期・前期（Duration）値を返す。"""
-    if tag not in tag_elements:
-        return None, None
-    current = prior = None
-    current_pure = prior_pure = None
-    for ctx, val in tag_elements[tag].items():
-        if _is_consolidated_duration(ctx):
-            if _is_pure_context(ctx, DURATION_CONTEXT_PATTERNS):
-                current_pure = val
-            else:
-                current = val
-        elif _is_consolidated_prior_duration(ctx):
-            if _is_pure_context(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
-                prior_pure = val
-            else:
-                prior = val
-    return (
-        current_pure if current_pure is not None else current,
-        prior_pure if prior_pure is not None else prior,
-    )
+def _detect_accounting_standard(field_set: FieldSet) -> str:
+    has_usgaap = any("USGAAP" in tag for tag in field_set)
+    has_ifrs = any("IFRS" in tag for tag in field_set)
+    if has_usgaap and not has_ifrs:
+        return "US-GAAP"
+    if has_ifrs:
+        return "IFRS"
+    return "J-GAAP"
 
 
-def _find_nonconsolidated_duration_value(
-    tag_elements: XbrlTagElements, tag: str
-) -> tuple[float | None, float | None]:
-    """指定タグの個別当期・前期（Duration）値を返す。"""
-    if tag not in tag_elements:
-        return None, None
-    current = prior = None
-    current_pure = prior_pure = None
-    for ctx, val in tag_elements[tag].items():
-        if _is_nonconsolidated_duration(ctx):
-            if _is_pure_nonconsolidated_context(ctx, DURATION_CONTEXT_PATTERNS):
-                current_pure = val
-            else:
-                current = val
-        elif _is_nonconsolidated_prior_duration(ctx):
-            if _is_pure_nonconsolidated_context(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
-                prior_pure = val
-            else:
-                prior = val
-    return (
-        current_pure if current_pure is not None else current,
-        prior_pure if prior_pure is not None else prior,
-    )
+def _resolve_prefer_both(field_set: FieldSet, tags: list[str]) -> tuple[float | None, float | None]:
+    """両方（当期・前期）揃うタグを優先し、なければ片側のみでも返す。"""
+    partial_c: float | None = None
+    partial_p: float | None = None
+    for tag in tags:
+        if tag not in field_set:
+            continue
+        c, p = field_set[tag]["current"], field_set[tag]["prior"]
+        if c is not None and p is not None:
+            return c, p
+        if (c is not None or p is not None) and partial_c is None and partial_p is None:
+            partial_c, partial_p = c, p
+    return partial_c, partial_p
 
 
-def _extract_sales_for_yoy(
-    tag_elements: XbrlTagElements,
-    blocks_nc: bool = False,
-) -> tuple[float | None, float | None]:
-    """売上高の当期・前期値を返す（YoY比較用）。連結優先、個別フォールバック。
-
-    当期・前期が両方揃うタグを優先する。両方揃うタグがなければ、
-    最初に見つかった片側候補を返す。
-    blocks_nc=True のとき単体フォールバックを抑止する。
-    """
+def _extract_sales_for_yoy(field_set: FieldSet) -> tuple[float | None, float | None]:
+    """売上高の当期・前期値を返す（YoY比較用）。当期・前期が両方揃うタグを優先する。"""
     sales_tags = next(
         (comp["tags"] for comp in GROSS_PROFIT_COMPONENT_DEFINITIONS if comp["label"] == "売上高"),
         [],
     ) + ORDINARY_REVENUE_TAGS
-    for consolidated in (True, False):
-        if not consolidated and blocks_nc:
-            continue
-        partial_c: float | None = None
-        partial_p: float | None = None
-        for tag in sales_tags:
-            if consolidated:
-                c, p = _find_consolidated_duration_value(tag_elements, tag)
-            else:
-                c, p = _find_nonconsolidated_duration_value(tag_elements, tag)
-            if c is not None and p is not None:
-                return c, p
-            if (c is not None or p is not None) and partial_c is None and partial_p is None:
-                partial_c, partial_p = c, p
-        if partial_c is not None or partial_p is not None:
-            return partial_c, partial_p
-    return None, None
+    return _resolve_prefer_both(field_set, sales_tags)
 
 
-def _extract_business_gross_profit(
-    tag_elements: XbrlTagElements,
-    blocks_nc: bool = False,
-) -> GrossProfitResult | None:
+def _extract_business_gross_profit(field_set: FieldSet) -> GrossProfitResult | None:
     """銀行等の連結業務粗利益を構成要素から算出する。"""
     comp_results: list[MetricComponent] = []
     current_total = prior_total = 0.0
     has_current = has_prior = False
 
     for comp_def in BUSINESS_GROSS_PROFIT_COMPONENT_DEFINITIONS:
-        found_tag = None
-        current = prior = None
-        for tag in comp_def["tags"]:
-            current, prior = _find_consolidated_duration_value(tag_elements, tag)
-            if current is not None or prior is not None:
-                found_tag = tag
-                break
-
+        item = resolve_item(field_set, comp_def["tags"])
         sign = comp_def["sign"]
-        if current is not None:
-            current_total += sign * current
+        if item["current"] is not None:
+            current_total += sign * item["current"]
             has_current = True
-        if prior is not None:
-            prior_total += sign * prior
+        if item["prior"] is not None:
+            prior_total += sign * item["prior"]
             has_prior = True
 
         comp_results.append({
             "label": comp_def["label"],
-            "tag": found_tag,
-            "current": sign * current if current is not None else None,
-            "prior": sign * prior if prior is not None else None,
+            "tag": item["tag"],
+            "current": sign * item["current"] if item["current"] is not None else None,
+            "prior": sign * item["prior"] if item["prior"] is not None else None,
         })
 
     if not has_current and not has_prior:
         return None
 
-    sales_c, sales_p = _extract_sales_for_yoy(tag_elements, blocks_nc=blocks_nc)
+    sales_c, sales_p = _extract_sales_for_yoy(field_set)
     result: GrossProfitResult = {
         "current": current_total if has_current else None,
         "prior": prior_total if has_prior else None,
@@ -306,17 +239,6 @@ def _extract_usgaap_gp_from_html(xbrl_dir: Path) -> GrossProfitResult | None:
     return None
 
 
-def _detect_accounting_standard(tag_elements: XbrlTagElements) -> str:
-    """会計基準を判定: 'J-GAAP' | 'IFRS' | 'US-GAAP'"""
-    if any(t in tag_elements for t in USGAAP_MARKER_TAGS) and not any(
-        t in tag_elements for t in IFRS_PL_MARKER_TAGS
-    ):
-        return "US-GAAP"
-    if any(t in tag_elements for t in IFRS_PL_MARKER_TAGS):
-        return "IFRS"
-    return "J-GAAP"
-
-
 def extract_gross_profit(
     xbrl_dir: Path,
     *,
@@ -342,28 +264,19 @@ def extract_gross_profit(
             ]
         }
     """
-    if pre_parsed is not None:
-        tag_elements: XbrlTagElements = {
-            tag: ctx for tag, ctx in pre_parsed.items() if tag in _GP_RELEVANT_TAGS
-        }
-    else:
-        tag_elements = {}
-        for f in find_xbrl_files(xbrl_dir):
-            for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_GP_RELEVANT_TAGS).items():
-                if tag not in tag_elements:
-                    tag_elements[tag] = {}
-                tag_elements[tag].update(ctx_map)
+    field_set = (
+        field_set_from_pre_parsed_duration(pre_parsed)
+        if pre_parsed is not None
+        else parse_duration_fields(xbrl_dir, allowed_tags=_GP_RELEVANT_TAGS)
+    )
 
-    check_elements = pre_parsed if pre_parsed is not None else tag_elements
-    _blocks_nc = has_nonconsolidated_contexts(check_elements)
-
-    accounting_standard = _detect_accounting_standard(tag_elements)
+    accounting_standard = _detect_accounting_standard(field_set)
 
     # US-GAAP 企業: 連結損益計算書HTML(0105010)から直接解析
     if accounting_standard == "US-GAAP":
         usgaap_result = _extract_usgaap_gp_from_html(xbrl_dir)
         if usgaap_result is not None:
-            sales_c, sales_p = _extract_sales_for_yoy(tag_elements, blocks_nc=_blocks_nc)
+            sales_c, sales_p = _extract_sales_for_yoy(field_set)
             if sales_c is not None or sales_p is not None:
                 usgaap_result["current_sales"] = sales_c
                 usgaap_result["prior_sales"] = sales_p
@@ -375,88 +288,55 @@ def extract_gross_profit(
         }
 
     # 直接法: GrossProfit タグを検索
-    for gp_tag in GROSS_PROFIT_DIRECT_TAGS:
-        current, prior = _find_consolidated_duration_value(tag_elements, gp_tag)
-        if current is None and prior is None and not _blocks_nc:
-            current, prior = _find_nonconsolidated_duration_value(tag_elements, gp_tag)
-        if current is not None or prior is not None:
-            sales_c, sales_p = _extract_sales_for_yoy(tag_elements, blocks_nc=_blocks_nc)
-            result: GrossProfitResult = {
-                "current": current,
-                "prior": prior,
-                "method": "direct",
-                "accounting_standard": accounting_standard,
-                "components": [
-                    {"label": "売上総利益", "tag": gp_tag, "current": current, "prior": prior}
-                ],
-            }
-            if sales_c is not None or sales_p is not None:
-                result["current_sales"] = sales_c
-                result["prior_sales"] = sales_p
-            return result
+    gp_item = resolve_item(field_set, GROSS_PROFIT_DIRECT_TAGS)
+    if gp_item["tag"] is not None:
+        sales_c, sales_p = _extract_sales_for_yoy(field_set)
+        result: GrossProfitResult = {
+            "current": gp_item["current"],
+            "prior": gp_item["prior"],
+            "method": "direct",
+            "accounting_standard": accounting_standard,
+            "components": [
+                {"label": "売上総利益", "tag": gp_item["tag"], "current": gp_item["current"], "prior": gp_item["prior"]}
+            ],
+        }
+        if sales_c is not None or sales_p is not None:
+            result["current_sales"] = sales_c
+            result["prior_sales"] = sales_p
+        return result
 
-    business_gross_profit = _extract_business_gross_profit(tag_elements, blocks_nc=_blocks_nc)
+    business_gross_profit = _extract_business_gross_profit(field_set)
     if business_gross_profit is not None:
         return business_gross_profit
 
     # 直接法: OperatingGrossProfit タグを検索
-    for gp_tag in OPERATING_GROSS_PROFIT_DIRECT_TAGS:
-        current, prior = _find_consolidated_duration_value(tag_elements, gp_tag)
-        if current is None and prior is None and not _blocks_nc:
-            current, prior = _find_nonconsolidated_duration_value(tag_elements, gp_tag)
-        if current is not None or prior is not None:
-            sales_c, sales_p = _extract_sales_for_yoy(tag_elements, blocks_nc=_blocks_nc)
-            result: GrossProfitResult = {
-                "current": current,
-                "prior": prior,
-                "method": "operating_gross_profit",
-                "accounting_standard": accounting_standard,
-                "components": [
-                    {"label": "営業総利益", "tag": gp_tag, "current": current, "prior": prior}
-                ],
-            }
-            if sales_c is not None or sales_p is not None:
-                result["current_sales"] = sales_c
-                result["prior_sales"] = sales_p
-            return result
+    ogp_item = resolve_item(field_set, OPERATING_GROSS_PROFIT_DIRECT_TAGS)
+    if ogp_item["tag"] is not None:
+        sales_c, sales_p = _extract_sales_for_yoy(field_set)
+        result = {
+            "current": ogp_item["current"],
+            "prior": ogp_item["prior"],
+            "method": "operating_gross_profit",
+            "accounting_standard": accounting_standard,
+            "components": [
+                {"label": "営業総利益", "tag": ogp_item["tag"], "current": ogp_item["current"], "prior": ogp_item["prior"]}
+            ],
+        }
+        if sales_c is not None or sales_p is not None:
+            result["current_sales"] = sales_c
+            result["prior_sales"] = sales_p
+        return result
 
     # 計算法: 売上高タグ・売上原価タグをそれぞれ取得して差し引く
     comp_results: list[MetricComponent] = []
     for comp_def in GROSS_PROFIT_COMPONENT_DEFINITIONS:
-        found_tag = None
-        current = prior = None
-        for tag in comp_def["tags"]:
-            c, p = _find_consolidated_duration_value(tag_elements, tag)
-            if c is not None or p is not None:
-                found_tag = tag
-                current, prior = c, p
-                break
+        item = resolve_item(field_set, comp_def["tags"])
         comp_results.append({
             "label": comp_def["label"],
-            "tag": found_tag,
-            "current": current,
-            "prior": prior,
+            "tag": item["tag"],
+            "current": item["current"],
+            "prior": item["prior"],
         })
-
-    # 連結値が全くなければ個別にフォールバック（単体のみ企業に限る）
-    has_consolidated = any(c["current"] is not None or c["prior"] is not None for c in comp_results)
-    if not has_consolidated and not _blocks_nc:
-        comp_results = []
-        for comp_def in GROSS_PROFIT_COMPONENT_DEFINITIONS:
-            found_tag = None
-            current = prior = None
-            for tag in comp_def["tags"]:
-                c, p = _find_nonconsolidated_duration_value(tag_elements, tag)
-                if c is not None or p is not None:
-                    found_tag = tag
-                    current, prior = c, p
-                    break
-            comp_results.append({
-                "label": comp_def["label"],
-                "tag": found_tag,
-                "current": current,
-                "prior": prior,
-            })
 
     sales = next((c for c in comp_results if c["label"] == "売上高"), None)
     cogs = next((c for c in comp_results if c["label"] == "売上原価"), None)

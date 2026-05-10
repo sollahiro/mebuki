@@ -18,16 +18,25 @@ except ImportError:
     _BS4_AVAILABLE = False
 
 from blue_ticker.analysis.context_helpers import (
+    _is_consolidated_duration,
     _is_consolidated_instant,
+    _is_consolidated_prior_duration,
     _is_consolidated_prior_instant,
+    _is_nonconsolidated_duration,
     _is_nonconsolidated_instant,
+    _is_nonconsolidated_prior_duration,
     _is_nonconsolidated_prior_instant,
     _is_pure_nonconsolidated_context,
     has_nonconsolidated_contexts,
 )
 from blue_ticker.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files, parse_html_number
 from blue_ticker.constants.financial import MILLION_YEN
-from blue_ticker.constants.xbrl import INSTANT_CONTEXT_PATTERNS, PRIOR_INSTANT_CONTEXT_PATTERNS
+from blue_ticker.constants.xbrl import (
+    DURATION_CONTEXT_PATTERNS,
+    INSTANT_CONTEXT_PATTERNS,
+    PRIOR_DURATION_CONTEXT_PATTERNS,
+    PRIOR_INSTANT_CONTEXT_PATTERNS,
+)
 from blue_ticker.utils.xbrl_result_types import XbrlTagElements
 
 
@@ -87,6 +96,122 @@ def parse_instant_fields(
         for tag, fv in nc_set.items():
             if tag not in field_set:
                 field_set[tag] = fv
+
+    return field_set
+
+
+def field_set_from_pre_parsed_duration(tag_elements: XbrlTagElements) -> FieldSet:
+    """XbrlTagElements（生パース済みデータ）から Duration FieldSet を生成する。
+
+    parse_duration_fields のファイルI/Oをスキップしたい場合のヘルパー。
+    コンテキスト正規化・nonconsolidated フォールバックは parse_duration_fields と同一。
+    """
+    field_set = _normalize_duration(tag_elements)
+    if not has_nonconsolidated_contexts(tag_elements):
+        nc_set = _normalize_duration_nonconsolidated(tag_elements)
+        for tag, fv in nc_set.items():
+            if tag not in field_set:
+                field_set[tag] = fv
+    # Instant コンテキストのみのタグ（会計基準マーカー等）を存在記録として追加する
+    for tag in tag_elements:
+        if tag not in field_set:
+            field_set[tag] = {"current": None, "prior": None}
+    return field_set
+
+
+def parse_duration_fields(
+    xbrl_dir: Path,
+    *,
+    allowed_tags: frozenset[str] | None = None,
+) -> FieldSet:
+    """XBRL ディレクトリから Duration（フロー項目）コンテキストの全タグを読み込み、
+    連結当期/前期値に正規化して返す。
+
+    連結グループを持たない個別財務諸表のみの企業（_NonConsolidatedMember コンテキスト）は、
+    個別コンテキストにフォールバックして値を返す。
+    allowed_tags を渡すと収集対象を絞れる（None = 全タグ）。
+    """
+    tag_elements: XbrlTagElements = {}
+    for f in find_xbrl_files(xbrl_dir):
+        for tag, ctx_map in collect_numeric_elements(f, allowed_tags=allowed_tags).items():
+            if tag not in tag_elements:
+                tag_elements[tag] = {}
+            tag_elements[tag].update(ctx_map)
+
+    field_set = _normalize_duration(tag_elements)
+
+    # 連結グループを持たない企業: 個別コンテキストにフォールバック
+    if not has_nonconsolidated_contexts(tag_elements):
+        nc_set = _normalize_duration_nonconsolidated(tag_elements)
+        for tag, fv in nc_set.items():
+            if tag not in field_set:
+                field_set[tag] = fv
+
+    # Instant コンテキストのみのタグ（会計基準マーカー等）を存在記録として追加する
+    for tag in tag_elements:
+        if tag not in field_set:
+            field_set[tag] = {"current": None, "prior": None}
+
+    return field_set
+
+
+def _normalize_duration(tag_elements: XbrlTagElements) -> FieldSet:
+    """XbrlTagElements → FieldSet（Duration コンテキスト用）。
+
+    完全一致コンテキスト（CurrentYearDuration 等）を最優先し、
+    前方一致パターン（_is_consolidated_duration 等）をフォールバックにする。
+    """
+    exact_current: frozenset[str] = frozenset(DURATION_CONTEXT_PATTERNS)
+    exact_prior: frozenset[str] = frozenset(PRIOR_DURATION_CONTEXT_PATTERNS)
+
+    field_set: FieldSet = {}
+    for tag, ctx_map in tag_elements.items():
+        current: float | None = None
+        prior: float | None = None
+
+        for ctx, val in ctx_map.items():
+            if ctx in exact_current:
+                current = val
+            elif ctx in exact_prior:
+                prior = val
+
+        if current is None and prior is None:
+            for ctx, val in ctx_map.items():
+                if _is_consolidated_duration(ctx):
+                    current = val
+                elif _is_consolidated_prior_duration(ctx):
+                    prior = val
+
+        if current is not None or prior is not None:
+            field_set[tag] = {"current": current, "prior": prior}
+
+    return field_set
+
+
+def _normalize_duration_nonconsolidated(tag_elements: XbrlTagElements) -> FieldSet:
+    """個別財務諸表のみの企業向け: _NonConsolidated コンテキストを当期/前期に正規化する（Duration版）。"""
+    exact_current: frozenset[str] = frozenset(DURATION_CONTEXT_PATTERNS)
+    exact_prior: frozenset[str] = frozenset(PRIOR_DURATION_CONTEXT_PATTERNS)
+
+    field_set: FieldSet = {}
+    for tag, ctx_map in tag_elements.items():
+        current: float | None = None
+        prior: float | None = None
+
+        for ctx, val in ctx_map.items():
+            if _is_nonconsolidated_duration(ctx):
+                if _is_pure_nonconsolidated_context(ctx, list(exact_current)):
+                    current = val
+                elif current is None:
+                    current = val
+            elif _is_nonconsolidated_prior_duration(ctx):
+                if _is_pure_nonconsolidated_context(ctx, list(exact_prior)):
+                    prior = val
+                elif prior is None:
+                    prior = val
+
+        if current is not None or prior is not None:
+            field_set[tag] = {"current": current, "prior": prior}
 
     return field_set
 

@@ -22,28 +22,22 @@ try:
 except ImportError:
     _BS4_AVAILABLE = False
 
-from blue_ticker.analysis.context_helpers import (
-    _is_consolidated_duration,
-    _is_consolidated_prior_duration,
-    _is_nonconsolidated_duration,
-    _is_nonconsolidated_prior_duration,
-    _is_pure_context,
-    _is_pure_nonconsolidated_context,
+from blue_ticker.analysis.field_parser import (
+    FieldSet,
+    field_set_from_pre_parsed_duration,
+    parse_duration_fields,
+    resolve_item,
 )
 from blue_ticker.utils.xbrl_result_types import InterestExpenseResult, XbrlTagElements
 from blue_ticker.analysis.xbrl_utils import (
-    collect_numeric_elements,
-    find_xbrl_files,
     parse_html_int_attribute,
     parse_html_number,
 )
 from blue_ticker.constants.financial import MILLION_YEN
 from blue_ticker.constants.xbrl import (
-    DURATION_CONTEXT_PATTERNS,
     IFRS_INTEREST_EXPENSE_MARKER_TAGS,
     INTEREST_EXPENSE_IFRS_TAGS,
     INTEREST_EXPENSE_JGAAP_TAGS,
-    PRIOR_DURATION_CONTEXT_PATTERNS,
     USGAAP_MARKER_TAGS,
 )
 
@@ -55,63 +49,12 @@ _IE_RELEVANT_TAGS: frozenset[str] = frozenset(
 )
 
 
-def _find_consolidated_duration_value(
-    tag_elements: XbrlTagElements, tag: str
-) -> tuple[float | None, float | None]:
-    """連結当期・前期の値を返す。純コンテキスト（セグメント修飾なし）を優先する。"""
-    if tag not in tag_elements:
-        return None, None
-    current = prior = None
-    current_pure = prior_pure = None
-    for ctx, val in tag_elements[tag].items():
-        if _is_consolidated_duration(ctx):
-            if _is_pure_context(ctx, DURATION_CONTEXT_PATTERNS):
-                current_pure = val
-            else:
-                current = val
-        elif _is_consolidated_prior_duration(ctx):
-            if _is_pure_context(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
-                prior_pure = val
-            else:
-                prior = val
-    return (
-        current_pure if current_pure is not None else current,
-        prior_pure if prior_pure is not None else prior,
-    )
-
-
-def _find_nonconsolidated_duration_value(
-    tag_elements: XbrlTagElements, tag: str
-) -> tuple[float | None, float | None]:
-    """個別当期・前期の値を返す。純コンテキストを優先する。"""
-    if tag not in tag_elements:
-        return None, None
-    current = prior = None
-    current_pure = prior_pure = None
-    for ctx, val in tag_elements[tag].items():
-        if _is_nonconsolidated_duration(ctx):
-            if _is_pure_nonconsolidated_context(ctx, DURATION_CONTEXT_PATTERNS):
-                current_pure = val
-            else:
-                current = val
-        elif _is_nonconsolidated_prior_duration(ctx):
-            if _is_pure_nonconsolidated_context(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
-                prior_pure = val
-            else:
-                prior = val
-    return (
-        current_pure if current_pure is not None else current,
-        prior_pure if prior_pure is not None else prior,
-    )
-
-
-def _detect_accounting_standard(tag_elements: XbrlTagElements) -> str:
-    """会計基準を判定: 'J-GAAP' | 'IFRS' | 'US-GAAP'"""
-    if any(t in tag_elements for t in USGAAP_MARKER_TAGS) and not any(
-        t in tag_elements for t in IFRS_INTEREST_EXPENSE_MARKER_TAGS
-    ):
+def _detect_accounting_standard(field_set: FieldSet) -> str:
+    has_usgaap = any("USGAAP" in tag for tag in field_set)
+    has_ifrs = any("IFRS" in tag for tag in field_set)
+    if has_usgaap and not has_ifrs:
         return "US-GAAP"
-    if any(t in tag_elements for t in IFRS_INTEREST_EXPENSE_MARKER_TAGS):
+    if has_ifrs:
         return "IFRS"
     return "J-GAAP"
 
@@ -256,19 +199,13 @@ def extract_interest_expense(
             "accounting_standard": str,   # "J-GAAP" | "IFRS" | "US-GAAP"
         }
     """
-    if pre_parsed is not None:
-        tag_elements: XbrlTagElements = {
-            tag: ctx for tag, ctx in pre_parsed.items() if tag in _IE_RELEVANT_TAGS
-        }
-    else:
-        tag_elements = {}
-        for f in find_xbrl_files(xbrl_dir):
-            for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_IE_RELEVANT_TAGS).items():
-                if tag not in tag_elements:
-                    tag_elements[tag] = {}
-                tag_elements[tag].update(ctx_map)
+    field_set = (
+        field_set_from_pre_parsed_duration(pre_parsed)
+        if pre_parsed is not None
+        else parse_duration_fields(xbrl_dir, allowed_tags=_IE_RELEVANT_TAGS)
+    )
 
-    accounting_standard = _detect_accounting_standard(tag_elements)
+    accounting_standard = _detect_accounting_standard(field_set)
 
     if accounting_standard == "US-GAAP":
         result = _extract_usgaap_ie_from_html(xbrl_dir)
@@ -285,17 +222,14 @@ def extract_interest_expense(
         else INTEREST_EXPENSE_JGAAP_TAGS
     )
 
-    for tag in candidate_tags:
-        current, prior = _find_consolidated_duration_value(tag_elements, tag)
-        if current is None and prior is None:
-            current, prior = _find_nonconsolidated_duration_value(tag_elements, tag)
-        if current is not None or prior is not None:
-            return {
-                "current": current,
-                "prior": prior,
-                "method": "direct",
-                "accounting_standard": accounting_standard,
-            }
+    item = resolve_item(field_set, candidate_tags)
+    if item["tag"] is not None:
+        return {
+            "current": item["current"],
+            "prior": item["prior"],
+            "method": "direct",
+            "accounting_standard": accounting_standard,
+        }
 
     result = _extract_ifrs_ie_from_textblock(xbrl_dir)
     if result is not None:

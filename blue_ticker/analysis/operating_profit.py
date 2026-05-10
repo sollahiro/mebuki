@@ -16,30 +16,24 @@ try:
 except ImportError:
     _BS4_AVAILABLE = False
 
-from blue_ticker.analysis.context_helpers import (
-    _is_consolidated_duration,
-    _is_consolidated_prior_duration,
-    _is_nonconsolidated_duration,
-    _is_nonconsolidated_prior_duration,
-    has_nonconsolidated_contexts,
-    _is_pure_context,
-    _is_pure_nonconsolidated_context,
+from blue_ticker.analysis.field_parser import (
+    FieldSet,
+    derive_subtraction,
+    field_set_from_pre_parsed_duration,
+    parse_duration_fields,
+    resolve_item,
 )
 from blue_ticker.analysis.xbrl_utils import (
-    collect_numeric_elements,
-    find_xbrl_files,
     parse_html_int_attribute,
     parse_html_number,
 )
 from blue_ticker.constants.financial import MILLION_YEN
 from blue_ticker.constants.xbrl import (
-    DURATION_CONTEXT_PATTERNS,
     GROSS_PROFIT_DIRECT_TAGS,
     IFRS_PL_MARKER_TAGS,
     OPERATING_PROFIT_DIRECT_TAGS,
     ORDINARY_REVENUE_TAGS,
     ORDINARY_INCOME_TAGS,
-    PRIOR_DURATION_CONTEXT_PATTERNS,
     SGA_DIRECT_TAGS,
     USGAAP_MARKER_TAGS,
 )
@@ -56,99 +50,12 @@ _OP_RELEVANT_TAGS: frozenset[str] = frozenset(
 )
 
 
-def _find_duration_value(
-    tag_elements: XbrlTagElements, tag: str, consolidated: bool
-) -> tuple[float | None, float | None]:
-    if tag not in tag_elements:
-        return None, None
-    is_cur = _is_consolidated_duration if consolidated else _is_nonconsolidated_duration
-    is_pri = _is_consolidated_prior_duration if consolidated else _is_nonconsolidated_prior_duration
-    current = prior = None
-    current_pure = prior_pure = None
-    current_patterns = DURATION_CONTEXT_PATTERNS
-    prior_patterns = PRIOR_DURATION_CONTEXT_PATTERNS
-    is_pure = _is_pure_context if consolidated else _is_pure_nonconsolidated_context
-    for ctx, val in tag_elements[tag].items():
-        if is_cur(ctx):
-            if is_pure(ctx, current_patterns):
-                current_pure = val
-            else:
-                current = val
-        elif is_pri(ctx):
-            if is_pure(ctx, prior_patterns):
-                prior_pure = val
-            else:
-                prior = val
-    return (
-        current_pure if current_pure is not None else current,
-        prior_pure if prior_pure is not None else prior,
-    )
-
-
-def _try_tags(
-    tag_elements: XbrlTagElements, tags: list[str], consolidated: bool
-) -> tuple[str | None, float | None, float | None]:
-    """指定した連結/個別モードでタグリストを試す。"""
-    for tag in tags:
-        c, p = _find_duration_value(tag_elements, tag, consolidated)
-        if c is not None or p is not None:
-            return tag, c, p
-    return None, None, None
-
-
-def _extract_ordinary_revenue(
-    tag_elements: XbrlTagElements,
-    blocks_nc: bool = False,
-) -> tuple[float | None, float | None]:
-    """金融機関向けに経常収益の当期・前期値を返す。"""
-    for consolidated in (True, False):
-        if not consolidated and blocks_nc:
-            continue
-        for tag in ORDINARY_REVENUE_TAGS:
-            current, prior = _find_duration_value(tag_elements, tag, consolidated)
-            if current is not None or prior is not None:
-                return current, prior
-    return None, None
-
-
-def _try_sga(
-    tag_elements: XbrlTagElements, consolidated: bool
-) -> tuple[float | None, float | None]:
-    """販管費の当期・前期を取得する。"""
-    for tag in SGA_DIRECT_TAGS:
-        c, p = _find_duration_value(tag_elements, tag, consolidated)
-        if c is not None or p is not None:
-            return c, p
-    return None, None
-
-
-def _try_computed_op(
-    tag_elements: XbrlTagElements, consolidated: bool
-) -> tuple[float | None, float | None, float | None, float | None]:
-    """GrossProfit - SGA で営業利益の当期・前期を計算する。
-
-    OperatingProfitLossIFRS が存在しない IFRS 企業（日立等）向けフォールバック。
-    """
-    gp_c = gp_p = None
-    for tag in GROSS_PROFIT_DIRECT_TAGS:
-        c, p = _find_duration_value(tag_elements, tag, consolidated)
-        if c is not None or p is not None:
-            gp_c, gp_p = c, p
-            break
-
-    sga_c, sga_p = _try_sga(tag_elements, consolidated)
-
-    current = (gp_c - sga_c) if gp_c is not None and sga_c is not None else None
-    prior = (gp_p - sga_p) if gp_p is not None and sga_p is not None else None
-    return current, prior, sga_c, sga_p
-
-
-def _detect_accounting_standard(tag_elements: XbrlTagElements) -> str:
-    if any(t in tag_elements for t in USGAAP_MARKER_TAGS) and not any(
-        t in tag_elements for t in IFRS_PL_MARKER_TAGS
-    ):
+def _detect_accounting_standard(field_set: FieldSet) -> str:
+    has_usgaap = any("USGAAP" in tag for tag in field_set)
+    has_ifrs = any("IFRS" in tag for tag in field_set)
+    if has_usgaap and not has_ifrs:
         return "US-GAAP"
-    if any(t in tag_elements for t in IFRS_PL_MARKER_TAGS):
+    if has_ifrs:
         return "IFRS"
     return "J-GAAP"
 
@@ -272,22 +179,13 @@ def extract_operating_profit(
             "reason":  str | None,   # not_found 時のみ
         }
     """
-    if pre_parsed is not None:
-        tag_elements: XbrlTagElements = {
-            tag: ctx for tag, ctx in pre_parsed.items() if tag in _OP_RELEVANT_TAGS
-        }
-    else:
-        tag_elements = {}
-        for f in find_xbrl_files(xbrl_dir):
-            for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_OP_RELEVANT_TAGS).items():
-                if tag not in tag_elements:
-                    tag_elements[tag] = {}
-                tag_elements[tag].update(ctx_map)
+    field_set = (
+        field_set_from_pre_parsed_duration(pre_parsed)
+        if pre_parsed is not None
+        else parse_duration_fields(xbrl_dir, allowed_tags=_OP_RELEVANT_TAGS)
+    )
 
-    check_elements = pre_parsed if pre_parsed is not None else tag_elements
-    _blocks_nc = has_nonconsolidated_contexts(check_elements)
-
-    accounting_standard = _detect_accounting_standard(tag_elements)
+    accounting_standard = _detect_accounting_standard(field_set)
 
     if accounting_standard == "US-GAAP":
         usgaap_result = _extract_usgaap_op_from_html(xbrl_dir)
@@ -300,48 +198,47 @@ def extract_operating_profit(
             "reason": "US-GAAP 連結損益計算書 HTML で営業利益・経常利益を取得できない",
         }
 
-    # 連結優先、非連結フォールバック（単体のみ企業に限る）。
-    # 各スコープで: 直接法 → 計算法(GP-SGA) → 経常利益 の順に試みる。
-    for consolidated in (True, False):
-        if not consolidated and _blocks_nc:
-            continue
-        _, current, prior = _try_tags(tag_elements, OPERATING_PROFIT_DIRECT_TAGS, consolidated)
-        if current is not None or prior is not None:
-            sga_c, sga_p = _try_sga(tag_elements, consolidated)
-            result: OperatingProfitResult = {
-                "current": current, "prior": prior,
-                "method": "direct", "label": "営業利益",
-                "accounting_standard": accounting_standard,
-            }
-            if sga_c is not None or sga_p is not None:
-                result["current_sga"] = sga_c
-                result["prior_sga"] = sga_p
-            return result
+    # 直接法: OPERATING_PROFIT_DIRECT_TAGS
+    op_item = resolve_item(field_set, OPERATING_PROFIT_DIRECT_TAGS)
+    if op_item["tag"] is not None:
+        sga_item = resolve_item(field_set, SGA_DIRECT_TAGS)
+        result: OperatingProfitResult = {
+            "current": op_item["current"], "prior": op_item["prior"],
+            "method": "direct", "label": "営業利益",
+            "accounting_standard": accounting_standard,
+        }
+        if sga_item["tag"] is not None:
+            result["current_sga"] = sga_item["current"]
+            result["prior_sga"] = sga_item["prior"]
+        return result
 
-        current, prior, sga_c, sga_p = _try_computed_op(tag_elements, consolidated)
-        if current is not None or prior is not None:
-            result = {
-                "current": current, "prior": prior,
-                "method": "computed", "label": "営業利益",
-                "accounting_standard": accounting_standard,
-            }
-            if sga_c is not None or sga_p is not None:
-                result["current_sga"] = sga_c
-                result["prior_sga"] = sga_p
-            return result
+    # 計算法: GrossProfit - SGA（OperatingProfitLossIFRS が存在しない IFRS 企業向け）
+    computed = derive_subtraction(field_set, GROSS_PROFIT_DIRECT_TAGS, SGA_DIRECT_TAGS)
+    if computed["tag"] is not None:
+        sga_item = resolve_item(field_set, SGA_DIRECT_TAGS)
+        result = {
+            "current": computed["current"], "prior": computed["prior"],
+            "method": "computed", "label": "営業利益",
+            "accounting_standard": accounting_standard,
+        }
+        if sga_item["tag"] is not None:
+            result["current_sga"] = sga_item["current"]
+            result["prior_sga"] = sga_item["prior"]
+        return result
 
-        _, current, prior = _try_tags(tag_elements, ORDINARY_INCOME_TAGS, consolidated)
-        if current is not None or prior is not None:
-            ordinary_result: OperatingProfitResult = {
-                "current": current, "prior": prior,
-                "method": "ordinary_income", "label": "経常利益",
-                "accounting_standard": accounting_standard,
-            }
-            sales_c, sales_p = _extract_ordinary_revenue(tag_elements, blocks_nc=_blocks_nc)
-            if sales_c is not None or sales_p is not None:
-                ordinary_result["current_sales"] = sales_c
-                ordinary_result["prior_sales"] = sales_p
-            return ordinary_result
+    # 経常利益フォールバック（金融機関向け）
+    oi_item = resolve_item(field_set, ORDINARY_INCOME_TAGS)
+    if oi_item["tag"] is not None:
+        ordinary_result: OperatingProfitResult = {
+            "current": oi_item["current"], "prior": oi_item["prior"],
+            "method": "ordinary_income", "label": "経常利益",
+            "accounting_standard": accounting_standard,
+        }
+        sales_item = resolve_item(field_set, ORDINARY_REVENUE_TAGS)
+        if sales_item["tag"] is not None:
+            ordinary_result["current_sales"] = sales_item["current"]
+            ordinary_result["prior_sales"] = sales_item["prior"]
+        return ordinary_result
 
     return {
         "current": None, "prior": None,

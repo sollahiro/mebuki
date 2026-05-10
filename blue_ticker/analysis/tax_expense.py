@@ -18,30 +18,24 @@ try:
 except ImportError:
     _BS4_AVAILABLE = False
 
-from blue_ticker.analysis.context_helpers import (
-    _is_consolidated_duration,
-    _is_consolidated_prior_duration,
-    _is_nonconsolidated_duration,
-    _is_nonconsolidated_prior_duration,
-    _is_pure_context,
-    _is_pure_nonconsolidated_context,
+from blue_ticker.analysis.field_parser import (
+    FieldSet,
+    field_set_from_pre_parsed_duration,
+    parse_duration_fields,
+    resolve_item,
 )
 from blue_ticker.utils.xbrl_result_types import TaxExpenseResult, XbrlTagElements
 from blue_ticker.analysis.xbrl_utils import (
-    collect_numeric_elements,
-    find_xbrl_files,
     parse_html_int_attribute,
     parse_html_number,
 )
 from blue_ticker.constants.financial import MILLION_YEN
 from blue_ticker.constants.xbrl import (
-    DURATION_CONTEXT_PATTERNS,
     INCOME_TAX_IFRS_TAGS,
     INCOME_TAX_JGAAP_TAGS,
     IFRS_TAX_MARKER_TAGS,
     PRETAX_INCOME_IFRS_TAGS,
     PRETAX_INCOME_JGAAP_TAGS,
-    PRIOR_DURATION_CONTEXT_PATTERNS,
     USGAAP_MARKER_TAGS,
 )
 
@@ -55,53 +49,14 @@ _TAX_RELEVANT_TAGS: frozenset[str] = frozenset(
 )
 
 
-
-def _find_consolidated_duration_value(
-    tag_elements: XbrlTagElements, tag: str
-) -> tuple[float | None, float | None]:
-    if tag not in tag_elements:
-        return None, None
-    current = prior = None
-    current_pure = prior_pure = None
-    for ctx, val in tag_elements[tag].items():
-        if _is_consolidated_duration(ctx):
-            if _is_pure_context(ctx, DURATION_CONTEXT_PATTERNS):
-                current_pure = val
-            else:
-                current = val
-        elif _is_consolidated_prior_duration(ctx):
-            if _is_pure_context(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
-                prior_pure = val
-            else:
-                prior = val
-    return (
-        current_pure if current_pure is not None else current,
-        prior_pure if prior_pure is not None else prior,
-    )
-
-
-def _find_nonconsolidated_duration_value(
-    tag_elements: XbrlTagElements, tag: str
-) -> tuple[float | None, float | None]:
-    if tag not in tag_elements:
-        return None, None
-    current = prior = None
-    current_pure = prior_pure = None
-    for ctx, val in tag_elements[tag].items():
-        if _is_nonconsolidated_duration(ctx):
-            if _is_pure_nonconsolidated_context(ctx, DURATION_CONTEXT_PATTERNS):
-                current_pure = val
-            else:
-                current = val
-        elif _is_nonconsolidated_prior_duration(ctx):
-            if _is_pure_nonconsolidated_context(ctx, PRIOR_DURATION_CONTEXT_PATTERNS):
-                prior_pure = val
-            else:
-                prior = val
-    return (
-        current_pure if current_pure is not None else current,
-        prior_pure if prior_pure is not None else prior,
-    )
+def _detect_accounting_standard(field_set: FieldSet) -> str:
+    has_usgaap = any("USGAAP" in tag for tag in field_set)
+    has_ifrs = any("IFRS" in tag for tag in field_set)
+    if has_usgaap and not has_ifrs:
+        return "US-GAAP"
+    if has_ifrs:
+        return "IFRS"
+    return "J-GAAP"
 
 
 def _extract_usgaap_tax_from_html(xbrl_dir: Path) -> TaxExpenseResult | None:
@@ -228,26 +183,6 @@ def _extract_usgaap_tax_from_html(xbrl_dir: Path) -> TaxExpenseResult | None:
     return None
 
 
-def _detect_accounting_standard(tag_elements: XbrlTagElements) -> str:
-    if any(t in tag_elements for t in USGAAP_MARKER_TAGS) and not any(
-        t in tag_elements for t in IFRS_TAX_MARKER_TAGS
-    ):
-        return "US-GAAP"
-    if any(t in tag_elements for t in IFRS_TAX_MARKER_TAGS):
-        return "IFRS"
-    return "J-GAAP"
-
-
-def _get_value(tag_elements: XbrlTagElements, tags: list[str]) -> tuple[float | None, float | None]:
-    for tag in tags:
-        current, prior = _find_consolidated_duration_value(tag_elements, tag)
-        if current is None and prior is None:
-            current, prior = _find_nonconsolidated_duration_value(tag_elements, tag)
-        if current is not None or prior is not None:
-            return current, prior
-    return None, None
-
-
 def extract_tax_expense(
     xbrl_dir: Path,
     *,
@@ -268,15 +203,13 @@ def extract_tax_expense(
             "method": str,   # "computed" | "not_found"
         }
     """
-    if pre_parsed is not None:
-        tag_elements: XbrlTagElements = {tag: ctx for tag, ctx in pre_parsed.items() if tag in _TAX_RELEVANT_TAGS}
-    else:
-        tag_elements = {}
-        for f in find_xbrl_files(xbrl_dir):
-            for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_TAX_RELEVANT_TAGS).items():
-                tag_elements.setdefault(tag, {}).update(ctx_map)
+    field_set = (
+        field_set_from_pre_parsed_duration(pre_parsed)
+        if pre_parsed is not None
+        else parse_duration_fields(xbrl_dir, allowed_tags=_TAX_RELEVANT_TAGS)
+    )
 
-    accounting_standard = _detect_accounting_standard(tag_elements)
+    accounting_standard = _detect_accounting_standard(field_set)
 
     if accounting_standard == "US-GAAP":
         result = _extract_usgaap_tax_from_html(xbrl_dir)
@@ -296,15 +229,15 @@ def extract_tax_expense(
         pretax_tags = PRETAX_INCOME_JGAAP_TAGS
         tax_tags = INCOME_TAX_JGAAP_TAGS
 
-    pretax_cur, pretax_prior = _get_value(tag_elements, pretax_tags)
-    tax_cur, tax_prior = _get_value(tag_elements, tax_tags)
+    pretax_item = resolve_item(field_set, pretax_tags)
+    tax_item = resolve_item(field_set, tax_tags)
 
     def _tax_rate(pretax: float | None, tax: float | None) -> float | None:
         if pretax is not None and tax is not None and pretax != 0:
             return tax / pretax
         return None
 
-    if pretax_cur is None and tax_cur is None:
+    if pretax_item["tag"] is None and tax_item["tag"] is None:
         return {
             "pretax_income": None, "income_tax": None, "effective_tax_rate": None,
             "prior_pretax_income": None, "prior_income_tax": None, "prior_effective_tax_rate": None,
@@ -313,12 +246,12 @@ def extract_tax_expense(
         }
 
     return {
-        "pretax_income": pretax_cur,
-        "income_tax": tax_cur,
-        "effective_tax_rate": _tax_rate(pretax_cur, tax_cur),
-        "prior_pretax_income": pretax_prior,
-        "prior_income_tax": tax_prior,
-        "prior_effective_tax_rate": _tax_rate(pretax_prior, tax_prior),
+        "pretax_income": pretax_item["current"],
+        "income_tax": tax_item["current"],
+        "effective_tax_rate": _tax_rate(pretax_item["current"], tax_item["current"]),
+        "prior_pretax_income": pretax_item["prior"],
+        "prior_income_tax": tax_item["prior"],
+        "prior_effective_tax_rate": _tax_rate(pretax_item["prior"], tax_item["prior"]),
         "accounting_standard": accounting_standard,
         "method": "computed",
     }
