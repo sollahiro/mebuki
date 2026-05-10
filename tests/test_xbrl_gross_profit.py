@@ -18,6 +18,7 @@ import tempfile
 from pathlib import Path
 
 from blue_ticker.analysis.gross_profit import extract_gross_profit
+from blue_ticker.analysis.sections import IncomeStatementSection, detect_accounting_standard
 
 NS_XBRLI = "http://www.xbrl.org/2003/instance"
 NS_JPPFS = "http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2022-11-01/jppfs_cor"
@@ -98,7 +99,7 @@ class TestGrossProfitDirectMethod(unittest.TestCase):
                 unitRef="JPY" decimals="-6">110000000000</jppfs_cor:GrossProfit>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_gross_profit(self.xbrl_dir)
+        result = extract_gross_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertEqual(result["accounting_standard"], "J-GAAP")
         self.assertAlmostEqual(result["current"], 120_000_000_000)
@@ -117,7 +118,7 @@ class TestGrossProfitDirectMethod(unittest.TestCase):
                 unitRef="JPY" decimals="-6">520000000000</jpifrs_cor:GrossProfitIFRS>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_gross_profit(self.xbrl_dir)
+        result = extract_gross_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertEqual(result["accounting_standard"], "IFRS")
         self.assertAlmostEqual(result["current"], 550_764_000_000)
@@ -146,7 +147,7 @@ class TestGrossProfitComputedMethod(unittest.TestCase):
                 unitRef="JPY" decimals="-6">170000000000</jppfs_cor:CostOfSales>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_gross_profit(self.xbrl_dir)
+        result = extract_gross_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "computed")
         self.assertEqual(result["accounting_standard"], "J-GAAP")
         self.assertAlmostEqual(result["current"], 120_000_000_000)  # 300B - 180B
@@ -165,7 +166,7 @@ class TestGrossProfitComputedMethod(unittest.TestCase):
                 unitRef="JPY" decimals="-6">2932980000</jppfs_cor:OperatingGrossProfit>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_gross_profit(self.xbrl_dir)
+        result = extract_gross_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "operating_gross_profit")
         self.assertEqual(result["accounting_standard"], "J-GAAP")
         self.assertAlmostEqual(result["current"], 3_320_406_000)
@@ -182,7 +183,7 @@ class TestGrossProfitComputedMethod(unittest.TestCase):
                 unitRef="JPY" decimals="-6">24519640000</jppfs_cor:OperatingCost>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_gross_profit(self.xbrl_dir)
+        result = extract_gross_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "computed")
         self.assertAlmostEqual(result["current"], 3_320_407_000)
 
@@ -201,7 +202,7 @@ class TestGrossProfitComputedMethod(unittest.TestCase):
                 unitRef="JPY" decimals="-6">280000000000</jpifrs_cor:CostOfSalesIFRS>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_gross_profit(self.xbrl_dir)
+        result = extract_gross_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "computed")
         self.assertEqual(result["accounting_standard"], "IFRS")
         self.assertAlmostEqual(result["current"], 200_000_000_000)  # 500B - 300B
@@ -214,7 +215,7 @@ class TestGrossProfitComputedMethod(unittest.TestCase):
                 unitRef="JPY" decimals="-6">100000000000</jppfs_cor:NetSales>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_gross_profit(self.xbrl_dir)
+        result = extract_gross_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "computed")
         self.assertAlmostEqual(result["current"], 100_000_000_000)
 
@@ -269,7 +270,7 @@ class TestBusinessGrossProfitMethod(unittest.TestCase):
                 unitRef="JPY" decimals="-6">593515000000</jppfs_cor:OtherOrdinaryExpensesOEBNK>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_gross_profit(self.xbrl_dir)
+        result = extract_gross_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "business_gross_profit")
         self.assertAlmostEqual(result["current"], 4_819_211_000_000)
         self.assertAlmostEqual(result["prior"], 4_732_215_000_000)
@@ -283,7 +284,7 @@ class TestBusinessGrossProfitMethod(unittest.TestCase):
                 unitRef="JPY" decimals="-6">454258000000</jppfs_cor:TradingIncomeOIBNK>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_gross_profit(self.xbrl_dir)
+        result = extract_gross_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "business_gross_profit")
         self.assertAlmostEqual(result["current"], 454_258_000_000)
         trading_income = next(c for c in result["components"] if c["label"] == "特定取引収益")
@@ -299,7 +300,7 @@ class TestBusinessGrossProfitMethod(unittest.TestCase):
                 unitRef="JPY" decimals="-6">12000000000</jppfs_cor:TradingExpensesOEBNK>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_gross_profit(self.xbrl_dir)
+        result = extract_gross_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "business_gross_profit")
         self.assertAlmostEqual(result["current"], -12_000_000_000)
         trading_income = next(c for c in result["components"] if c["label"] == "特定取引収益")
@@ -328,7 +329,7 @@ class TestGrossProfitConsolidatedPriority(unittest.TestCase):
                 unitRef="JPY" decimals="-6">50000000000</jppfs_cor:GrossProfit>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_gross_profit(self.xbrl_dir)
+        result = extract_gross_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertAlmostEqual(result["current"], 200_000_000_000)  # 連結値
 
@@ -345,7 +346,7 @@ class TestGrossProfitConsolidatedPriority(unittest.TestCase):
                 unitRef="JPY" decimals="-6">45000000000</jppfs_cor:GrossProfit>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_gross_profit(self.xbrl_dir)
+        result = extract_gross_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertAlmostEqual(result["current"], 200_000_000_000)
         self.assertAlmostEqual(result["prior"], 180_000_000_000)
@@ -357,7 +358,7 @@ class TestGrossProfitConsolidatedPriority(unittest.TestCase):
                 unitRef="JPY" decimals="-6">50000000000</jppfs_cor:GrossProfit>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_gross_profit(self.xbrl_dir)
+        result = extract_gross_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertAlmostEqual(result["current"], 50_000_000_000)
 
@@ -374,7 +375,7 @@ class TestGrossProfitConsolidatedPriority(unittest.TestCase):
                 unitRef="JPY" decimals="-6">9000000000</jppfs_cor:GrossProfit>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_gross_profit(self.xbrl_dir)
+        result = extract_gross_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertAlmostEqual(result["current"], 50_000_000_000)
         self.assertAlmostEqual(result["prior"], 45_000_000_000)
@@ -391,7 +392,7 @@ class TestGrossProfitNotFound(unittest.TestCase):
 
     def test_not_found_empty_dir(self):
         """XMLファイルが存在しない場合は not_found を返す"""
-        result = extract_gross_profit(self.xbrl_dir)
+        result = extract_gross_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "not_found")
         self.assertIsNone(result["current"])
         self.assertIsNone(result["prior"])
@@ -403,19 +404,19 @@ class TestGrossProfitNotFound(unittest.TestCase):
                 unitRef="JPY" decimals="-6">999000000000</jppfs_cor:TotalAssets>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_gross_profit(self.xbrl_dir)
+        result = extract_gross_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "not_found")
         self.assertIsNone(result["current"])
 
     def test_pre_parsed_keeps_usgaap_cash_marker(self):
         """pre_parsed 経由でも US-GAAP 判定マーカーを落とさない"""
+        _pp = {
+            "CashAndCashEquivalentsUSGAAPSummaryOfBusinessResults": {
+                "CurrentYearDuration": 100_000_000_000.0
+            }
+        }
         result = extract_gross_profit(
-            self.xbrl_dir,
-            pre_parsed={
-                "CashAndCashEquivalentsUSGAAPSummaryOfBusinessResults": {
-                    "CurrentYearDuration": 100_000_000_000.0
-                }
-            },
+            IncomeStatementSection.from_pre_parsed(_pp, detect_accounting_standard(_pp), self.xbrl_dir)
         )
         self.assertEqual(result["method"], "not_found")
         self.assertEqual(result["accounting_standard"], "US-GAAP")
@@ -429,17 +430,17 @@ class TestGrossProfitNotFound(unittest.TestCase):
         </table></body></html>
         """
         (self.xbrl_dir / "0105010.htm").write_text(html, encoding="utf-8")
-        result = extract_gross_profit(
-            self.xbrl_dir,
-            pre_parsed={
-                "CashAndCashEquivalentsUSGAAPSummaryOfBusinessResults": {
-                    "CurrentYearDuration": 1.0
-                },
-                "RevenuesUSGAAPSummaryOfBusinessResults": {
-                    "CurrentYearDuration": 2_859_041_000_000.0,
-                    "Prior1YearDuration": 2_525_773_000_000.0,
-                },
+        _pp = {
+            "CashAndCashEquivalentsUSGAAPSummaryOfBusinessResults": {
+                "CurrentYearDuration": 1.0
             },
+            "RevenuesUSGAAPSummaryOfBusinessResults": {
+                "CurrentYearDuration": 2_859_041_000_000.0,
+                "Prior1YearDuration": 2_525_773_000_000.0,
+            },
+        }
+        result = extract_gross_profit(
+            IncomeStatementSection.from_pre_parsed(_pp, detect_accounting_standard(_pp), self.xbrl_dir)
         )
         self.assertEqual(result["method"], "usgaap_html")
         self.assertEqual(result["accounting_standard"], "US-GAAP")
@@ -453,7 +454,7 @@ class TestGrossProfitNotFound(unittest.TestCase):
                 unitRef="JPY" decimals="-6">100000000000</jppfs_cor:GrossProfit>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_gross_profit(self.xbrl_dir)
+        result = extract_gross_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertIsNone(result["current"])
         self.assertAlmostEqual(result["prior"], 100_000_000_000)
@@ -486,7 +487,7 @@ class TestSalesTagPriorityForYoY(unittest.TestCase):
                 unitRef="JPY" decimals="-6">800000000000</jpifrs_cor:Revenue>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_gross_profit(self.xbrl_dir)
+        result = extract_gross_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertIsNotNone(result.get("prior_sales"), "prior_sales が取得できていない（片側タグで止まった可能性）")
         self.assertAlmostEqual(result.get("prior_sales"), 800_000_000_000)
@@ -505,7 +506,7 @@ class TestSalesTagPriorityForYoY(unittest.TestCase):
                 unitRef="JPY" decimals="-6">1000000000000</jpifrs_cor:NetSalesIFRS>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_gross_profit(self.xbrl_dir)
+        result = extract_gross_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertAlmostEqual(result.get("current_sales"), 1_000_000_000_000)
         self.assertIsNone(result.get("prior_sales"))

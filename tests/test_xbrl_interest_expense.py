@@ -11,6 +11,7 @@ import tempfile
 from pathlib import Path
 
 from blue_ticker.analysis.interest_expense import extract_interest_expense
+from blue_ticker.analysis.sections import IncomeStatementSection
 
 NS_XBRLI = "http://www.xbrl.org/2003/instance"
 NS_JPPFS = "http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2022-11-01/jppfs_cor"
@@ -107,7 +108,7 @@ class TestJGaap(unittest.TestCase):
                 unitRef="JPY" decimals="-6">9000000000</jppfs_cor:InterestExpensesNOE>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_interest_expense(self.xbrl_dir)
+        result = extract_interest_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertEqual(result["accounting_standard"], "J-GAAP")
         self.assertAlmostEqual(result["current"], 8_752_000_000)
@@ -122,7 +123,7 @@ class TestJGaap(unittest.TestCase):
                 unitRef="JPY" decimals="-6">1000000000</jppfs_cor:InterestExpensesNOE>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_interest_expense(self.xbrl_dir)
+        result = extract_interest_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertAlmostEqual(result["current"], 8_752_000_000)
 
     def test_nonconsolidated_fallback(self):
@@ -132,7 +133,7 @@ class TestJGaap(unittest.TestCase):
                 unitRef="JPY" decimals="-6">1000000000</jppfs_cor:InterestExpensesNOE>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_interest_expense(self.xbrl_dir)
+        result = extract_interest_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertAlmostEqual(result["current"], 1_000_000_000)
 
@@ -157,7 +158,7 @@ class TestIfrs(unittest.TestCase):
                 unitRef="JPY" decimals="-6">4800000000</jpifrs_cor:InterestExpensesIFRS>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_interest_expense(self.xbrl_dir)
+        result = extract_interest_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertEqual(result["accounting_standard"], "IFRS")
         self.assertAlmostEqual(result["current"], 5_000_000_000)
@@ -172,7 +173,7 @@ class TestIfrs(unittest.TestCase):
                 unitRef="JPY" decimals="-6">6000000000</jpifrs_cor:FinanceCostsIFRS>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_interest_expense(self.xbrl_dir)
+        result = extract_interest_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertEqual(result["accounting_standard"], "IFRS")
         self.assertAlmostEqual(result["current"], 6_000_000_000)
@@ -193,7 +194,7 @@ class TestIfrs(unittest.TestCase):
         """
         (self.xbrl_dir / "note_ixbrl.htm").write_text(html, encoding="utf-8")
 
-        result = extract_interest_expense(self.xbrl_dir)
+        result = extract_interest_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
 
         self.assertEqual(result["method"], "ifrs_textblock")
         self.assertEqual(result["accounting_standard"], "IFRS")
@@ -225,7 +226,7 @@ class TestUsGaapHtml(unittest.TestCase):
             <tr><td>支払利息</td><td>9,000</td><td>8,752</td></tr>
         """)
         (self.xbrl_dir / "0105010_test_ixbrl.htm").write_text(html, encoding="utf-8")
-        result = extract_interest_expense(self.xbrl_dir)
+        result = extract_interest_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "usgaap_html")
         self.assertEqual(result["accounting_standard"], "US-GAAP")
         self.assertAlmostEqual(result["current"], 8_752_000_000)
@@ -238,7 +239,7 @@ class TestUsGaapHtml(unittest.TestCase):
             <tr><td>支払利息</td><td>△9,000</td><td>△8,752</td></tr>
         """)
         (self.xbrl_dir / "0105010_test_ixbrl.htm").write_text(html, encoding="utf-8")
-        result = extract_interest_expense(self.xbrl_dir)
+        result = extract_interest_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "usgaap_html")
         self.assertAlmostEqual(result["current"], 8_752_000_000)
         self.assertAlmostEqual(result["prior"], 9_000_000_000)
@@ -246,7 +247,7 @@ class TestUsGaapHtml(unittest.TestCase):
     def test_no_html_file_returns_not_found(self):
         """US-GAAP で 0105010 HTML が存在しない場合 not_found を返す。"""
         self._write_usgaap_xbrl()
-        result = extract_interest_expense(self.xbrl_dir)
+        result = extract_interest_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "not_found")
         self.assertEqual(result["accounting_standard"], "US-GAAP")
         self.assertIsNone(result["current"])
@@ -265,14 +266,14 @@ class TestNotFound(unittest.TestCase):
         """支払利息タグが一切存在しない場合 not_found を返す。"""
         xml = _make_xbrl("")
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_interest_expense(self.xbrl_dir)
+        result = extract_interest_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "not_found")
         self.assertIsNone(result["current"])
         self.assertIsNone(result["prior"])
 
     def test_empty_directory(self):
         """XBRL ファイルが存在しない場合 not_found を返す。"""
-        result = extract_interest_expense(self.xbrl_dir)
+        result = extract_interest_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "not_found")
         self.assertIsNone(result["current"])
 

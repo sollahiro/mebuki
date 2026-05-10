@@ -12,6 +12,7 @@ import tempfile
 from pathlib import Path
 
 from blue_ticker.analysis.tax_expense import extract_tax_expense
+from blue_ticker.analysis.sections import IncomeStatementSection
 
 NS_XBRLI = "http://www.xbrl.org/2003/instance"
 NS_JPPFS = "http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2022-11-01/jppfs_cor"
@@ -101,7 +102,7 @@ class TestJGaap(unittest.TestCase):
                 unitRef="JPY" decimals="-6">22500000000</jppfs_cor:IncomeTaxes>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_tax_expense(self.xbrl_dir)
+        result = extract_tax_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "computed")
         self.assertEqual(result["accounting_standard"], "J-GAAP")
         self.assertAlmostEqual(result["pretax_income"], 100_000_000_000)
@@ -121,7 +122,7 @@ class TestJGaap(unittest.TestCase):
                 unitRef="JPY" decimals="-6">25000000000</jppfs_cor:IncomeTaxes>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_tax_expense(self.xbrl_dir)
+        result = extract_tax_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertAlmostEqual(result["pretax_income"], 100_000_000_000)
 
     def test_effective_tax_rate_zero_pretax(self):
@@ -133,7 +134,7 @@ class TestJGaap(unittest.TestCase):
                 unitRef="JPY" decimals="-6">1000000000</jppfs_cor:IncomeTaxes>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_tax_expense(self.xbrl_dir)
+        result = extract_tax_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertIsNone(result["effective_tax_rate"])
 
 
@@ -161,7 +162,7 @@ class TestIfrs(unittest.TestCase):
                 unitRef="JPY" decimals="-6">17500000000</jpifrs_cor:IncomeTaxExpenseIFRS>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_tax_expense(self.xbrl_dir)
+        result = extract_tax_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "computed")
         self.assertEqual(result["accounting_standard"], "IFRS")
         self.assertAlmostEqual(result["pretax_income"], 80_000_000_000)
@@ -196,7 +197,7 @@ class TestUsGaapHtml(unittest.TestCase):
             <tr><td>法人税等合計</td><td>9,000</td><td>8,757</td></tr>
         """)
         (self.xbrl_dir / "0105010_test_ixbrl.htm").write_text(html, encoding="utf-8")
-        result = extract_tax_expense(self.xbrl_dir)
+        result = extract_tax_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "usgaap_html")
         self.assertEqual(result["accounting_standard"], "US-GAAP")
         self.assertAlmostEqual(result["pretax_income"], 38_440_000_000)
@@ -212,7 +213,7 @@ class TestUsGaapHtml(unittest.TestCase):
             <tr><td>法人税等調整額</td><td>1,000</td><td>1,757</td></tr>
         """)
         (self.xbrl_dir / "0105010_test_ixbrl.htm").write_text(html, encoding="utf-8")
-        result = extract_tax_expense(self.xbrl_dir)
+        result = extract_tax_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "usgaap_html")
         self.assertAlmostEqual(result["income_tax"], 8_757_000_000)  # 7000 + 1757
 
@@ -225,7 +226,7 @@ class TestUsGaapHtml(unittest.TestCase):
             <tr><td>法人税等調整額</td><td>△500</td><td>△743</td></tr>
         """)
         (self.xbrl_dir / "0105010_test_ixbrl.htm").write_text(html, encoding="utf-8")
-        result = extract_tax_expense(self.xbrl_dir)
+        result = extract_tax_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "usgaap_html")
         # 9500 + (-743) = 8757
         self.assertAlmostEqual(result["income_tax"], 8_757_000_000)
@@ -233,7 +234,7 @@ class TestUsGaapHtml(unittest.TestCase):
     def test_no_html_returns_not_found(self):
         """US-GAAP で 0105010 HTML が存在しない場合 not_found を返す。"""
         self._write_usgaap_xbrl()
-        result = extract_tax_expense(self.xbrl_dir)
+        result = extract_tax_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "not_found")
         self.assertEqual(result["accounting_standard"], "US-GAAP")
         self.assertIsNone(result["pretax_income"])
@@ -252,14 +253,14 @@ class TestNotFound(unittest.TestCase):
         """税引前利益タグが一切存在しない場合 not_found を返す。"""
         xml = _make_xbrl("")
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_tax_expense(self.xbrl_dir)
+        result = extract_tax_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "not_found")
         self.assertIsNone(result["pretax_income"])
         self.assertIsNone(result["income_tax"])
 
     def test_empty_directory(self):
         """XBRL ファイルが存在しない場合 not_found を返す。"""
-        result = extract_tax_expense(self.xbrl_dir)
+        result = extract_tax_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "not_found")
         self.assertIsNone(result["pretax_income"])
 

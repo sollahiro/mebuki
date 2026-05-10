@@ -19,12 +19,7 @@ try:
 except ImportError:
     _BS4_AVAILABLE = False
 
-from blue_ticker.analysis.field_parser import (
-    FieldSet,
-    field_set_from_pre_parsed_duration,
-    parse_duration_fields,
-    resolve_item,
-)
+from blue_ticker.analysis.sections import CashFlowSection
 from blue_ticker.analysis.xbrl_utils import (
     parse_html_int_attribute,
     parse_html_number,
@@ -33,27 +28,8 @@ from blue_ticker.constants.financial import MILLION_YEN
 from blue_ticker.constants.xbrl import (
     CF_DEPRECIATION_IFRS_TAGS,
     CF_DEPRECIATION_JGAAP_TAGS,
-    IFRS_DEPRECIATION_MARKER_TAGS,
-    USGAAP_MARKER_TAGS,
 )
-from blue_ticker.utils.xbrl_result_types import DepreciationResult, XbrlTagElements
-
-_CF_DA_RELEVANT_TAGS: frozenset[str] = frozenset(
-    CF_DEPRECIATION_JGAAP_TAGS
-    + CF_DEPRECIATION_IFRS_TAGS
-    + USGAAP_MARKER_TAGS
-    + IFRS_DEPRECIATION_MARKER_TAGS
-)
-
-
-def _detect_accounting_standard(field_set: FieldSet) -> str:
-    has_usgaap = any("USGAAP" in tag for tag in field_set)
-    has_ifrs = any("IFRS" in tag for tag in field_set)
-    if has_usgaap and not has_ifrs:
-        return "US-GAAP"
-    if has_ifrs:
-        return "IFRS"
-    return "J-GAAP"
+from blue_ticker.utils.xbrl_result_types import DepreciationResult
 
 
 def _extract_usgaap_da_from_html(xbrl_dir: Path) -> DepreciationResult | None:
@@ -154,13 +130,9 @@ def _extract_usgaap_da_from_html(xbrl_dir: Path) -> DepreciationResult | None:
     return None
 
 
-def extract_depreciation(
-    xbrl_dir: Path,
-    *,
-    pre_parsed: XbrlTagElements | None = None,
-) -> DepreciationResult:
+def extract_depreciation(section: CashFlowSection) -> DepreciationResult:
     """
-    XBRLディレクトリから連結CF計算書の減価償却費を抽出する。
+    CF計算書セクションから減価償却費を抽出する。
 
     Returns:
         {
@@ -170,18 +142,13 @@ def extract_depreciation(
             "accounting_standard": str,
         }
     """
-    field_set = (
-        field_set_from_pre_parsed_duration(pre_parsed)
-        if pre_parsed is not None
-        else parse_duration_fields(xbrl_dir, allowed_tags=_CF_DA_RELEVANT_TAGS)
-    )
-
-    accounting_standard = _detect_accounting_standard(field_set)
+    accounting_standard = section.accounting_standard
 
     if accounting_standard == "US-GAAP":
-        result = _extract_usgaap_da_from_html(xbrl_dir)
-        if result is not None:
-            return result
+        if section.xbrl_dir is not None:
+            result = _extract_usgaap_da_from_html(section.xbrl_dir)
+            if result is not None:
+                return result
         return {
             "current": None,
             "prior": None,
@@ -196,7 +163,7 @@ def extract_depreciation(
         else CF_DEPRECIATION_JGAAP_TAGS
     )
 
-    item = resolve_item(field_set, candidate_tags)
+    item = section.resolve(candidate_tags)
     if item["tag"] is not None:
         return {
             "current": item["current"],

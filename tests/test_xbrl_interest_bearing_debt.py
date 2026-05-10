@@ -589,6 +589,7 @@ def extract_interest_bearing_debt(xbrl_dir: Path) -> dict:
 # ---------------------------------------------------------------------------
 
 from blue_ticker.analysis.interest_bearing_debt import extract_interest_bearing_debt  # noqa: E402
+from blue_ticker.analysis.sections import BalanceSheetSection  # noqa: E402
 
 NS_XBRLI = "http://www.xbrl.org/2003/instance"
 NS_JPPFS = "http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2022-11-01/jppfs_cor"
@@ -653,7 +654,7 @@ class TestDirectExtraction(unittest.TestCase):
                 unitRef="JPY">450000000000</jppfs_cor:InterestBearingDebt>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_interest_bearing_debt(self.xbrl_dir)
+        result = extract_interest_bearing_debt(BalanceSheetSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "field_parser")
         self.assertEqual(result["accounting_standard"], "J-GAAP")
         self.assertAlmostEqual(result["current"], 500_000_000_000)
@@ -686,7 +687,7 @@ class TestJGaapComponents(unittest.TestCase):
                 unitRef="JPY">30000000000</jppfs_cor:LongTermLoansPayable>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_interest_bearing_debt(self.xbrl_dir)
+        result = extract_interest_bearing_debt(BalanceSheetSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "field_parser")
         self.assertEqual(result["accounting_standard"], "J-GAAP")
         # 合計: 10+5+3+8+50+30 = 106 十億円
@@ -726,7 +727,7 @@ class TestIfrsComponents(unittest.TestCase):
                 unitRef="JPY">211795000000</jppfs_cor:BorrowingsNCLIFRS>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_interest_bearing_debt(self.xbrl_dir)
+        result = extract_interest_bearing_debt(BalanceSheetSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "field_parser")
         self.assertEqual(result["accounting_standard"], "IFRS")
         # 合計: 5923+10000+24989+8234+204412+211795 = 465353 百万円
@@ -756,7 +757,7 @@ class TestConsolidatedPriority(unittest.TestCase):
                 unitRef="JPY">100000000000</jppfs_cor:ShortTermLoansPayable>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_interest_bearing_debt(self.xbrl_dir)
+        result = extract_interest_bearing_debt(BalanceSheetSection.from_xbrl(self.xbrl_dir))
         comp = next(c for c in result["components"] if c["label"] == "短期借入金")
         self.assertAlmostEqual(comp["current"], 999_000_000_000)
 
@@ -775,7 +776,7 @@ class TestConsolidatedPriority(unittest.TestCase):
                 unitRef="JPY">800000000000</jppfs_cor:NetAssets>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_interest_bearing_debt(self.xbrl_dir)
+        result = extract_interest_bearing_debt(BalanceSheetSection.from_xbrl(self.xbrl_dir))
         comp = next(c for c in result["components"] if c["label"] == "短期借入金")
         # ShortTermLoansPayable は個別のみ → BorrowingsCLIFRS（連結）が選ばれる
         self.assertAlmostEqual(comp["current"], 5_923_000_000)
@@ -798,7 +799,7 @@ class TestNotFound(unittest.TestCase):
             </jpcrp_cor:BusinessRisksTextBlock>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_interest_bearing_debt(self.xbrl_dir)
+        result = extract_interest_bearing_debt(BalanceSheetSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "not_found")
         self.assertIsNone(result["current"])
 

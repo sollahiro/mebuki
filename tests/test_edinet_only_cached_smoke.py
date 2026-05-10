@@ -13,6 +13,11 @@ from blue_ticker.analysis.context_helpers import has_nonconsolidated_contexts
 from blue_ticker.analysis.gross_profit import extract_gross_profit
 from blue_ticker.analysis.income_statement import extract_income_statement
 from blue_ticker.analysis.interest_bearing_debt import extract_interest_bearing_debt
+from blue_ticker.analysis.sections import (
+    BalanceSheetSection,
+    IncomeStatementSection,
+    detect_accounting_standard,
+)
 from blue_ticker.services.edinet_smoke_cache import DEFAULT_SMOKE_COMPANIES
 from blue_ticker.services.edinet_fetcher import EdinetFetcher
 from blue_ticker.utils.fiscal_year import normalize_date_format
@@ -228,11 +233,16 @@ def test_edinet_only_smoke_from_cached_search_and_xbrl(company: SmokeCompany) ->
     if expected_consolidated_contexts is not None:
         assert has_nonconsolidated_contexts(pre_parsed) is expected_consolidated_contexts
 
-    income = extract_income_statement(xbrl_dir, pre_parsed=pre_parsed)
+    _std = detect_accounting_standard(pre_parsed)
+    income = extract_income_statement(
+        IncomeStatementSection.from_pre_parsed(pre_parsed, _std, xbrl_dir)
+    )
     assert income["accounting_standard"] in _expected_standards(company, str(doc["edinet_fy_end"]))
     assert any(income.get(key) is not None for key in ("sales", "operating_profit", "net_profit"))
 
-    balance_sheet = extract_balance_sheet(xbrl_dir, pre_parsed=pre_parsed)
+    balance_sheet = extract_balance_sheet(
+        BalanceSheetSection.from_pre_parsed(pre_parsed, _std, xbrl_dir)
+    )
     assert balance_sheet["accounting_standard"] in _expected_standards(company, str(doc["edinet_fy_end"]))
     assert any(
         balance_sheet.get(key) is not None
@@ -245,10 +255,14 @@ def test_edinet_only_smoke_from_cached_search_and_xbrl(company: SmokeCompany) ->
         )
     )
 
-    gross_profit = extract_gross_profit(xbrl_dir, pre_parsed=pre_parsed)
+    gross_profit = extract_gross_profit(
+        IncomeStatementSection.from_pre_parsed(pre_parsed, _std, xbrl_dir)
+    )
     assert gross_profit["accounting_standard"] in _expected_standards(company, str(doc["edinet_fy_end"]))
     assert gross_profit["method"] != "not_found" or company.category == "J-GAAP financial"
 
-    ibd = extract_interest_bearing_debt(xbrl_dir, pre_parsed=pre_parsed)
+    ibd = extract_interest_bearing_debt(
+        BalanceSheetSection.from_pre_parsed(pre_parsed, _std, xbrl_dir)
+    )
     assert ibd["accounting_standard"] in _expected_standards(company, str(doc["edinet_fy_end"]))
     assert ibd["method"] != "not_found" or company.category == "J-GAAP financial"

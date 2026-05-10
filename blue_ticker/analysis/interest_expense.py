@@ -22,41 +22,17 @@ try:
 except ImportError:
     _BS4_AVAILABLE = False
 
-from blue_ticker.analysis.field_parser import (
-    FieldSet,
-    field_set_from_pre_parsed_duration,
-    parse_duration_fields,
-    resolve_item,
-)
-from blue_ticker.utils.xbrl_result_types import InterestExpenseResult, XbrlTagElements
+from blue_ticker.analysis.sections import IncomeStatementSection
 from blue_ticker.analysis.xbrl_utils import (
     parse_html_int_attribute,
     parse_html_number,
 )
 from blue_ticker.constants.financial import MILLION_YEN
 from blue_ticker.constants.xbrl import (
-    IFRS_INTEREST_EXPENSE_MARKER_TAGS,
     INTEREST_EXPENSE_IFRS_TAGS,
     INTEREST_EXPENSE_JGAAP_TAGS,
-    USGAAP_MARKER_TAGS,
 )
-
-_IE_RELEVANT_TAGS: frozenset[str] = frozenset(
-    INTEREST_EXPENSE_JGAAP_TAGS
-    + INTEREST_EXPENSE_IFRS_TAGS
-    + USGAAP_MARKER_TAGS
-    + IFRS_INTEREST_EXPENSE_MARKER_TAGS
-)
-
-
-def _detect_accounting_standard(field_set: FieldSet) -> str:
-    has_usgaap = any("USGAAP" in tag for tag in field_set)
-    has_ifrs = any("IFRS" in tag for tag in field_set)
-    if has_usgaap and not has_ifrs:
-        return "US-GAAP"
-    if has_ifrs:
-        return "IFRS"
-    return "J-GAAP"
+from blue_ticker.utils.xbrl_result_types import InterestExpenseResult
 
 
 def _extract_usgaap_ie_from_html(xbrl_dir: Path) -> InterestExpenseResult | None:
@@ -182,13 +158,9 @@ def _extract_ifrs_ie_from_textblock(xbrl_dir: Path) -> InterestExpenseResult | N
     return None
 
 
-def extract_interest_expense(
-    xbrl_dir: Path,
-    *,
-    pre_parsed: XbrlTagElements | None = None,
-) -> InterestExpenseResult:
+def extract_interest_expense(section: IncomeStatementSection) -> InterestExpenseResult:
     """
-    XBRLディレクトリから連結損益計算書の支払利息（金融費用）を抽出する。
+    損益計算書セクションから支払利息（金融費用）を抽出する。
 
     Returns:
         {
@@ -199,18 +171,13 @@ def extract_interest_expense(
             "accounting_standard": str,   # "J-GAAP" | "IFRS" | "US-GAAP"
         }
     """
-    field_set = (
-        field_set_from_pre_parsed_duration(pre_parsed)
-        if pre_parsed is not None
-        else parse_duration_fields(xbrl_dir, allowed_tags=_IE_RELEVANT_TAGS)
-    )
-
-    accounting_standard = _detect_accounting_standard(field_set)
+    accounting_standard = section.accounting_standard
 
     if accounting_standard == "US-GAAP":
-        result = _extract_usgaap_ie_from_html(xbrl_dir)
-        if result is not None:
-            return result
+        if section.xbrl_dir is not None:
+            result = _extract_usgaap_ie_from_html(section.xbrl_dir)
+            if result is not None:
+                return result
         return {
             "current": None, "prior": None,
             "method": "not_found", "accounting_standard": "US-GAAP",
@@ -222,7 +189,7 @@ def extract_interest_expense(
         else INTEREST_EXPENSE_JGAAP_TAGS
     )
 
-    item = resolve_item(field_set, candidate_tags)
+    item = section.resolve(candidate_tags)
     if item["tag"] is not None:
         return {
             "current": item["current"],
@@ -231,9 +198,10 @@ def extract_interest_expense(
             "accounting_standard": accounting_standard,
         }
 
-    result = _extract_ifrs_ie_from_textblock(xbrl_dir)
-    if result is not None:
-        return result
+    if section.xbrl_dir is not None:
+        result = _extract_ifrs_ie_from_textblock(section.xbrl_dir)
+        if result is not None:
+            return result
 
     return {
         "current": None, "prior": None,

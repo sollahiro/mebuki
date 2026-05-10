@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from blue_ticker.analysis.depreciation import extract_depreciation
+from blue_ticker.analysis.sections import CashFlowSection
 
 NS_XBRLI = "http://www.xbrl.org/2003/instance"
 NS_JPPFS = "http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2022-11-01/jppfs_cor"
@@ -84,7 +85,7 @@ class TestExtractDepreciationJGAAP(unittest.TestCase):
                     '<jppfs_cor:DepreciationAndAmortizationOpeCF contextRef="CurrentYearDuration" decimals="-6" unitRef="JPY">9209000000</jppfs_cor:DepreciationAndAmortizationOpeCF>'
                 ),
             )
-            result = extract_depreciation(xbrl_dir)
+            result = extract_depreciation(CashFlowSection.from_xbrl(xbrl_dir))
         self.assertEqual(result["current"], 9209000000.0)
         self.assertIsNone(result["prior"])
         self.assertEqual(result["accounting_standard"], "J-GAAP")
@@ -99,7 +100,7 @@ class TestExtractDepreciationJGAAP(unittest.TestCase):
                     '<jppfs_cor:DepreciationAndAmortizationOpeCF contextRef="Prior1YearDuration" decimals="-6" unitRef="JPY">8500000000</jppfs_cor:DepreciationAndAmortizationOpeCF>'
                 ),
             )
-            result = extract_depreciation(xbrl_dir)
+            result = extract_depreciation(CashFlowSection.from_xbrl(xbrl_dir))
         self.assertEqual(result["current"], 9209000000.0)
         self.assertEqual(result["prior"], 8500000000.0)
 
@@ -112,14 +113,14 @@ class TestExtractDepreciationJGAAP(unittest.TestCase):
                     '<jppfs_cor:DepreciationAndAmortizationOpeCF contextRef="CurrentYearDuration_NonConsolidatedMember" decimals="-6" unitRef="JPY">1925000000</jppfs_cor:DepreciationAndAmortizationOpeCF>'
                 ),
             )
-            result = extract_depreciation(xbrl_dir)
+            result = extract_depreciation(CashFlowSection.from_xbrl(xbrl_dir))
         self.assertEqual(result["current"], 1925000000.0)
         self.assertEqual(result["accounting_standard"], "J-GAAP")
 
     def test_not_found(self):
         with tempfile.TemporaryDirectory() as tmp:
             xbrl_dir = _write_xbrl(Path(tmp), _make_xbrl(""))
-            result = extract_depreciation(xbrl_dir)
+            result = extract_depreciation(CashFlowSection.from_xbrl(xbrl_dir))
         self.assertIsNone(result["current"])
         self.assertEqual(result["method"], "not_found")
 
@@ -138,7 +139,7 @@ class TestExtractDepreciationIFRS(unittest.TestCase):
                     '<jpigp_cor:DepreciationAndAmortizationOpeCFIFRS contextRef="CurrentYearDuration" decimals="-6" unitRef="JPY">133784000000</jpigp_cor:DepreciationAndAmortizationOpeCFIFRS>'
                 ),
             )
-            result = extract_depreciation(xbrl_dir)
+            result = extract_depreciation(CashFlowSection.from_xbrl(xbrl_dir))
         self.assertEqual(result["current"], 133784000000.0)
         self.assertEqual(result["accounting_standard"], "IFRS")
         self.assertEqual(result["method"], "direct")
@@ -171,7 +172,7 @@ class TestExtractDepreciationUSGAAP(unittest.TestCase):
             "<tr><td>(1) 減価償却費</td><td>150,014</td><td></td><td>163,567</td><td></td></tr>"
         )
         (self.xbrl_dir / "0105010_test_ixbrl.htm").write_text(html, encoding="utf-8")
-        result = extract_depreciation(self.xbrl_dir)
+        result = extract_depreciation(CashFlowSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "usgaap_html")
         self.assertEqual(result["accounting_standard"], "US-GAAP")
         self.assertAlmostEqual(result["current"], 163_567_000_000)
@@ -180,7 +181,7 @@ class TestExtractDepreciationUSGAAP(unittest.TestCase):
     def test_no_html_file_returns_not_found(self):
         """US-GAAP で 0105010 HTML が存在しない場合 not_found を返す。"""
         self._write_usgaap_xbrl()
-        result = extract_depreciation(self.xbrl_dir)
+        result = extract_depreciation(CashFlowSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "not_found")
         self.assertEqual(result["accounting_standard"], "US-GAAP")
         self.assertIsNone(result["current"])
@@ -193,7 +194,7 @@ class TestExtractDepreciationUSGAAP(unittest.TestCase):
         )
         if not real_dir.exists():
             self.skipTest("富士フイルム実データが存在しない")
-        result = extract_depreciation(real_dir)
+        result = extract_depreciation(CashFlowSection.from_xbrl(real_dir))
         self.assertEqual(result["method"], "usgaap_html")
         self.assertEqual(result["accounting_standard"], "US-GAAP")
         self.assertAlmostEqual(result["current"], 163_567_000_000)

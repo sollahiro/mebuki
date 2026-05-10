@@ -5,6 +5,7 @@ from typing import Any, cast
 import pytest
 
 from blue_ticker.analysis.balance_sheet import extract_balance_sheet
+from blue_ticker.analysis.sections import BalanceSheetSection
 from blue_ticker.constants.financial import MILLION_YEN
 from blue_ticker.services.analyzer import _apply_balance_sheet
 from blue_ticker.utils.metrics_types import YearEntry
@@ -64,7 +65,7 @@ class TestBalanceSheetExtraction:
                 """,
             )
 
-            result = extract_balance_sheet(xbrl_dir)
+            result = extract_balance_sheet(BalanceSheetSection.from_xbrl(xbrl_dir))
 
         assert result["accounting_standard"] == "J-GAAP"
         assert result["method"] == "field_parser"
@@ -89,7 +90,7 @@ class TestBalanceSheetExtraction:
                 """,
             )
 
-            result = extract_balance_sheet(xbrl_dir)
+            result = extract_balance_sheet(BalanceSheetSection.from_xbrl(xbrl_dir))
 
         assert result["accounting_standard"] == "IFRS"
         assert result["current_assets"] == pytest.approx(6_597_843 * MILLION_YEN)
@@ -114,7 +115,7 @@ class TestBalanceSheetExtraction:
                 """,
             )
 
-            result = extract_balance_sheet(xbrl_dir)
+            result = extract_balance_sheet(BalanceSheetSection.from_xbrl(xbrl_dir))
 
         assert result["accounting_standard"] == "US-GAAP"
         assert result["current_assets"] == pytest.approx(1_581_681 * MILLION_YEN)
@@ -147,7 +148,7 @@ class TestBalanceSheetExtraction:
             )
             (xbrl_dir / "0105010_honbun_ixbrl.htm").write_text(html, encoding="utf-8")
 
-            result = extract_balance_sheet(xbrl_dir)
+            result = extract_balance_sheet(BalanceSheetSection.from_xbrl(xbrl_dir))
 
         assert result["current_assets"] == pytest.approx(1_581_681 * MILLION_YEN)
         assert result["non_current_assets"] == pytest.approx(3_668_227 * MILLION_YEN)
@@ -168,7 +169,7 @@ class TestBalanceSheetExtraction:
                 """,
             )
 
-            result = extract_balance_sheet(xbrl_dir)
+            result = extract_balance_sheet(BalanceSheetSection.from_xbrl(xbrl_dir))
 
         assert result["net_assets"] == pytest.approx(3_352_682 * MILLION_YEN)
 
@@ -182,7 +183,7 @@ class TestBalanceSheetExtraction:
                 """,
             )
 
-            result = extract_balance_sheet(xbrl_dir)
+            result = extract_balance_sheet(BalanceSheetSection.from_xbrl(xbrl_dir))
 
         assert result["components"][2]["tag"] == "OtherAssetsUSGAAP"
 
@@ -201,7 +202,7 @@ class TestBalanceSheetExtraction:
                 """,
             )
 
-            result = extract_balance_sheet(xbrl_dir)
+            result = extract_balance_sheet(BalanceSheetSection.from_xbrl(xbrl_dir))
 
         assert result["current_assets"] == pytest.approx(184_600 * MILLION_YEN)
         assert result["non_current_assets"] == pytest.approx(113_568 * MILLION_YEN)

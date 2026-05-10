@@ -16,13 +16,7 @@ try:
 except ImportError:
     _BS4_AVAILABLE = False
 
-from blue_ticker.analysis.field_parser import (
-    FieldSet,
-    derive_subtraction,
-    field_set_from_pre_parsed_duration,
-    parse_duration_fields,
-    resolve_item,
-)
+from blue_ticker.analysis.sections import IncomeStatementSection
 from blue_ticker.analysis.xbrl_utils import (
     parse_html_int_attribute,
     parse_html_number,
@@ -30,34 +24,12 @@ from blue_ticker.analysis.xbrl_utils import (
 from blue_ticker.constants.financial import MILLION_YEN
 from blue_ticker.constants.xbrl import (
     GROSS_PROFIT_DIRECT_TAGS,
-    IFRS_PL_MARKER_TAGS,
     OPERATING_PROFIT_DIRECT_TAGS,
-    ORDINARY_REVENUE_TAGS,
     ORDINARY_INCOME_TAGS,
+    ORDINARY_REVENUE_TAGS,
     SGA_DIRECT_TAGS,
-    USGAAP_MARKER_TAGS,
 )
-from blue_ticker.utils.xbrl_result_types import OperatingProfitResult, XbrlTagElements
-
-_OP_RELEVANT_TAGS: frozenset[str] = frozenset(
-    OPERATING_PROFIT_DIRECT_TAGS
-    + ORDINARY_INCOME_TAGS
-    + ORDINARY_REVENUE_TAGS
-    + GROSS_PROFIT_DIRECT_TAGS
-    + SGA_DIRECT_TAGS
-    + USGAAP_MARKER_TAGS
-    + IFRS_PL_MARKER_TAGS
-)
-
-
-def _detect_accounting_standard(field_set: FieldSet) -> str:
-    has_usgaap = any("USGAAP" in tag for tag in field_set)
-    has_ifrs = any("IFRS" in tag for tag in field_set)
-    if has_usgaap and not has_ifrs:
-        return "US-GAAP"
-    if has_ifrs:
-        return "IFRS"
-    return "J-GAAP"
+from blue_ticker.utils.xbrl_result_types import OperatingProfitResult
 
 
 def _extract_usgaap_op_from_html(xbrl_dir: Path) -> OperatingProfitResult | None:
@@ -159,13 +131,9 @@ def _extract_usgaap_op_from_html(xbrl_dir: Path) -> OperatingProfitResult | None
     return None
 
 
-def extract_operating_profit(
-    xbrl_dir: Path,
-    *,
-    pre_parsed: XbrlTagElements | None = None,
-) -> OperatingProfitResult:
+def extract_operating_profit(section: IncomeStatementSection) -> OperatingProfitResult:
     """
-    XBRLディレクトリから連結損益計算書の営業利益（または経常利益）を抽出する。
+    損益計算書セクションから営業利益（または経常利益）を抽出する。
 
     金融機関など営業利益が存在しない場合は経常利益にフォールバックする。
 
@@ -179,18 +147,13 @@ def extract_operating_profit(
             "reason":  str | None,   # not_found 時のみ
         }
     """
-    field_set = (
-        field_set_from_pre_parsed_duration(pre_parsed)
-        if pre_parsed is not None
-        else parse_duration_fields(xbrl_dir, allowed_tags=_OP_RELEVANT_TAGS)
-    )
-
-    accounting_standard = _detect_accounting_standard(field_set)
+    accounting_standard = section.accounting_standard
 
     if accounting_standard == "US-GAAP":
-        usgaap_result = _extract_usgaap_op_from_html(xbrl_dir)
-        if usgaap_result is not None:
-            return usgaap_result
+        if section.xbrl_dir is not None:
+            usgaap_result = _extract_usgaap_op_from_html(section.xbrl_dir)
+            if usgaap_result is not None:
+                return usgaap_result
         return {
             "current": None, "prior": None,
             "method": "not_found", "label": "営業利益",
@@ -199,9 +162,9 @@ def extract_operating_profit(
         }
 
     # 直接法: OPERATING_PROFIT_DIRECT_TAGS
-    op_item = resolve_item(field_set, OPERATING_PROFIT_DIRECT_TAGS)
+    op_item = section.resolve(OPERATING_PROFIT_DIRECT_TAGS)
     if op_item["tag"] is not None:
-        sga_item = resolve_item(field_set, SGA_DIRECT_TAGS)
+        sga_item = section.resolve(SGA_DIRECT_TAGS)
         result: OperatingProfitResult = {
             "current": op_item["current"], "prior": op_item["prior"],
             "method": "direct", "label": "営業利益",
@@ -213,9 +176,9 @@ def extract_operating_profit(
         return result
 
     # 計算法: GrossProfit - SGA（OperatingProfitLossIFRS が存在しない IFRS 企業向け）
-    computed = derive_subtraction(field_set, GROSS_PROFIT_DIRECT_TAGS, SGA_DIRECT_TAGS)
+    computed = section.derive_subtraction(GROSS_PROFIT_DIRECT_TAGS, SGA_DIRECT_TAGS)
     if computed["current"] is not None or computed["prior"] is not None:
-        sga_item = resolve_item(field_set, SGA_DIRECT_TAGS)
+        sga_item = section.resolve(SGA_DIRECT_TAGS)
         result = {
             "current": computed["current"], "prior": computed["prior"],
             "method": "computed", "label": "営業利益",
@@ -227,14 +190,14 @@ def extract_operating_profit(
         return result
 
     # 経常利益フォールバック（金融機関向け）
-    oi_item = resolve_item(field_set, ORDINARY_INCOME_TAGS)
+    oi_item = section.resolve(ORDINARY_INCOME_TAGS)
     if oi_item["tag"] is not None:
         ordinary_result: OperatingProfitResult = {
             "current": oi_item["current"], "prior": oi_item["prior"],
             "method": "ordinary_income", "label": "経常利益",
             "accounting_standard": accounting_standard,
         }
-        sales_item = resolve_item(field_set, ORDINARY_REVENUE_TAGS)
+        sales_item = section.resolve(ORDINARY_REVENUE_TAGS)
         if sales_item["tag"] is not None:
             ordinary_result["current_sales"] = sales_item["current"]
             ordinary_result["prior_sales"] = sales_item["prior"]

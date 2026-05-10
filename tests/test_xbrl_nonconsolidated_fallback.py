@@ -16,6 +16,24 @@ import pytest
 from blue_ticker.analysis.balance_sheet import extract_balance_sheet
 from blue_ticker.analysis.cash_flow import extract_cash_flow
 from blue_ticker.analysis.income_statement import extract_income_statement
+from blue_ticker.analysis.sections import (
+    BalanceSheetSection,
+    CashFlowSection,
+    IncomeStatementSection,
+    detect_accounting_standard,
+)
+
+
+def _is_from_pp(pre_parsed: dict) -> IncomeStatementSection:
+    return IncomeStatementSection.from_pre_parsed(pre_parsed, detect_accounting_standard(pre_parsed))
+
+
+def _cf_from_pp(pre_parsed: dict) -> CashFlowSection:
+    return CashFlowSection.from_pre_parsed(pre_parsed, detect_accounting_standard(pre_parsed))
+
+
+def _bs_from_pp(pre_parsed: dict, xbrl_dir: Path = Path(".")) -> BalanceSheetSection:
+    return BalanceSheetSection.from_pre_parsed(pre_parsed, detect_accounting_standard(pre_parsed), xbrl_dir)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -24,20 +42,17 @@ from blue_ticker.analysis.income_statement import extract_income_statement
 
 def test_income_statement_single_entity_uses_plain_context() -> None:
     """単体のみ企業は plain context のデータを返す。"""
-    result = extract_income_statement(
-        Path("."),
-        pre_parsed={
-            "NetSalesSummaryOfBusinessResults": {
-                "CurrentYearDuration": 4_547_599_000.0,
-            },
-            "OperatingIncomeLoss": {
-                "CurrentYearDuration": -120_634_000.0,
-            },
-            "NetIncomeLossSummaryOfBusinessResults": {
-                "CurrentYearDuration": 17_478_000.0,
-            },
+    result = extract_income_statement(_is_from_pp({
+        "NetSalesSummaryOfBusinessResults": {
+            "CurrentYearDuration": 4_547_599_000.0,
         },
-    )
+        "OperatingIncomeLoss": {
+            "CurrentYearDuration": -120_634_000.0,
+        },
+        "NetIncomeLossSummaryOfBusinessResults": {
+            "CurrentYearDuration": 17_478_000.0,
+        },
+    }))
 
     assert result["sales"] == pytest.approx(4_547_599_000.0)
     assert result["operating_profit"] == pytest.approx(-120_634_000.0)
@@ -46,17 +61,14 @@ def test_income_statement_single_entity_uses_plain_context() -> None:
 
 def test_cash_flow_single_entity_uses_plain_context() -> None:
     """単体のみ企業は plain context のCF値を返す。"""
-    result = extract_cash_flow(
-        Path("."),
-        pre_parsed={
-            "NetCashProvidedByUsedInOperatingActivities": {
-                "CurrentYearDuration": -482_098_000.0,
-            },
-            "NetCashProvidedByUsedInInvestmentActivities": {
-                "CurrentYearDuration": -306_697_000.0,
-            },
+    result = extract_cash_flow(_cf_from_pp({
+        "NetCashProvidedByUsedInOperatingActivities": {
+            "CurrentYearDuration": -482_098_000.0,
         },
-    )
+        "NetCashProvidedByUsedInInvestmentActivities": {
+            "CurrentYearDuration": -306_697_000.0,
+        },
+    }))
 
     assert result["cfo"]["current"] == pytest.approx(-482_098_000.0)
     assert result["cfi"]["current"] == pytest.approx(-306_697_000.0)
@@ -64,17 +76,14 @@ def test_cash_flow_single_entity_uses_plain_context() -> None:
 
 def test_balance_sheet_single_entity_uses_plain_context() -> None:
     """単体のみ企業は plain context のBS値を返す。"""
-    result = extract_balance_sheet(
-        Path("."),
-        pre_parsed={
-            "NetAssets": {
-                "CurrentYearInstant": 4_521_695_000.0,
-            },
-            "TotalAssetsSummaryOfBusinessResults": {
-                "CurrentYearInstant": 6_705_070_000.0,
-            },
+    result = extract_balance_sheet(_bs_from_pp({
+        "NetAssets": {
+            "CurrentYearInstant": 4_521_695_000.0,
         },
-    )
+        "TotalAssetsSummaryOfBusinessResults": {
+            "CurrentYearInstant": 6_705_070_000.0,
+        },
+    }))
 
     assert result["total_assets"] == pytest.approx(6_705_070_000.0)
     assert result["net_assets"] == pytest.approx(4_521_695_000.0)
@@ -107,7 +116,7 @@ def test_income_statement_consolidated_company_blocks_nonconsolidated_fallback()
     pre_parsed["NetSalesSummaryOfBusinessResults"] = {
         "CurrentYearDuration_NonConsolidatedMember": 4_547_599_000.0,
     }
-    result = extract_income_statement(Path("."), pre_parsed=pre_parsed)
+    result = extract_income_statement(_is_from_pp(pre_parsed))
 
     assert result["sales"] is None
 
@@ -118,7 +127,7 @@ def test_cash_flow_consolidated_company_blocks_nonconsolidated_fallback() -> Non
     pre_parsed["NetCashProvidedByUsedInOperatingActivities"] = {
         "CurrentYearDuration_NonConsolidatedMember": -482_098_000.0,
     }
-    result = extract_cash_flow(Path("."), pre_parsed=pre_parsed)
+    result = extract_cash_flow(_cf_from_pp(pre_parsed))
 
     assert result["cfo"]["current"] is None
     assert result["cfi"]["current"] is None
@@ -135,7 +144,7 @@ def test_balance_sheet_consolidated_company_blocks_nonconsolidated_fallback() ->
     }
     # 空ディレクトリを渡すことで HTML フォールバックが実ファイルを走査しないようにする
     with tempfile.TemporaryDirectory() as tmp:
-        result = extract_balance_sheet(Path(tmp), pre_parsed=pre_parsed)
+        result = extract_balance_sheet(_bs_from_pp(pre_parsed, Path(tmp)))
 
     assert result["net_assets"] is None
     assert result["total_assets"] is None

@@ -18,13 +18,7 @@ try:
 except ImportError:
     _BS4_AVAILABLE = False
 
-from blue_ticker.analysis.field_parser import (
-    FieldSet,
-    field_set_from_pre_parsed_duration,
-    parse_duration_fields,
-    resolve_item,
-)
-from blue_ticker.utils.xbrl_result_types import TaxExpenseResult, XbrlTagElements
+from blue_ticker.analysis.sections import IncomeStatementSection
 from blue_ticker.analysis.xbrl_utils import (
     parse_html_int_attribute,
     parse_html_number,
@@ -33,30 +27,10 @@ from blue_ticker.constants.financial import MILLION_YEN
 from blue_ticker.constants.xbrl import (
     INCOME_TAX_IFRS_TAGS,
     INCOME_TAX_JGAAP_TAGS,
-    IFRS_TAX_MARKER_TAGS,
     PRETAX_INCOME_IFRS_TAGS,
     PRETAX_INCOME_JGAAP_TAGS,
-    USGAAP_MARKER_TAGS,
 )
-
-_TAX_RELEVANT_TAGS: frozenset[str] = frozenset(
-    PRETAX_INCOME_JGAAP_TAGS
-    + PRETAX_INCOME_IFRS_TAGS
-    + INCOME_TAX_JGAAP_TAGS
-    + INCOME_TAX_IFRS_TAGS
-    + USGAAP_MARKER_TAGS
-    + IFRS_TAX_MARKER_TAGS
-)
-
-
-def _detect_accounting_standard(field_set: FieldSet) -> str:
-    has_usgaap = any("USGAAP" in tag for tag in field_set)
-    has_ifrs = any("IFRS" in tag for tag in field_set)
-    if has_usgaap and not has_ifrs:
-        return "US-GAAP"
-    if has_ifrs:
-        return "IFRS"
-    return "J-GAAP"
+from blue_ticker.utils.xbrl_result_types import TaxExpenseResult
 
 
 def _extract_usgaap_tax_from_html(xbrl_dir: Path) -> TaxExpenseResult | None:
@@ -183,13 +157,9 @@ def _extract_usgaap_tax_from_html(xbrl_dir: Path) -> TaxExpenseResult | None:
     return None
 
 
-def extract_tax_expense(
-    xbrl_dir: Path,
-    *,
-    pre_parsed: XbrlTagElements | None = None,
-) -> TaxExpenseResult:
+def extract_tax_expense(section: IncomeStatementSection) -> TaxExpenseResult:
     """
-    XBRLディレクトリから税引前利益・法人税等を抽出し実効税率を計算する。
+    損益計算書セクションから税引前利益・法人税等を抽出し実効税率を計算する。
 
     Returns:
         {
@@ -203,18 +173,13 @@ def extract_tax_expense(
             "method": str,   # "computed" | "not_found"
         }
     """
-    field_set = (
-        field_set_from_pre_parsed_duration(pre_parsed)
-        if pre_parsed is not None
-        else parse_duration_fields(xbrl_dir, allowed_tags=_TAX_RELEVANT_TAGS)
-    )
-
-    accounting_standard = _detect_accounting_standard(field_set)
+    accounting_standard = section.accounting_standard
 
     if accounting_standard == "US-GAAP":
-        result = _extract_usgaap_tax_from_html(xbrl_dir)
-        if result is not None:
-            return result
+        if section.xbrl_dir is not None:
+            result = _extract_usgaap_tax_from_html(section.xbrl_dir)
+            if result is not None:
+                return result
         return {
             "pretax_income": None, "income_tax": None, "effective_tax_rate": None,
             "prior_pretax_income": None, "prior_income_tax": None, "prior_effective_tax_rate": None,
@@ -229,8 +194,8 @@ def extract_tax_expense(
         pretax_tags = PRETAX_INCOME_JGAAP_TAGS
         tax_tags = INCOME_TAX_JGAAP_TAGS
 
-    pretax_item = resolve_item(field_set, pretax_tags)
-    tax_item = resolve_item(field_set, tax_tags)
+    pretax_item = section.resolve(pretax_tags)
+    tax_item = section.resolve(tax_tags)
 
     def _tax_rate(pretax: float | None, tax: float | None) -> float | None:
         if pretax is not None and tax is not None and pretax != 0:

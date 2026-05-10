@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 
 from blue_ticker.analysis.operating_profit import extract_operating_profit
+from blue_ticker.analysis.sections import IncomeStatementSection
 
 NS_XBRLI = "http://www.xbrl.org/2003/instance"
 NS_JPPFS = "http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2022-11-01/jppfs_cor"
@@ -95,7 +96,7 @@ class TestOperatingProfitDirectMethod(unittest.TestCase):
                 unitRef="JPY" decimals="-6">450000000000</jppfs_cor:OperatingIncomeLoss>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_operating_profit(self.xbrl_dir)
+        result = extract_operating_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertEqual(result["label"], "営業利益")
         self.assertEqual(result["accounting_standard"], "J-GAAP")
@@ -113,7 +114,7 @@ class TestOperatingProfitDirectMethod(unittest.TestCase):
                 unitRef="JPY" decimals="-6">696000000000</jpifrs_cor:OperatingProfitLossIFRS>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_operating_profit(self.xbrl_dir)
+        result = extract_operating_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertEqual(result["accounting_standard"], "IFRS")
         self.assertAlmostEqual(result["current"], 755_816_000_000)
@@ -150,7 +151,7 @@ class TestOperatingProfitComputedMethod(unittest.TestCase):
                 unitRef="JPY" decimals="-6">{sga_prior}</jpifrs_cor:SellingGeneralAndAdministrativeExpensesIFRS>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_operating_profit(self.xbrl_dir)
+        result = extract_operating_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "computed")
         self.assertEqual(result["label"], "営業利益")
         self.assertEqual(result["accounting_standard"], "IFRS")
@@ -170,7 +171,7 @@ class TestOperatingProfitComputedMethod(unittest.TestCase):
                 unitRef="JPY" decimals="-6">1500000000000</jpifrs_cor:SellingGeneralAndAdministrativeExpensesIFRS>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_operating_profit(self.xbrl_dir)
+        result = extract_operating_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "computed")
         self.assertIsNone(result["current"])
         self.assertAlmostEqual(result["prior"], 500_000_000_000)
@@ -188,7 +189,7 @@ class TestOperatingProfitComputedMethod(unittest.TestCase):
                 unitRef="JPY" decimals="-6">1500000000000</jpifrs_cor:SellingGeneralAndAdministrativeExpensesIFRS>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_operating_profit(self.xbrl_dir)
+        result = extract_operating_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertAlmostEqual(result["current"], 800_000_000_000)
         self.assertAlmostEqual(result["current_sga"], 1_500_000_000_000)
@@ -216,7 +217,7 @@ class TestOperatingProfitFallbacks(unittest.TestCase):
                 unitRef="JPY" decimals="-6">280000000000</jppfs_cor:OrdinaryIncome>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_operating_profit(self.xbrl_dir)
+        result = extract_operating_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "ordinary_income")
         self.assertEqual(result["label"], "経常利益")
         self.assertAlmostEqual(result["current"], 300_000_000_000)
@@ -232,7 +233,7 @@ class TestOperatingProfitFallbacks(unittest.TestCase):
                 unitRef="JPY" decimals="-6">100000000000</jppfs_cor:OperatingIncomeLoss>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_operating_profit(self.xbrl_dir)
+        result = extract_operating_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertAlmostEqual(result["current"], 900_000_000_000)
 
@@ -249,7 +250,7 @@ class TestOperatingProfitFallbacks(unittest.TestCase):
                 unitRef="JPY" decimals="-6">90000000000</jppfs_cor:OperatingIncomeLoss>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_operating_profit(self.xbrl_dir)
+        result = extract_operating_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertAlmostEqual(result["current"], 900_000_000_000)
         self.assertAlmostEqual(result["prior"], 850_000_000_000)
@@ -261,7 +262,7 @@ class TestOperatingProfitFallbacks(unittest.TestCase):
                 unitRef="JPY" decimals="-6">150000000000</jppfs_cor:OperatingIncomeLoss>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_operating_profit(self.xbrl_dir)
+        result = extract_operating_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertAlmostEqual(result["current"], 150_000_000_000)
 
@@ -278,7 +279,7 @@ class TestOperatingProfitFallbacks(unittest.TestCase):
                 unitRef="JPY" decimals="-6">20000000000</jppfs_cor:OperatingIncomeLoss>
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_operating_profit(self.xbrl_dir)
+        result = extract_operating_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertAlmostEqual(result["current"], 150_000_000_000)
         self.assertAlmostEqual(result["prior"], 140_000_000_000)
@@ -287,7 +288,7 @@ class TestOperatingProfitFallbacks(unittest.TestCase):
         """該当タグが一切ない場合は not_found を返す"""
         xml = _make_xbrl("")
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
-        result = extract_operating_profit(self.xbrl_dir)
+        result = extract_operating_profit(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "not_found")
         self.assertIsNone(result["current"])
         self.assertIsNone(result["prior"])

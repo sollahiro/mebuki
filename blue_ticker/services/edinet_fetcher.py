@@ -33,6 +33,13 @@ from blue_ticker.analysis.interest_expense import extract_interest_expense
 from blue_ticker.analysis.net_revenue import extract_net_revenue
 from blue_ticker.analysis.operating_profit import extract_operating_profit
 from blue_ticker.analysis.order_book import extract_order_book
+from blue_ticker.analysis.sections import (
+    BalanceSheetSection,
+    CashFlowSection,
+    EmployeeSection,
+    IncomeStatementSection,
+    detect_accounting_standard,
+)
 from blue_ticker.analysis.shareholder_metrics import extract_shareholder_metrics
 from blue_ticker.analysis.tax_expense import extract_tax_expense
 from blue_ticker.utils.cache import CacheManager
@@ -124,6 +131,50 @@ _STATEMENT_SECTIONS_BY_KEY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] =
     "op": (_INCOME_STATEMENT_SECTIONS, _INCOME_STATEMENT_FALLBACK_SECTIONS),
     "da": (_CASH_FLOW_SECTIONS, _CASH_FLOW_FALLBACK_SECTIONS),
 }
+
+def _make_section_wrapper(
+    section_class: type, extract_fn: Callable
+) -> Callable:
+    """Section-aware 抽出関数を旧 (xbrl_path, *, pre_parsed=None) シグネチャへ変換する。"""
+    def _wrapper(
+        xbrl_path: Path,
+        *,
+        pre_parsed: XbrlTagElements | None = None,
+    ) -> dict[str, Any]:
+        if pre_parsed is not None:
+            std = detect_accounting_standard(pre_parsed)
+            section = section_class.from_pre_parsed(pre_parsed, std, xbrl_path)
+        else:
+            section = section_class.from_xbrl(xbrl_path)
+        return extract_fn(section)  # type: ignore[arg-type]
+    return _wrapper
+
+
+def _employees_compat(
+    xbrl_path: Path,
+    *,
+    pre_parsed: XbrlTagElements | None = None,
+) -> dict[str, Any]:
+    """EmployeeSection（xbrl_dir なし）向けラッパー。"""
+    if pre_parsed is not None:
+        std = detect_accounting_standard(pre_parsed)
+        section = EmployeeSection.from_pre_parsed(pre_parsed, std)
+    else:
+        section = EmployeeSection.from_xbrl(xbrl_path)
+    return extract_employees(section)
+
+
+_extract_is_compat = _make_section_wrapper(IncomeStatementSection, extract_income_statement)
+_extract_gp_compat = _make_section_wrapper(IncomeStatementSection, extract_gross_profit)
+_extract_op_compat = _make_section_wrapper(IncomeStatementSection, extract_operating_profit)
+_extract_ie_compat = _make_section_wrapper(IncomeStatementSection, extract_interest_expense)
+_extract_tax_compat = _make_section_wrapper(IncomeStatementSection, extract_tax_expense)
+_extract_nr_compat = _make_section_wrapper(IncomeStatementSection, extract_net_revenue)
+_extract_cf_compat = _make_section_wrapper(CashFlowSection, extract_cash_flow)
+_extract_da_compat = _make_section_wrapper(CashFlowSection, extract_depreciation)
+_extract_bs_compat = _make_section_wrapper(BalanceSheetSection, extract_balance_sheet)
+_extract_ibd_compat = _make_section_wrapper(BalanceSheetSection, extract_interest_bearing_debt)
+
 
 _SHAREHOLDER_CALCULATION_FIELDS: tuple[str, ...] = (
     # extract_shareholder_metrics() が返す検証・注記fallback由来の値を
@@ -363,11 +414,11 @@ class ExtractorSpec:
 
 
 _EXTRACTOR_SPECS: list[ExtractorSpec] = [
-    ExtractorSpec("ibd", "IBD", extract_interest_bearing_debt),
+    ExtractorSpec("ibd", "IBD", _extract_ibd_compat),
     ExtractorSpec(
         "bs",
         "BS",
-        extract_balance_sheet,
+        _extract_bs_compat,
         result_check=lambda r: any(
             r.get(key) is not None
             for key in (
@@ -380,13 +431,13 @@ _EXTRACTOR_SPECS: list[ExtractorSpec] = [
             )
         ),
     ),
-    ExtractorSpec("gp", "GP", extract_gross_profit),
-    ExtractorSpec("ie", "IE", extract_interest_expense),
-    ExtractorSpec("tax", "TAX", extract_tax_expense),
-    ExtractorSpec("emp", "EMP", extract_employees),
-    ExtractorSpec("nr", "NR", extract_net_revenue, result_check=lambda r: bool(r.get("found"))),
-    ExtractorSpec("op", "OP", extract_operating_profit),
-    ExtractorSpec("da", "DA", extract_depreciation),
+    ExtractorSpec("gp", "GP", _extract_gp_compat),
+    ExtractorSpec("ie", "IE", _extract_ie_compat),
+    ExtractorSpec("tax", "TAX", _extract_tax_compat),
+    ExtractorSpec("emp", "EMP", _employees_compat),
+    ExtractorSpec("nr", "NR", _extract_nr_compat, result_check=lambda r: bool(r.get("found"))),
+    ExtractorSpec("op", "OP", _extract_op_compat),
+    ExtractorSpec("da", "DA", _extract_da_compat),
     ExtractorSpec(
         "ob",
         "OB",
@@ -965,11 +1016,6 @@ class EdinetFetcher:
 
         Returns: { "YYYYMMDD": {"gp": gp_result_dict, "cf": cf_result_dict, "ibd": ibd_result_dict} }
         """
-        from blue_ticker.analysis.gross_profit import extract_gross_profit
-        from blue_ticker.analysis.operating_profit import extract_operating_profit
-        from blue_ticker.analysis.cash_flow import extract_cash_flow
-        from blue_ticker.analysis.interest_bearing_debt import extract_interest_bearing_debt
-
         if not self.edinet_client or not self.edinet_client.api_key:
             return {}
         docs = await self._get_half_year_docs(code, financial_data, max_years)
@@ -987,19 +1033,19 @@ class EdinetFetcher:
             entry = pre_parsed_map[fy_end_8]
             gp = cast(
                 GrossProfitResult,
-                _extract_with_statement_scope(entry, "gp", extract_gross_profit),
+                _extract_with_statement_scope(entry, "gp", _extract_gp_compat),
             )
             op = cast(
                 OperatingProfitResult,
-                _extract_with_statement_scope(entry, "op", extract_operating_profit),
+                _extract_with_statement_scope(entry, "op", _extract_op_compat),
             )
             cf = cast(
                 CashFlowResult,
-                _extract_with_statement_scope(entry, "da", extract_cash_flow),
+                _extract_with_statement_scope(entry, "da", _extract_cf_compat),
             )
             ibd = cast(
                 InterestBearingDebtResult,
-                _extract_with_statement_scope(entry, "ibd", extract_interest_bearing_debt),
+                _extract_with_statement_scope(entry, "ibd", _extract_ibd_compat),
             )
             gp["docID"] = doc["docID"]
             op["docID"] = doc["docID"]
@@ -1129,39 +1175,39 @@ class EdinetFetcher:
             cash_flow_pre_parsed = _preparsed_for_statement(entry, "da")
             all_pre_parsed = entry[1]
 
-            is_result = extract_income_statement(xbrl_path, pre_parsed=income_pre_parsed)
+            is_result = _extract_is_compat(xbrl_path, pre_parsed=income_pre_parsed)
             if not _result_has_signal(is_result):
-                is_result = extract_income_statement(xbrl_path, pre_parsed=all_pre_parsed)
+                is_result = _extract_is_compat(xbrl_path, pre_parsed=all_pre_parsed)
             sales = is_result.get("sales")
             operating_profit = is_result.get("operating_profit")
             operating_profit_label = None
             sales_label = is_result.get("sales_label", "売上高") if sales is not None else None
             if sales is None:
-                gp_for_sales = extract_gross_profit(xbrl_path, pre_parsed=income_pre_parsed)
+                gp_for_sales = _extract_gp_compat(xbrl_path, pre_parsed=income_pre_parsed)
                 if not _result_has_signal(gp_for_sales):
-                    gp_for_sales = extract_gross_profit(xbrl_path, pre_parsed=all_pre_parsed)
+                    gp_for_sales = _extract_gp_compat(xbrl_path, pre_parsed=all_pre_parsed)
                 sales = gp_for_sales.get("current_sales")
                 if sales is not None:
                     sales_label = "経常収益"
                 if sales is None:
-                    op_for_sales = extract_operating_profit(xbrl_path, pre_parsed=income_pre_parsed)
+                    op_for_sales = _extract_op_compat(xbrl_path, pre_parsed=income_pre_parsed)
                     if not _result_has_signal(op_for_sales):
-                        op_for_sales = extract_operating_profit(xbrl_path, pre_parsed=all_pre_parsed)
+                        op_for_sales = _extract_op_compat(xbrl_path, pre_parsed=all_pre_parsed)
                     sales = op_for_sales.get("current_sales")
                     if sales is not None:
                         sales_label = "経常収益"
             if operating_profit is None:
-                op_result = extract_operating_profit(xbrl_path, pre_parsed=income_pre_parsed)
+                op_result = _extract_op_compat(xbrl_path, pre_parsed=income_pre_parsed)
                 if not _result_has_signal(op_result):
-                    op_result = extract_operating_profit(xbrl_path, pre_parsed=all_pre_parsed)
+                    op_result = _extract_op_compat(xbrl_path, pre_parsed=all_pre_parsed)
                 operating_profit = op_result.get("current")
                 operating_profit_label = op_result.get("label")
-            bs_result = extract_balance_sheet(xbrl_path, pre_parsed=balance_pre_parsed)
+            bs_result = _extract_bs_compat(xbrl_path, pre_parsed=balance_pre_parsed)
             if not _result_has_signal(bs_result):
-                bs_result = extract_balance_sheet(xbrl_path, pre_parsed=all_pre_parsed)
-            cf_result = extract_cash_flow(xbrl_path, pre_parsed=cash_flow_pre_parsed)
+                bs_result = _extract_bs_compat(xbrl_path, pre_parsed=all_pre_parsed)
+            cf_result = _extract_cf_compat(xbrl_path, pre_parsed=cash_flow_pre_parsed)
             if not _result_has_signal(cf_result):
-                cf_result = extract_cash_flow(xbrl_path, pre_parsed=all_pre_parsed)
+                cf_result = _extract_cf_compat(xbrl_path, pre_parsed=all_pre_parsed)
             sh_result = extract_shareholder_metrics(
                 xbrl_path,
                 pre_parsed=all_pre_parsed,
@@ -1256,39 +1302,39 @@ class EdinetFetcher:
             cash_flow_pre_parsed = _preparsed_for_statement(entry, "da")
             all_pre_parsed = entry[1]
 
-            is_result = extract_income_statement(xbrl_path, pre_parsed=income_pre_parsed)
+            is_result = _extract_is_compat(xbrl_path, pre_parsed=income_pre_parsed)
             if not _result_has_signal(is_result):
-                is_result = extract_income_statement(xbrl_path, pre_parsed=all_pre_parsed)
+                is_result = _extract_is_compat(xbrl_path, pre_parsed=all_pre_parsed)
             sales = is_result.get("sales")
             operating_profit = is_result.get("operating_profit")
             operating_profit_label = None
             sales_label = is_result.get("sales_label", "売上高") if sales is not None else None
             if sales is None:
-                gp_for_sales = extract_gross_profit(xbrl_path, pre_parsed=income_pre_parsed)
+                gp_for_sales = _extract_gp_compat(xbrl_path, pre_parsed=income_pre_parsed)
                 if not _result_has_signal(gp_for_sales):
-                    gp_for_sales = extract_gross_profit(xbrl_path, pre_parsed=all_pre_parsed)
+                    gp_for_sales = _extract_gp_compat(xbrl_path, pre_parsed=all_pre_parsed)
                 sales = gp_for_sales.get("current_sales")
                 if sales is not None:
                     sales_label = "経常収益"
                 if sales is None:
-                    op_for_sales = extract_operating_profit(xbrl_path, pre_parsed=income_pre_parsed)
+                    op_for_sales = _extract_op_compat(xbrl_path, pre_parsed=income_pre_parsed)
                     if not _result_has_signal(op_for_sales):
-                        op_for_sales = extract_operating_profit(xbrl_path, pre_parsed=all_pre_parsed)
+                        op_for_sales = _extract_op_compat(xbrl_path, pre_parsed=all_pre_parsed)
                     sales = op_for_sales.get("current_sales")
                     if sales is not None:
                         sales_label = "経常収益"
             if operating_profit is None:
-                op_result = extract_operating_profit(xbrl_path, pre_parsed=income_pre_parsed)
+                op_result = _extract_op_compat(xbrl_path, pre_parsed=income_pre_parsed)
                 if not _result_has_signal(op_result):
-                    op_result = extract_operating_profit(xbrl_path, pre_parsed=all_pre_parsed)
+                    op_result = _extract_op_compat(xbrl_path, pre_parsed=all_pre_parsed)
                 operating_profit = op_result.get("current")
                 operating_profit_label = op_result.get("label")
-            bs_result = extract_balance_sheet(xbrl_path, pre_parsed=balance_pre_parsed)
+            bs_result = _extract_bs_compat(xbrl_path, pre_parsed=balance_pre_parsed)
             if not _result_has_signal(bs_result):
-                bs_result = extract_balance_sheet(xbrl_path, pre_parsed=all_pre_parsed)
-            cf_result = extract_cash_flow(xbrl_path, pre_parsed=cash_flow_pre_parsed)
+                bs_result = _extract_bs_compat(xbrl_path, pre_parsed=all_pre_parsed)
+            cf_result = _extract_cf_compat(xbrl_path, pre_parsed=cash_flow_pre_parsed)
             if not _result_has_signal(cf_result):
-                cf_result = extract_cash_flow(xbrl_path, pre_parsed=all_pre_parsed)
+                cf_result = _extract_cf_compat(xbrl_path, pre_parsed=all_pre_parsed)
             sh_result = extract_shareholder_metrics(
                 xbrl_path,
                 pre_parsed=all_pre_parsed,

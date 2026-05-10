@@ -29,12 +29,7 @@ try:
 except ImportError:
     _BS4_AVAILABLE = False
 
-from blue_ticker.analysis.field_parser import (
-    FieldSet,
-    field_set_from_pre_parsed_duration,
-    parse_duration_fields,
-    resolve_item,
-)
+from blue_ticker.analysis.sections import IncomeStatementSection
 from blue_ticker.analysis.xbrl_utils import (
     parse_html_int_attribute,
     parse_html_number,
@@ -44,43 +39,25 @@ from blue_ticker.constants.xbrl import (
     BUSINESS_GROSS_PROFIT_COMPONENT_DEFINITIONS,
     GROSS_PROFIT_COMPONENT_DEFINITIONS,
     GROSS_PROFIT_DIRECT_TAGS,
-    IFRS_PL_MARKER_TAGS,
     OPERATING_GROSS_PROFIT_DIRECT_TAGS,
     ORDINARY_REVENUE_TAGS,
-    USGAAP_MARKER_TAGS,
 )
-from blue_ticker.utils.xbrl_result_types import GrossProfitResult, MetricComponent, XbrlTagElements
-
-# XBRL解析で収集対象とするローカルタグ名のセット
-_GP_RELEVANT_TAGS: frozenset[str] = frozenset(
-    GROSS_PROFIT_DIRECT_TAGS
-    + OPERATING_GROSS_PROFIT_DIRECT_TAGS
-    + [tag for comp in GROSS_PROFIT_COMPONENT_DEFINITIONS for tag in comp["tags"]]
-    + [tag for comp in BUSINESS_GROSS_PROFIT_COMPONENT_DEFINITIONS for tag in comp["tags"]]
-    + ORDINARY_REVENUE_TAGS
-    + USGAAP_MARKER_TAGS
-    + IFRS_PL_MARKER_TAGS
-)
+from blue_ticker.utils.xbrl_result_types import GrossProfitResult, MetricComponent
 
 
-def _detect_accounting_standard(field_set: FieldSet) -> str:
-    has_usgaap = any("USGAAP" in tag for tag in field_set)
-    has_ifrs = any("IFRS" in tag for tag in field_set)
-    if has_usgaap and not has_ifrs:
-        return "US-GAAP"
-    if has_ifrs:
-        return "IFRS"
-    return "J-GAAP"
-
-
-def _resolve_prefer_both(field_set: FieldSet, tags: list[str]) -> tuple[float | None, float | None]:
+def _resolve_prefer_both(
+    section: IncomeStatementSection, tags: list[str]
+) -> tuple[float | None, float | None]:
     """両方（当期・前期）揃うタグを優先し、なければ片側のみでも返す。"""
     partial_c: float | None = None
     partial_p: float | None = None
     for tag in tags:
-        if tag not in field_set:
+        if tag not in section:
             continue
-        c, p = field_set[tag]["current"], field_set[tag]["prior"]
+        fv = section.field_value(tag)
+        if fv is None:
+            continue
+        c, p = fv["current"], fv["prior"]
         if c is not None and p is not None:
             return c, p
         if (c is not None or p is not None) and partial_c is None and partial_p is None:
@@ -88,23 +65,23 @@ def _resolve_prefer_both(field_set: FieldSet, tags: list[str]) -> tuple[float | 
     return partial_c, partial_p
 
 
-def _extract_sales_for_yoy(field_set: FieldSet) -> tuple[float | None, float | None]:
+def _extract_sales_for_yoy(section: IncomeStatementSection) -> tuple[float | None, float | None]:
     """売上高の当期・前期値を返す（YoY比較用）。当期・前期が両方揃うタグを優先する。"""
     sales_tags = next(
         (comp["tags"] for comp in GROSS_PROFIT_COMPONENT_DEFINITIONS if comp["label"] == "売上高"),
         [],
     ) + ORDINARY_REVENUE_TAGS
-    return _resolve_prefer_both(field_set, sales_tags)
+    return _resolve_prefer_both(section, sales_tags)
 
 
-def _extract_business_gross_profit(field_set: FieldSet) -> GrossProfitResult | None:
+def _extract_business_gross_profit(section: IncomeStatementSection) -> GrossProfitResult | None:
     """銀行等の連結業務粗利益を構成要素から算出する。"""
     comp_results: list[MetricComponent] = []
     current_total = prior_total = 0.0
     has_current = has_prior = False
 
     for comp_def in BUSINESS_GROSS_PROFIT_COMPONENT_DEFINITIONS:
-        item = resolve_item(field_set, comp_def["tags"])
+        item = section.resolve(comp_def["tags"])
         sign = comp_def["sign"]
         if item["current"] is not None:
             current_total += sign * item["current"]
@@ -123,7 +100,7 @@ def _extract_business_gross_profit(field_set: FieldSet) -> GrossProfitResult | N
     if not has_current and not has_prior:
         return None
 
-    sales_c, sales_p = _extract_sales_for_yoy(field_set)
+    sales_c, sales_p = _extract_sales_for_yoy(section)
     result: GrossProfitResult = {
         "current": current_total if has_current else None,
         "prior": prior_total if has_prior else None,
@@ -239,13 +216,9 @@ def _extract_usgaap_gp_from_html(xbrl_dir: Path) -> GrossProfitResult | None:
     return None
 
 
-def extract_gross_profit(
-    xbrl_dir: Path,
-    *,
-    pre_parsed: XbrlTagElements | None = None,
-) -> GrossProfitResult:
+def extract_gross_profit(section: IncomeStatementSection) -> GrossProfitResult:
     """
-    XBRLディレクトリから連結損益計算書の売上総利益を抽出する。
+    損益計算書セクションから売上総利益を抽出する。
 
     Returns:
         {
@@ -264,23 +237,18 @@ def extract_gross_profit(
             ]
         }
     """
-    field_set = (
-        field_set_from_pre_parsed_duration(pre_parsed)
-        if pre_parsed is not None
-        else parse_duration_fields(xbrl_dir, allowed_tags=_GP_RELEVANT_TAGS)
-    )
-
-    accounting_standard = _detect_accounting_standard(field_set)
+    accounting_standard = section.accounting_standard
 
     # US-GAAP 企業: 連結損益計算書HTML(0105010)から直接解析
     if accounting_standard == "US-GAAP":
-        usgaap_result = _extract_usgaap_gp_from_html(xbrl_dir)
-        if usgaap_result is not None:
-            sales_c, sales_p = _extract_sales_for_yoy(field_set)
-            if sales_c is not None or sales_p is not None:
-                usgaap_result["current_sales"] = sales_c
-                usgaap_result["prior_sales"] = sales_p
-            return usgaap_result
+        if section.xbrl_dir is not None:
+            usgaap_result = _extract_usgaap_gp_from_html(section.xbrl_dir)
+            if usgaap_result is not None:
+                sales_c, sales_p = _extract_sales_for_yoy(section)
+                if sales_c is not None or sales_p is not None:
+                    usgaap_result["current_sales"] = sales_c
+                    usgaap_result["prior_sales"] = sales_p
+                return usgaap_result
         return {
             "current": None, "prior": None,
             "method": "not_found", "accounting_standard": "US-GAAP", "components": [],
@@ -288,9 +256,9 @@ def extract_gross_profit(
         }
 
     # 直接法: GrossProfit タグを検索
-    gp_item = resolve_item(field_set, GROSS_PROFIT_DIRECT_TAGS)
+    gp_item = section.resolve(GROSS_PROFIT_DIRECT_TAGS)
     if gp_item["tag"] is not None:
-        sales_c, sales_p = _extract_sales_for_yoy(field_set)
+        sales_c, sales_p = _extract_sales_for_yoy(section)
         result: GrossProfitResult = {
             "current": gp_item["current"],
             "prior": gp_item["prior"],
@@ -305,14 +273,14 @@ def extract_gross_profit(
             result["prior_sales"] = sales_p
         return result
 
-    business_gross_profit = _extract_business_gross_profit(field_set)
+    business_gross_profit = _extract_business_gross_profit(section)
     if business_gross_profit is not None:
         return business_gross_profit
 
     # 直接法: OperatingGrossProfit タグを検索
-    ogp_item = resolve_item(field_set, OPERATING_GROSS_PROFIT_DIRECT_TAGS)
+    ogp_item = section.resolve(OPERATING_GROSS_PROFIT_DIRECT_TAGS)
     if ogp_item["tag"] is not None:
-        sales_c, sales_p = _extract_sales_for_yoy(field_set)
+        sales_c, sales_p = _extract_sales_for_yoy(section)
         result = {
             "current": ogp_item["current"],
             "prior": ogp_item["prior"],
@@ -330,7 +298,7 @@ def extract_gross_profit(
     # 計算法: 売上高タグ・売上原価タグをそれぞれ取得して差し引く
     comp_results: list[MetricComponent] = []
     for comp_def in GROSS_PROFIT_COMPONENT_DEFINITIONS:
-        item = resolve_item(field_set, comp_def["tags"])
+        item = section.resolve(comp_def["tags"])
         comp_results.append({
             "label": comp_def["label"],
             "tag": item["tag"],
