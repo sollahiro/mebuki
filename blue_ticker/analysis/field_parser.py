@@ -175,11 +175,11 @@ def _normalize_duration(tag_elements: XbrlTagElements) -> FieldSet:
             elif ctx in exact_prior:
                 prior = val
 
-        if current is None and prior is None:
+        if current is None or prior is None:
             for ctx, val in ctx_map.items():
-                if _is_consolidated_duration(ctx):
+                if current is None and _is_consolidated_duration(ctx):
                     current = val
-                elif _is_consolidated_prior_duration(ctx):
+                if prior is None and _is_consolidated_prior_duration(ctx):
                     prior = val
 
         if current is not None or prior is not None:
@@ -236,11 +236,11 @@ def _normalize_instant(tag_elements: XbrlTagElements) -> FieldSet:
             elif ctx in exact_prior:
                 prior = val
 
-        if current is None and prior is None:
+        if current is None or prior is None:
             for ctx, val in ctx_map.items():
-                if _is_consolidated_instant(ctx):
+                if current is None and _is_consolidated_instant(ctx):
                     current = val
-                elif _is_consolidated_prior_instant(ctx):
+                if prior is None and _is_consolidated_prior_instant(ctx):
                     prior = val
 
         if current is not None or prior is not None:
@@ -285,6 +285,22 @@ def resolve_item(field_set: FieldSet, candidate_tags: list[str]) -> ResolvedItem
             if fv["current"] is not None or fv["prior"] is not None:
                 return {"tag": tag, "current": fv["current"], "prior": fv["prior"]}
     return {"tag": None, "current": None, "prior": None}
+
+
+def resolve_item_prefer_current(field_set: FieldSet, candidate_tags: list[str]) -> ResolvedItem:
+    """候補タグを優先順に試す。当期値があるタグを優先し、なければ前期値のみのタグを返す。
+
+    損益計算書の売上高・営業利益など、当期値が主要用途で前期値はYoY補助のケースに使う。
+    """
+    fallback: ResolvedItem | None = None
+    for tag in candidate_tags:
+        if tag in field_set:
+            fv = field_set[tag]
+            if fv["current"] is not None:
+                return {"tag": tag, "current": fv["current"], "prior": fv["prior"]}
+            if fallback is None and fv["prior"] is not None:
+                fallback = {"tag": tag, "current": None, "prior": fv["prior"]}
+    return fallback if fallback is not None else {"tag": None, "current": None, "prior": None}
 
 
 def resolve_aggregate(

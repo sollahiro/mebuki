@@ -9,11 +9,15 @@ contextRef が Instant 型の連結コンテキストを優先し、
 
 from pathlib import Path
 
+from blue_ticker.analysis.context_helpers import (
+    _is_consolidated_instant,
+    _is_consolidated_prior_instant,
+)
 from blue_ticker.analysis.field_parser import (
     field_set_from_pre_parsed,
-    parse_instant_fields,
     resolve_item,
 )
+from blue_ticker.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
 from blue_ticker.utils.xbrl_result_types import EmployeesResult, XbrlTagElements
 
 EMPLOYEE_TAGS = [
@@ -40,14 +44,26 @@ def extract_employees(
             "scope":   str,           # "consolidated" | "nonconsolidated" | "unknown"
         }
     """
-    field_set = (
-        field_set_from_pre_parsed(pre_parsed)
-        if pre_parsed is not None
-        else parse_instant_fields(xbrl_dir, allowed_tags=_RELEVANT_TAGS)
-    )
+    if pre_parsed is not None:
+        tag_elements = pre_parsed
+    else:
+        tag_elements: XbrlTagElements = {}
+        for f in find_xbrl_files(xbrl_dir):
+            for tag, ctx_map in collect_numeric_elements(f, allowed_tags=_RELEVANT_TAGS).items():
+                if tag not in tag_elements:
+                    tag_elements[tag] = {}
+                tag_elements[tag].update(ctx_map)
+
+    field_set = field_set_from_pre_parsed(tag_elements)
 
     item = resolve_item(field_set, EMPLOYEE_TAGS)
     if item["tag"] is not None:
-        return {"current": item["current"], "prior": item["prior"], "method": "direct", "scope": "consolidated"}
+        ctx_map = tag_elements.get(item["tag"], {})
+        scope = (
+            "consolidated"
+            if any(_is_consolidated_instant(c) or _is_consolidated_prior_instant(c) for c in ctx_map)
+            else "nonconsolidated"
+        )
+        return {"current": item["current"], "prior": item["prior"], "method": "direct", "scope": scope}
 
     return {"current": None, "prior": None, "method": "not_found", "scope": "unknown"}

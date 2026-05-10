@@ -214,7 +214,7 @@ def extract_operating_profit(
 
     # 計算法: GrossProfit - SGA（OperatingProfitLossIFRS が存在しない IFRS 企業向け）
     computed = derive_subtraction(field_set, GROSS_PROFIT_DIRECT_TAGS, SGA_DIRECT_TAGS)
-    if computed["tag"] is not None:
+    if computed["current"] is not None or computed["prior"] is not None:
         sga_item = resolve_item(field_set, SGA_DIRECT_TAGS)
         result = {
             "current": computed["current"], "prior": computed["prior"],

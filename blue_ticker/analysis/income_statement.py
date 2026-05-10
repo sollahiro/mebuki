@@ -22,6 +22,7 @@ from blue_ticker.analysis.field_parser import (
     field_set_from_pre_parsed_duration,
     parse_duration_fields,
     resolve_item,
+    resolve_item_prefer_current,
 )
 from blue_ticker.constants.xbrl import (
     IFRS_PL_MARKER_TAGS,
@@ -85,9 +86,9 @@ def extract_income_statement(
 
     standard = _detect_accounting_standard(field_set)
 
-    sales_item = resolve_item(field_set, NET_SALES_TAGS)
-    op_item = resolve_item(field_set, OPERATING_PROFIT_DIRECT_TAGS)
-    np_item = resolve_item(field_set, NET_PROFIT_TAGS)
+    sales_item = resolve_item_prefer_current(field_set, NET_SALES_TAGS)
+    op_item = resolve_item_prefer_current(field_set, OPERATING_PROFIT_DIRECT_TAGS)
+    np_item = resolve_item_prefer_current(field_set, NET_PROFIT_TAGS)
 
     found_tags = [
         k for k in ("sales", "operating_profit", "net_profit")
