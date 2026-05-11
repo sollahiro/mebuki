@@ -78,6 +78,11 @@ def _extract_usgaap_ie_from_html(xbrl_dir: Path) -> InterestExpenseResult | None
                     current_col_idx = last_col
                 elif "前連結" in text or "前期" in text:
                     prior_col_idx = last_col
+                elif re.search(r"第\d+期", text):
+                    if prior_col_idx is None:
+                        prior_col_idx = col_offset
+                    else:
+                        current_col_idx = col_offset
                 col_offset += span
             if current_col_idx is not None:
                 break
