@@ -19,6 +19,15 @@ EDINET_CACHE_LOCK_POLL_SECONDS = 0.2
 EDINET_CACHE_LOCK_NOTICE_SECONDS = 1.0
 EDINET_CACHE_LOCK_STALE_SECONDS = 10 * 60
 EDINET_CACHE_LOCK_TIMEOUT_SECONDS = 3 * 60
+SSL_CERT_FILE_ENV = "SSL_CERT_FILE"
+SSL_CA_BUNDLE_CANDIDATES = (
+    "/opt/homebrew/etc/openssl@3/cert.pem",
+    "/opt/homebrew/etc/ca-certificates/cert.pem",
+    "/usr/local/etc/openssl@3/cert.pem",
+    "/usr/local/etc/ca-certificates/cert.pem",
+    "/etc/ssl/cert.pem",
+    "/etc/ssl/certs/ca-certificates.crt",
+)
 
 # 財務省 JGB 利回り CSV
 MOF_JGB_ALL_CSV_URL     = "https://www.mof.go.jp/jgbs/reference/interest_rate/data/jgbcm_all.csv"

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import re
 import ssl
 from datetime import date, datetime, timedelta
@@ -12,6 +13,8 @@ from ..constants.api import (
     EDINET_API_BASE_URL,
     EDINET_DOCUMENT_INDEX_BATCH_SIZE,
     EDINET_DOCUMENT_INDEX_MIN_RANGE_DAYS,
+    SSL_CA_BUNDLE_CANDIDATES,
+    SSL_CERT_FILE_ENV,
 )
 from .edinet_cache_backend import EdinetCacheBackend
 from blue_ticker.utils.fiscal_year import normalize_date_format, parse_date_string
@@ -61,7 +64,7 @@ class EdinetAPIClient:
             await self._session.close()
             self._session = None
         if self._session is None or self._session.closed:
-            ssl_context = ssl.create_default_context()
+            ssl_context = _create_ssl_context()
             connector = aiohttp.TCPConnector(ssl=ssl_context)
             self._session = aiohttp.ClientSession(connector=connector)
             self._session_loop = current_loop
@@ -467,6 +470,27 @@ class EdinetAPIClient:
             except Exception as e:
                 logger.error(f"❌ [EDINET] XBRL Download error {doc_id}: {e}")
                 return None
+
+
+def _create_ssl_context() -> ssl.SSLContext:
+    ca_bundle = _resolve_ca_bundle_file()
+    if ca_bundle is None:
+        return ssl.create_default_context()
+    return ssl.create_default_context(cafile=str(ca_bundle))
+
+
+def _resolve_ca_bundle_file() -> Path | None:
+    env_path = os.environ.get(SSL_CERT_FILE_ENV)
+    if env_path:
+        path = Path(env_path).expanduser()
+        if path.is_file():
+            return path
+
+    for candidate in SSL_CA_BUNDLE_CANDIDATES:
+        path = Path(candidate)
+        if path.is_file():
+            return path
+    return None
 
 
 def _retry_after_seconds(error: BaseException) -> float | None:

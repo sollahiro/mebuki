@@ -7,7 +7,7 @@ import pytest
 
 from blue_ticker.api.edinet_cache_backend import EdinetCacheBackend
 from blue_ticker.api.edinet_cache_store import EdinetCacheStore
-from blue_ticker.api.edinet_client import EdinetAPIClient
+from blue_ticker.api.edinet_client import EdinetAPIClient, _resolve_ca_bundle_file
 
 
 class _FakeEdinetClient(EdinetAPIClient):
@@ -146,6 +146,23 @@ def test_client_accepts_cache_backend_boundary(tmp_path) -> None:
     assert client.cache_store is backend
     assert client.cache_dir == tmp_path
     assert client._load_search_cache(filename) == [{"docID": "MEMORY"}]
+
+
+def test_resolve_ca_bundle_prefers_ssl_cert_file_env(tmp_path, monkeypatch) -> None:
+    ca_file = tmp_path / "custom-ca.pem"
+    ca_file.write_text("dummy", encoding="utf-8")
+    monkeypatch.setenv("SSL_CERT_FILE", str(ca_file))
+
+    assert _resolve_ca_bundle_file() == ca_file
+
+
+def test_resolve_ca_bundle_ignores_missing_ssl_cert_file_env(tmp_path, monkeypatch) -> None:
+    ca_file = tmp_path / "fallback-ca.pem"
+    ca_file.write_text("dummy", encoding="utf-8")
+    monkeypatch.setenv("SSL_CERT_FILE", str(tmp_path / "missing.pem"))
+    monkeypatch.setattr("blue_ticker.api.edinet_client.SSL_CA_BUNDLE_CANDIDATES", (str(ca_file),))
+
+    assert _resolve_ca_bundle_file() == ca_file
 
 
 @pytest.mark.asyncio
