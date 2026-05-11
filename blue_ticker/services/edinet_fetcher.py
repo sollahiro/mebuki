@@ -423,36 +423,28 @@ class _XbrlFinancials(TypedDict):
 def _extract_xbrl_financials(entry: _PreParsedEntry) -> _XbrlFinancials:
     """XBRL entry から財務数値を抽出する（IS/GP/OP フォールバック連鎖 + BS + CF + 株主指標）。"""
     xbrl_path = entry[0]
-    income_pre_parsed = _preparsed_for_statement(entry, "gp")
     balance_pre_parsed = _preparsed_for_statement(entry, "bs")
     cash_flow_pre_parsed = _preparsed_for_statement(entry, "da")
     all_pre_parsed = entry[1]
 
-    is_result = _extract_is_compat(xbrl_path, pre_parsed=income_pre_parsed)
-    if not _result_has_signal(is_result):
-        is_result = _extract_is_compat(xbrl_path, pre_parsed=all_pre_parsed)
+    # IS は全セクションを対象にする: セクション絞り込みだと IFRS/US-GAAP セクションが漏れる
+    is_result = _extract_is_compat(xbrl_path, pre_parsed=all_pre_parsed)
     sales: float | None = is_result.get("sales")
     operating_profit: float | None = is_result.get("operating_profit")
     operating_profit_label: str | None = None
     sales_label: str | None = is_result.get("sales_label", "売上高") if sales is not None else None
     if sales is None:
-        gp_for_sales = _extract_gp_compat(xbrl_path, pre_parsed=income_pre_parsed)
-        if not _result_has_signal(gp_for_sales):
-            gp_for_sales = _extract_gp_compat(xbrl_path, pre_parsed=all_pre_parsed)
+        gp_for_sales = _extract_gp_compat(xbrl_path, pre_parsed=all_pre_parsed)
         sales = gp_for_sales.get("current_sales")
         if sales is not None:
             sales_label = "経常収益"
         if sales is None:
-            op_for_sales = _extract_op_compat(xbrl_path, pre_parsed=income_pre_parsed)
-            if not _result_has_signal(op_for_sales):
-                op_for_sales = _extract_op_compat(xbrl_path, pre_parsed=all_pre_parsed)
+            op_for_sales = _extract_op_compat(xbrl_path, pre_parsed=all_pre_parsed)
             sales = op_for_sales.get("current_sales")
             if sales is not None:
                 sales_label = "経常収益"
     if operating_profit is None:
-        op_result = _extract_op_compat(xbrl_path, pre_parsed=income_pre_parsed)
-        if not _result_has_signal(op_result):
-            op_result = _extract_op_compat(xbrl_path, pre_parsed=all_pre_parsed)
+        op_result = _extract_op_compat(xbrl_path, pre_parsed=all_pre_parsed)
         operating_profit = op_result.get("current")
         operating_profit_label = op_result.get("label")
     bs_result = _extract_bs_compat(xbrl_path, pre_parsed=balance_pre_parsed)
