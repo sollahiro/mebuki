@@ -208,18 +208,19 @@ class EdinetAPIClient:
     async def _get_documents_for_date(self, date_str: str) -> list[dict[str, Any]]:
         """特定の日付のドキュメント一覧を取得（キャッシュ対応）"""
         cache_key = self._get_search_cache_key(date_str)
-        documents = self._load_stale_search_cache(cache_key)
+        # TTL 尊重: 有効期限内ならそのまま返す（過去日付は TTL=3650日で実質永久）
+        documents = self._load_search_cache(cache_key)
         if documents is not None:
             return documents
 
         try:
             with self.cache_store.file_lock(f"documents_by_date_{date_str}"):
-                documents = self._load_stale_search_cache(cache_key)
+                documents = self._load_search_cache(cache_key)
                 if documents is not None:
                     return documents
 
                 async with self._date_fetch_semaphore:
-                    documents = self._load_stale_search_cache(cache_key)
+                    documents = self._load_search_cache(cache_key)
                     if documents is not None:
                         return documents
                     try:
@@ -228,7 +229,8 @@ class EdinetAPIClient:
                         self._save_search_cache(cache_key, documents)
                         return documents
                     except Exception:
-                        return []
+                        # API 失敗時は期限切れキャッシュをフォールバックとして使う
+                        return self._load_stale_search_cache(cache_key) or []
         except TimeoutError as e:
             logger.warning(f"[EDINET] date cache lock timeout: date={date_str} error={e}")
             return self._load_stale_search_cache(cache_key) or []

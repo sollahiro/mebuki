@@ -11,7 +11,7 @@ from collections.abc import AsyncGenerator, Callable, Mapping
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import Any, TypeAlias, cast
+from typing import Any, TypeAlias, TypedDict, cast
 
 from blue_ticker import __version__
 from blue_ticker.api.edinet_client import EdinetAPIClient
@@ -40,7 +40,7 @@ from blue_ticker.analysis.sections import (
     IncomeStatementSection,
     detect_accounting_standard,
 )
-from blue_ticker.analysis.shareholder_metrics import extract_shareholder_metrics
+from blue_ticker.analysis.shareholder_metrics import ShareholderMetrics, extract_shareholder_metrics
 from blue_ticker.analysis.tax_expense import extract_tax_expense
 from blue_ticker.utils.cache import CacheManager
 from blue_ticker.utils.edinet_discovery import (
@@ -87,7 +87,7 @@ def _infer_fy_end_from_period_start(period_start: str) -> str:
         return ""
 
 
-_XBRL_PARSE_CACHE_VERSION = f"{__version__}:xbrl-facts-v1"
+_XBRL_PARSE_CACHE_VERSION = f"{__version__}:xbrl-facts-v2"
 
 _PreParsedEntry: TypeAlias = tuple[Path, XbrlTagElements, XbrlFactIndex]
 _PreParsedMap: TypeAlias = dict[str, _PreParsedEntry]
@@ -105,6 +105,8 @@ _INCOME_STATEMENT_FALLBACK_SECTIONS: tuple[str, ...] = (
 _BALANCE_SHEET_SECTIONS: tuple[str, ...] = (
     "ConsolidatedBalanceSheet",
     "NotesConsolidatedBalanceSheet",
+    "ConsolidatedStatementOfFinancialPositionIFRS",  # IFRS 連結財政状態計算書
+    "NotesConsolidatedStatementOfFinancialPositionIFRS",
 )
 _BALANCE_SHEET_FALLBACK_SECTIONS: tuple[str, ...] = (
     "BalanceSheet",
@@ -403,6 +405,132 @@ def _extract_with_statement_scope(
     if scoped_pre_parsed is not entry[1] and not _result_has_signal(result):
         return extract_fn(xbrl_path, pre_parsed=entry[1])
     return result
+
+
+class _XbrlFinancials(TypedDict):
+    sales: float | None
+    sales_label: str | None
+    operating_profit: float | None
+    operating_profit_label: str | None
+    net_profit: float | None
+    accounting_standard: str | None
+    net_assets: float | None
+    cfo: float | None
+    cfi: float | None
+    sh: ShareholderMetrics
+
+
+def _extract_xbrl_financials(entry: _PreParsedEntry) -> _XbrlFinancials:
+    """XBRL entry から財務数値を抽出する（IS/GP/OP フォールバック連鎖 + BS + CF + 株主指標）。"""
+    xbrl_path = entry[0]
+    income_pre_parsed = _preparsed_for_statement(entry, "gp")
+    balance_pre_parsed = _preparsed_for_statement(entry, "bs")
+    cash_flow_pre_parsed = _preparsed_for_statement(entry, "da")
+    all_pre_parsed = entry[1]
+
+    is_result = _extract_is_compat(xbrl_path, pre_parsed=income_pre_parsed)
+    if not _result_has_signal(is_result):
+        is_result = _extract_is_compat(xbrl_path, pre_parsed=all_pre_parsed)
+    sales: float | None = is_result.get("sales")
+    operating_profit: float | None = is_result.get("operating_profit")
+    operating_profit_label: str | None = None
+    sales_label: str | None = is_result.get("sales_label", "売上高") if sales is not None else None
+    if sales is None:
+        gp_for_sales = _extract_gp_compat(xbrl_path, pre_parsed=income_pre_parsed)
+        if not _result_has_signal(gp_for_sales):
+            gp_for_sales = _extract_gp_compat(xbrl_path, pre_parsed=all_pre_parsed)
+        sales = gp_for_sales.get("current_sales")
+        if sales is not None:
+            sales_label = "経常収益"
+        if sales is None:
+            op_for_sales = _extract_op_compat(xbrl_path, pre_parsed=income_pre_parsed)
+            if not _result_has_signal(op_for_sales):
+                op_for_sales = _extract_op_compat(xbrl_path, pre_parsed=all_pre_parsed)
+            sales = op_for_sales.get("current_sales")
+            if sales is not None:
+                sales_label = "経常収益"
+    if operating_profit is None:
+        op_result = _extract_op_compat(xbrl_path, pre_parsed=income_pre_parsed)
+        if not _result_has_signal(op_result):
+            op_result = _extract_op_compat(xbrl_path, pre_parsed=all_pre_parsed)
+        operating_profit = op_result.get("current")
+        operating_profit_label = op_result.get("label")
+    bs_result = _extract_bs_compat(xbrl_path, pre_parsed=balance_pre_parsed)
+    if not _result_has_signal(bs_result):
+        bs_result = _extract_bs_compat(xbrl_path, pre_parsed=all_pre_parsed)
+    cf_result = _extract_cf_compat(xbrl_path, pre_parsed=cash_flow_pre_parsed)
+    if not _result_has_signal(cf_result):
+        cf_result = _extract_cf_compat(xbrl_path, pre_parsed=all_pre_parsed)
+    sh_result = extract_shareholder_metrics(
+        xbrl_path,
+        pre_parsed=all_pre_parsed,
+        net_profit=is_result.get("net_profit"),
+    )
+    return _XbrlFinancials(
+        sales=sales,
+        sales_label=sales_label,
+        operating_profit=operating_profit,
+        operating_profit_label=operating_profit_label,
+        net_profit=is_result.get("net_profit"),
+        accounting_standard=is_result.get("accounting_standard"),
+        net_assets=bs_result.get("net_assets"),
+        cfo=cf_result["cfo"].get("current"),
+        cfi=cf_result["cfi"].get("current"),
+        sh=sh_result,
+    )
+
+
+def _build_xbrl_record(
+    fin: _XbrlFinancials,
+    code: str,
+    doc_id: str | None,
+    fy_end: str,
+    fy_st: str,
+    submit_date: str,
+    period_type: str,
+    *,
+    period_start: str | None = None,
+    period_end: str | None = None,
+) -> dict[str, Any]:
+    """財務抽出結果から XBRL 財務レコードを組み立てる。"""
+    sh = fin["sh"]
+    record: dict[str, Any] = {
+        "Code": code,
+        "CurFYEn": fy_end,
+        "CurFYSt": fy_st,
+        "CurPerType": period_type,
+        "DiscDate": submit_date,
+        "Sales": fin["sales"],
+        "SalesLabel": fin["sales_label"],
+        "OP": None if fin["operating_profit_label"] == "経常利益" else fin["operating_profit"],
+        "NP": fin["net_profit"],
+        "NetAssets": fin["net_assets"],
+        "CFO": fin["cfo"],
+        "CFI": fin["cfi"],
+        "EPS": sh.get("EPS"),
+        "BPS": sh.get("BPS"),
+        "ShOutFY": sh.get("ShOutFY"),
+        "DivTotalAnn": sh.get("DivTotalAnn"),
+        "PayoutRatioAnn": sh.get("PayoutRatioAnn"),
+        "CashEq": sh.get("CashEq"),
+        "DivAnn": sh.get("DivAnn"),
+        "Div2Q": sh.get("Div2Q"),
+        "_xbrl_source": True,
+        "_accounting_standard": fin["accounting_standard"],
+        "_docID": doc_id,
+    }
+    if period_start is not None:
+        record["CurPerSt"] = period_start
+    if period_end is not None:
+        record["CurPerEn"] = period_end
+    shareholder_metric_sources = sh.get("MetricSources")
+    if isinstance(shareholder_metric_sources, dict) and shareholder_metric_sources:
+        record["ShareholderMetricSources"] = shareholder_metric_sources
+    for key in _SHAREHOLDER_CALCULATION_FIELDS:
+        value = sh.get(key)
+        if value is not None and value != []:
+            record[key] = value
+    return record
 
 
 @dataclass(frozen=True)
@@ -743,7 +871,9 @@ class EdinetFetcher:
                 continue
             k, v = res
             if k and v is not None:
-                out[k] = v
+                # 原本を優先: _slice_docs_preserving_amendments は原本を先に並べるため
+                # setdefault により訂正報告書が原本エントリを上書きしない
+                out.setdefault(k, v)
         logger.info(f"[PARSE] {code}: XBRL一括パース完了 {len(out)}件 {time.perf_counter() - _t0:.2f}s")
         return out
 
@@ -1168,92 +1298,16 @@ class EdinetFetcher:
             if not fy_end or fy_end_8 not in pre_parsed_map:
                 continue
 
-            entry = pre_parsed_map[fy_end_8]
-            xbrl_path = entry[0]
-            income_pre_parsed = _preparsed_for_statement(entry, "gp")
-            balance_pre_parsed = _preparsed_for_statement(entry, "bs")
-            cash_flow_pre_parsed = _preparsed_for_statement(entry, "da")
-            all_pre_parsed = entry[1]
-
-            is_result = _extract_is_compat(xbrl_path, pre_parsed=income_pre_parsed)
-            if not _result_has_signal(is_result):
-                is_result = _extract_is_compat(xbrl_path, pre_parsed=all_pre_parsed)
-            sales = is_result.get("sales")
-            operating_profit = is_result.get("operating_profit")
-            operating_profit_label = None
-            sales_label = is_result.get("sales_label", "売上高") if sales is not None else None
-            if sales is None:
-                gp_for_sales = _extract_gp_compat(xbrl_path, pre_parsed=income_pre_parsed)
-                if not _result_has_signal(gp_for_sales):
-                    gp_for_sales = _extract_gp_compat(xbrl_path, pre_parsed=all_pre_parsed)
-                sales = gp_for_sales.get("current_sales")
-                if sales is not None:
-                    sales_label = "経常収益"
-                if sales is None:
-                    op_for_sales = _extract_op_compat(xbrl_path, pre_parsed=income_pre_parsed)
-                    if not _result_has_signal(op_for_sales):
-                        op_for_sales = _extract_op_compat(xbrl_path, pre_parsed=all_pre_parsed)
-                    sales = op_for_sales.get("current_sales")
-                    if sales is not None:
-                        sales_label = "経常収益"
-            if operating_profit is None:
-                op_result = _extract_op_compat(xbrl_path, pre_parsed=income_pre_parsed)
-                if not _result_has_signal(op_result):
-                    op_result = _extract_op_compat(xbrl_path, pre_parsed=all_pre_parsed)
-                operating_profit = op_result.get("current")
-                operating_profit_label = op_result.get("label")
-            bs_result = _extract_bs_compat(xbrl_path, pre_parsed=balance_pre_parsed)
-            if not _result_has_signal(bs_result):
-                bs_result = _extract_bs_compat(xbrl_path, pre_parsed=all_pre_parsed)
-            cf_result = _extract_cf_compat(xbrl_path, pre_parsed=cash_flow_pre_parsed)
-            if not _result_has_signal(cf_result):
-                cf_result = _extract_cf_compat(xbrl_path, pre_parsed=all_pre_parsed)
-            sh_result = extract_shareholder_metrics(
-                xbrl_path,
-                pre_parsed=all_pre_parsed,
-                net_profit=is_result.get("net_profit"),
+            fin = _extract_xbrl_financials(pre_parsed_map[fy_end_8])
+            record = _build_xbrl_record(
+                fin,
+                code,
+                doc_id=doc.get("docID"),
+                fy_end=fy_end,
+                fy_st=_infer_fy_start(fy_end),
+                submit_date=format_document_date(doc.get("submitDateTime")),
+                period_type="FY",
             )
-
-            fy_st = _infer_fy_start(fy_end)
-            submit_date = format_document_date(doc.get("submitDateTime"))
-
-            record: dict[str, Any] = {
-                "Code": code,
-                "CurFYEn": fy_end,
-                "CurFYSt": fy_st,
-                "CurPerType": "FY",
-                "DiscDate": submit_date,
-                # IS: 円単位
-                "Sales": sales,
-                "SalesLabel": sales_label,
-                "OP": None if operating_profit_label == "経常利益" else operating_profit,
-                "NP": is_result.get("net_profit"),
-                # BS: 円単位
-                "NetAssets": bs_result.get("net_assets"),
-                # CF: 円単位
-                "CFO": cf_result["cfo"].get("current"),
-                "CFI": cf_result["cfi"].get("current"),
-                # 株式・配当・現金同等物
-                "EPS": sh_result.get("EPS"),
-                "BPS": sh_result.get("BPS"),
-                "ShOutFY": sh_result.get("ShOutFY"),
-                "DivTotalAnn": sh_result.get("DivTotalAnn"),
-                "PayoutRatioAnn": sh_result.get("PayoutRatioAnn"),
-                "CashEq": sh_result.get("CashEq"),
-                "DivAnn": sh_result.get("DivAnn"),
-                "Div2Q": sh_result.get("Div2Q"),
-                # メタ情報（calculate_metrics_flexible には影響しない）
-                "_xbrl_source": True,
-                "_accounting_standard": is_result.get("accounting_standard"),
-                "_docID": doc.get("docID"),
-            }
-            shareholder_metric_sources = sh_result.get("MetricSources")
-            if isinstance(shareholder_metric_sources, dict) and shareholder_metric_sources:
-                record["ShareholderMetricSources"] = shareholder_metric_sources
-            for key in _SHAREHOLDER_CALCULATION_FIELDS:
-                value = sh_result.get(key)
-                if value is not None and value != []:
-                    record[key] = value
             records.append(record)
             logger.info(
                 f"[XBRL-IS] {code} {fy_end}: "
@@ -1295,87 +1349,18 @@ class EdinetFetcher:
             if not fy_end or fy_end_8 not in pre_parsed_map:
                 continue
 
-            entry = pre_parsed_map[fy_end_8]
-            xbrl_path = entry[0]
-            income_pre_parsed = _preparsed_for_statement(entry, "gp")
-            balance_pre_parsed = _preparsed_for_statement(entry, "bs")
-            cash_flow_pre_parsed = _preparsed_for_statement(entry, "da")
-            all_pre_parsed = entry[1]
-
-            is_result = _extract_is_compat(xbrl_path, pre_parsed=income_pre_parsed)
-            if not _result_has_signal(is_result):
-                is_result = _extract_is_compat(xbrl_path, pre_parsed=all_pre_parsed)
-            sales = is_result.get("sales")
-            operating_profit = is_result.get("operating_profit")
-            operating_profit_label = None
-            sales_label = is_result.get("sales_label", "売上高") if sales is not None else None
-            if sales is None:
-                gp_for_sales = _extract_gp_compat(xbrl_path, pre_parsed=income_pre_parsed)
-                if not _result_has_signal(gp_for_sales):
-                    gp_for_sales = _extract_gp_compat(xbrl_path, pre_parsed=all_pre_parsed)
-                sales = gp_for_sales.get("current_sales")
-                if sales is not None:
-                    sales_label = "経常収益"
-                if sales is None:
-                    op_for_sales = _extract_op_compat(xbrl_path, pre_parsed=income_pre_parsed)
-                    if not _result_has_signal(op_for_sales):
-                        op_for_sales = _extract_op_compat(xbrl_path, pre_parsed=all_pre_parsed)
-                    sales = op_for_sales.get("current_sales")
-                    if sales is not None:
-                        sales_label = "経常収益"
-            if operating_profit is None:
-                op_result = _extract_op_compat(xbrl_path, pre_parsed=income_pre_parsed)
-                if not _result_has_signal(op_result):
-                    op_result = _extract_op_compat(xbrl_path, pre_parsed=all_pre_parsed)
-                operating_profit = op_result.get("current")
-                operating_profit_label = op_result.get("label")
-            bs_result = _extract_bs_compat(xbrl_path, pre_parsed=balance_pre_parsed)
-            if not _result_has_signal(bs_result):
-                bs_result = _extract_bs_compat(xbrl_path, pre_parsed=all_pre_parsed)
-            cf_result = _extract_cf_compat(xbrl_path, pre_parsed=cash_flow_pre_parsed)
-            if not _result_has_signal(cf_result):
-                cf_result = _extract_cf_compat(xbrl_path, pre_parsed=all_pre_parsed)
-            sh_result = extract_shareholder_metrics(
-                xbrl_path,
-                pre_parsed=all_pre_parsed,
-                net_profit=is_result.get("net_profit"),
+            fin = _extract_xbrl_financials(pre_parsed_map[fy_end_8])
+            record = _build_xbrl_record(
+                fin,
+                code,
+                doc_id=doc.get("docID"),
+                fy_end=fy_end,
+                fy_st=period_start or _infer_fy_start(fy_end),
+                submit_date=format_document_date(doc.get("submitDateTime")),
+                period_type="2Q",
+                period_start=period_start,
+                period_end=period_end,
             )
-
-            submit_date = format_document_date(doc.get("submitDateTime"))
-            record: dict[str, Any] = {
-                "Code": code,
-                "CurFYEn": fy_end,
-                "CurFYSt": period_start or _infer_fy_start(fy_end),
-                "CurPerSt": period_start,
-                "CurPerEn": period_end,
-                "CurPerType": "2Q",
-                "DiscDate": submit_date,
-                "Sales": sales,
-                "SalesLabel": sales_label,
-                "OP": None if operating_profit_label == "経常利益" else operating_profit,
-                "NP": is_result.get("net_profit"),
-                "NetAssets": bs_result.get("net_assets"),
-                "CFO": cf_result["cfo"].get("current"),
-                "CFI": cf_result["cfi"].get("current"),
-                "EPS": sh_result.get("EPS"),
-                "BPS": sh_result.get("BPS"),
-                "ShOutFY": sh_result.get("ShOutFY"),
-                "DivTotalAnn": sh_result.get("DivTotalAnn"),
-                "PayoutRatioAnn": sh_result.get("PayoutRatioAnn"),
-                "CashEq": sh_result.get("CashEq"),
-                "DivAnn": sh_result.get("DivAnn"),
-                "Div2Q": sh_result.get("Div2Q"),
-                "_xbrl_source": True,
-                "_accounting_standard": is_result.get("accounting_standard"),
-                "_docID": doc.get("docID"),
-            }
-            shareholder_metric_sources = sh_result.get("MetricSources")
-            if isinstance(shareholder_metric_sources, dict) and shareholder_metric_sources:
-                record["ShareholderMetricSources"] = shareholder_metric_sources
-            for key in _SHAREHOLDER_CALCULATION_FIELDS:
-                value = sh_result.get(key)
-                if value is not None and value != []:
-                    record[key] = value
             records.append(record)
             logger.info(
                 f"[XBRL-2Q] {code} {fy_end}: "

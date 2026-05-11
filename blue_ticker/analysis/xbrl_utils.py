@@ -77,7 +77,8 @@ def _concept_local_name(concept: str) -> str:
     if ":" in fragment:
         return fragment.rsplit(":", 1)[-1]
     parts = fragment.split("_")
-    for part in parts:
+    # 末尾から探す: 会社コード (E01737-000 等) が先にヒットするのを避ける
+    for part in reversed(parts):
         if part and part[0].isupper():
             return part
     return fragment

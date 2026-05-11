@@ -351,6 +351,7 @@ COMPONENT_DEFINITIONS: list[_ComponentDef] = [
         "tags": [
             "CurrentPortionOfLongTermLoansPayable",     # J-GAAP
             "CurrentPortionOfLongTermBorrowingsCLIFRS", # IFRS 粒度別
+            "CurrentPortionOfLongTermDebtCLIFRS",       # IFRS 集約（社債+借入金の流動部分合計）
         ],
     },
     {
@@ -364,7 +365,8 @@ COMPONENT_DEFINITIONS: list[_ComponentDef] = [
         "label": "長期借入金",
         "tags": [
             "LongTermLoansPayable",         # J-GAAP
-            "BorrowingsNCLIFRS",            # IFRS 非流動負債 借入金
+            "BorrowingsNCLIFRS",            # IFRS 非流動負債 借入金（粒度別）
+            "LongTermDebtNCLIFRS",          # IFRS 非流動負債 集約（社債+借入金合計）
         ],
     },
 ]
@@ -759,11 +761,11 @@ IBD_CURRENT_COMPONENTS: list[list[str]] = [
     ["CommercialPapersLiabilities", "CommercialPapersCLIFRS"],
     ["ShortTermBondsPayable"],
     ["CurrentPortionOfBonds", "RedeemableBondsWithinOneYear", "CurrentPortionOfBondsCLIFRS"],
-    ["CurrentPortionOfLongTermLoansPayable", "CurrentPortionOfLongTermBorrowingsCLIFRS"],
+    ["CurrentPortionOfLongTermLoansPayable", "CurrentPortionOfLongTermBorrowingsCLIFRS", "CurrentPortionOfLongTermDebtCLIFRS"],
 ]
 IBD_NON_CURRENT_COMPONENTS: list[list[str]] = [
     ["BondsPayable", "BondsPayableNCLIFRS"],
-    ["LongTermLoansPayable", "BorrowingsNCLIFRS"],
+    ["LongTermLoansPayable", "BorrowingsNCLIFRS", "LongTermDebtNCLIFRS"],
 ]
 
 # IFRS 集約タグ（流動・非流動それぞれ1タグで全コンポーネントを集約）
