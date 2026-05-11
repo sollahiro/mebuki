@@ -737,6 +737,28 @@ class TestIfrsComponents(unittest.TestCase):
         self.assertIn("BondsPayableNCLIFRS", tags_found)
         self.assertIn("BorrowingsNCLIFRS", tags_found)
 
+    def test_ifrs_bonds_borrowings_and_lease_liabilities_tags(self):
+        """三菱電機形式: 社債、借入金及びリース負債の流動/非流動集約タグを使う。"""
+        xml = _make_xbrl("""
+            <jppfs_cor:BondsBorrowingsAndLeaseLiabilitiesCLIFRS contextRef="Prior1YearInstant"
+                unitRef="JPY">151698000000</jppfs_cor:BondsBorrowingsAndLeaseLiabilitiesCLIFRS>
+            <jppfs_cor:BondsBorrowingsAndLeaseLiabilitiesCLIFRS contextRef="CurrentYearInstant"
+                unitRef="JPY">120889000000</jppfs_cor:BondsBorrowingsAndLeaseLiabilitiesCLIFRS>
+            <jppfs_cor:BondsBorrowingsAndLeaseLiabilitiesNCLIFRS contextRef="Prior1YearInstant"
+                unitRef="JPY">242938000000</jppfs_cor:BondsBorrowingsAndLeaseLiabilitiesNCLIFRS>
+            <jppfs_cor:BondsBorrowingsAndLeaseLiabilitiesNCLIFRS contextRef="CurrentYearInstant"
+                unitRef="JPY">239772000000</jppfs_cor:BondsBorrowingsAndLeaseLiabilitiesNCLIFRS>
+        """)
+        (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
+        result = extract_interest_bearing_debt(BalanceSheetSection.from_xbrl(self.xbrl_dir))
+        self.assertEqual(result["method"], "field_parser")
+        self.assertEqual(result["accounting_standard"], "IFRS")
+        self.assertAlmostEqual(result["current"], 360_661_000_000)
+        self.assertAlmostEqual(result["prior"], 394_636_000_000)
+        tags_found = [c["tag"] for c in result["components"] if c["tag"]]
+        self.assertIn("BondsBorrowingsAndLeaseLiabilitiesCLIFRS", tags_found)
+        self.assertIn("BondsBorrowingsAndLeaseLiabilitiesNCLIFRS", tags_found)
+
 
 class TestConsolidatedPriority(unittest.TestCase):
     """連結が個別より優先されることのテスト。"""
