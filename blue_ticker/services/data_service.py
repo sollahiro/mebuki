@@ -319,7 +319,8 @@ class DataService:
                 result = _trim_analysis_years(result, analysis_years)
                 return _apply_debug_filter(result, include_debug_fields)
 
-        stock_info = {"Code": code, **self.fetch_stock_basic_info(code)}
+        basic_info = self.fetch_stock_basic_info(code)
+        stock_info = {"Code": code, **basic_info}
         financial_data: list[dict[str, Any]] = []
 
         result = await analyzer.fetch_analysis_data(
@@ -336,7 +337,7 @@ class DataService:
         formatted = {
             "_cache_version": _CACHE_VERSION,
             "code": code,
-            **self.fetch_stock_basic_info(code),
+            **basic_info,
             "metrics": result["metrics"],
             "edinet_data": result["edinet_data"],
             "analyzed_at": datetime.now().isoformat(),

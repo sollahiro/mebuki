@@ -46,6 +46,19 @@ def test_load_search_cache_returns_fresh_empty_result(tmp_path):
     assert store.load_search_cache(filename) == []
 
 
+def test_save_search_cache_uses_compact_json(tmp_path):
+    store = EdinetCacheStore(tmp_path)
+    filename = store.search_cache_key("2024-06-01")
+    documents = [{"docID": "S100TEST", "docTypeCode": "120"}]
+
+    store.save_search_cache(filename, documents)
+
+    assert _search_cache_path(store, filename).read_text(encoding="utf-8") == (
+        '[{"docID":"S100TEST","docTypeCode":"120"}]'
+    )
+    assert store.load_search_cache(filename) == documents
+
+
 def test_load_search_cache_expires_empty_result_quickly(tmp_path):
     store = EdinetCacheStore(
         tmp_path,
@@ -135,6 +148,20 @@ def test_document_index_roundtrip_requires_version_and_built_through(tmp_path):
 
     assert store.load_document_index(2024, required_through="2024-06-30") == documents
     assert store.load_document_index(2024, required_through="2025-01-01") is None
+
+
+def test_save_document_index_uses_compact_json(tmp_path):
+    store = EdinetCacheStore(tmp_path)
+    documents = [{"docID": "S100TEST", "docTypeCode": "120"}]
+
+    store.save_document_index(2024, documents, built_through="2024-12-31")
+
+    content = (store.document_indexes_dir / store.document_index_cache_key(2024)).read_text(
+        encoding="utf-8"
+    )
+    assert "\n" not in content
+    assert ": " not in content
+    assert store.load_document_index(2024, required_through="2024-06-30") == documents
 
 
 def test_document_index_can_allow_stale_built_through(tmp_path):

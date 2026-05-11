@@ -24,7 +24,7 @@ from blue_ticker.utils.wacc import load_rf_rates, resolve_rf_for_date, calculate
 from blue_ticker.utils.metrics_access import year_metric_value
 from blue_ticker.utils.metrics_types import CalculatedData, MetricSource, RawXbrlExtraction, YearEntry
 
-from .edinet_fetcher import EdinetFetcher
+from .edinet_fetcher import EdinetFetcher, XbrlBuildContext
 
 logger = logging.getLogger(__name__)
 
@@ -649,6 +649,7 @@ class IndividualAnalyzer:
         stock_info = prefetched_stock_info or {"Code": code}
         financial_data = prefetched_financial_data or []
         annual_data: list[dict[str, Any]] = []
+        annual_context: XbrlBuildContext | None = None
 
         if prefetched_stock_info is not None and prefetched_financial_data is not None:
             from blue_ticker.utils.financial_data import extract_annual_data
@@ -662,7 +663,11 @@ class IndividualAnalyzer:
         if not annual_data:
             from blue_ticker.constants.api import EDINET_DOC_DISCOVERY_BUFFER
             fallback_years = analysis_years or max_documents
-            annual_data = await self._edinet_fetcher.build_xbrl_annual_records(code, fallback_years + EDINET_DOC_DISCOVERY_BUFFER)
+            annual_context = await self._edinet_fetcher.build_xbrl_annual_context(
+                code,
+                fallback_years + EDINET_DOC_DISCOVERY_BUFFER,
+            )
+            annual_data = annual_context["records"]
             if not annual_data:
                 return {}
             financial_data = annual_data
@@ -680,12 +685,24 @@ class IndividualAnalyzer:
         all_metrics: dict[str, dict[str, Any]] = {}
 
         if financial_data:
-            pre_parsed_map, edinet_data = await asyncio.gather(
-                self._edinet_fetcher.predownload_and_parse(code, financial_data, actual_years),
-                self._edinet_fetcher.fetch_edinet_data_async(code, financial_data, max_documents=max_documents),
-            )
+            if annual_context is None:
+                pre_parsed_map, edinet_data = await asyncio.gather(
+                    self._edinet_fetcher.predownload_and_parse(code, financial_data, actual_years),
+                    self._edinet_fetcher.fetch_edinet_data_async(code, financial_data, max_documents=max_documents),
+                )
+            else:
+                pre_parsed_map = annual_context["pre_parsed_map"]
+                edinet_data = await self._edinet_fetcher.fetch_edinet_data_async(
+                    code,
+                    financial_data,
+                    max_documents=max_documents,
+                )
             all_metrics = await self._edinet_fetcher.extract_all_by_year(
-                code, financial_data, actual_years, pre_parsed_map=pre_parsed_map
+                code,
+                financial_data,
+                actual_years,
+                docs=annual_context["docs"] if annual_context is not None else None,
+                pre_parsed_map=pre_parsed_map,
             )
 
         years: list[YearEntry] = metrics.get("years", [])

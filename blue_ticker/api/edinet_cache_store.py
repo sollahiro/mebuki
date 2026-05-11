@@ -33,6 +33,8 @@ from blue_ticker.utils.fiscal_year import parse_date_string
 
 logger = logging.getLogger(__name__)
 
+_COMPACT_JSON_SEPARATORS = (",", ":")
+
 
 class EdinetCacheStore(EdinetCacheBackend):
     """EDINET の日別検索結果と XBRL 展開ディレクトリをローカルで管理する。"""
@@ -95,7 +97,7 @@ class EdinetCacheStore(EdinetCacheBackend):
         try:
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             cache_path.write_text(
-                json.dumps(data, ensure_ascii=False, indent=2),
+                json.dumps(data, ensure_ascii=False, separators=_COMPACT_JSON_SEPARATORS),
                 encoding="utf-8",
             )
         except Exception as e:
@@ -226,7 +228,7 @@ class EdinetCacheStore(EdinetCacheBackend):
         try:
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             cache_path.write_text(
-                json.dumps(payload, ensure_ascii=False, indent=2),
+                json.dumps(payload, ensure_ascii=False, separators=_COMPACT_JSON_SEPARATORS),
                 encoding="utf-8",
             )
         except Exception as e:

@@ -1,3 +1,4 @@
+import logging
 from unittest.mock import AsyncMock, Mock
 from pathlib import Path
 
@@ -103,6 +104,87 @@ async def test_get_annual_docs_reads_from_persistent_cache(tmp_path) -> None:
     )
 
     assert docs == [{"docID": "S100CACHED"}]
+
+
+@pytest.mark.asyncio
+async def test_extract_metric_uses_provided_docs_without_doc_discovery() -> None:
+    edinet_client = Mock()
+    edinet_client.api_key = "dummy"
+    fetcher = EdinetFetcher(edinet_client=edinet_client)
+    fetcher._get_annual_docs = AsyncMock(side_effect=AssertionError("doc discovery should be skipped"))  # type: ignore[method-assign]
+    fetcher._run_extraction = AsyncMock(return_value=("20240331", {"current": 1.0}))  # type: ignore[method-assign]
+    docs = [
+        {"docID": "S100ANNUAL", "docTypeCode": "120", "edinet_fy_end": "2024-03-31"},
+        {"docID": "S100OLD", "docTypeCode": "120", "edinet_fy_end": "2023-03-31"},
+        {
+            "docID": "S100AMEND",
+            "docTypeCode": "130",
+            "edinet_fy_end": "2024-03-31",
+            "_is_amendment": True,
+        },
+    ]
+
+    result = await fetcher.extract_gross_profit_by_year("72030", [], 1, docs=docs)
+
+    assert result == {"20240331": {"current": 1.0}}
+    fetcher._get_annual_docs.assert_not_awaited()
+    fetcher._run_extraction.assert_awaited_once()
+    assert fetcher._run_extraction.await_args is not None
+    assert fetcher._run_extraction.await_args.args[0]["docID"] == "S100ANNUAL"
+
+
+@pytest.mark.asyncio
+async def test_doc_id_maps_slice_provided_docs_to_max_years() -> None:
+    edinet_client = Mock()
+    edinet_client.api_key = "dummy"
+    fetcher = EdinetFetcher(edinet_client=edinet_client)
+    fetcher._get_annual_docs = AsyncMock(side_effect=AssertionError("doc discovery should be skipped"))  # type: ignore[method-assign]
+    docs = [
+        {"docID": "S100NEW", "docTypeCode": "120", "edinet_fy_end": "2025-03-31"},
+        {"docID": "S100OLD", "docTypeCode": "120", "edinet_fy_end": "2024-03-31"},
+        {
+            "docID": "S100NEWAMEND",
+            "docTypeCode": "130",
+            "edinet_fy_end": "2025-03-31",
+            "_is_amendment": True,
+        },
+        {
+            "docID": "S100OLDAMEND",
+            "docTypeCode": "130",
+            "edinet_fy_end": "2024-03-31",
+            "_is_amendment": True,
+        },
+    ]
+
+    doc_ids = await fetcher.get_doc_ids_by_year("72030", [], 1, docs=docs)
+    amendment_doc_ids = await fetcher.get_amendment_doc_ids_by_year("72030", [], 1, docs=docs)
+
+    assert doc_ids == {"20250331": "S100NEW"}
+    assert amendment_doc_ids == {"20250331": "S100NEWAMEND"}
+    fetcher._get_annual_docs.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_download_and_parse_docs_logs_profile_for_cache_miss_and_hit(tmp_path, caplog) -> None:
+    cache_manager = CacheManager(cache_dir=str(tmp_path / "cache"), enabled=True)
+    edinet_client = Mock()
+    edinet_client.api_key = "dummy"
+    edinet_client.download_document = AsyncMock(return_value=tmp_path / "xbrl")
+    (tmp_path / "xbrl").mkdir()
+    fetcher = EdinetFetcher(edinet_client=edinet_client, cache_manager=cache_manager)
+    docs = [{"docID": "S100PROFILE", "edinet_fy_end": "2024-03-31"}]
+    caplog.set_level(logging.INFO, logger="blue_ticker.services.edinet_fetcher")
+
+    await fetcher._download_and_parse_docs(docs, "72030")
+    await fetcher._download_and_parse_docs(docs, "72030")
+
+    messages = "\n".join(record.getMessage() for record in caplog.records)
+    assert "[PROFILE] 72030 20240331 cache_miss:" in messages
+    assert "[PROFILE] 72030 20240331 cache_hit:" in messages
+    assert "download=" in messages
+    assert "cache_read=" in messages
+    assert "parse=" in messages
+    assert "cache_write=" in messages
 
 
 @pytest.mark.asyncio

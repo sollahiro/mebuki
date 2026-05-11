@@ -271,10 +271,12 @@ class HalfYearDataService:
             cache_manager=self.cache_manager,
         )
         try:
-            fy_records, q2_records = await asyncio.gather(
-                edinet_fetcher.build_xbrl_annual_records(code, fetch_years),
-                edinet_fetcher.build_xbrl_half_year_records(code, fetch_years),
+            annual_context, half_context = await asyncio.gather(
+                edinet_fetcher.build_xbrl_annual_context(code, fetch_years),
+                edinet_fetcher.build_xbrl_half_year_context(code, fetch_years),
             )
+            fy_records = annual_context["records"]
+            q2_records = half_context["records"]
             financial_data = fy_records + q2_records
         except Exception as e:
             logger.warning(f"[HALF] {code}: EDINET-only財務データ構築スキップ - {e}")
@@ -293,10 +295,34 @@ class HalfYearDataService:
         unique_fy_ends = len(set(p["fy_end"] for p in base_periods))
         try:
             half_edinet, fy_gp_all, ibd_all, fy_op_all = await asyncio.gather(
-                edinet_fetcher.extract_half_year_edinet_data(code, financial_data, max_years=unique_fy_ends),
-                edinet_fetcher.extract_gross_profit_by_year(code, financial_data, max_years=EDINET_DOC_DISCOVERY_LIMIT),
-                edinet_fetcher.extract_ibd_by_year(code, financial_data, max_years=EDINET_DOC_DISCOVERY_LIMIT),
-                edinet_fetcher.extract_operating_profit_by_year(code, financial_data, max_years=EDINET_DOC_DISCOVERY_LIMIT),
+                edinet_fetcher.extract_half_year_edinet_data(
+                    code,
+                    financial_data,
+                    max_years=unique_fy_ends,
+                    docs=half_context["docs"],
+                    pre_parsed_map=half_context["pre_parsed_map"],
+                ),
+                edinet_fetcher.extract_gross_profit_by_year(
+                    code,
+                    financial_data,
+                    max_years=EDINET_DOC_DISCOVERY_LIMIT,
+                    docs=annual_context["docs"],
+                    pre_parsed_map=annual_context["pre_parsed_map"],
+                ),
+                edinet_fetcher.extract_ibd_by_year(
+                    code,
+                    financial_data,
+                    max_years=EDINET_DOC_DISCOVERY_LIMIT,
+                    docs=annual_context["docs"],
+                    pre_parsed_map=annual_context["pre_parsed_map"],
+                ),
+                edinet_fetcher.extract_operating_profit_by_year(
+                    code,
+                    financial_data,
+                    max_years=EDINET_DOC_DISCOVERY_LIMIT,
+                    docs=annual_context["docs"],
+                    pre_parsed_map=annual_context["pre_parsed_map"],
+                ),
             )
             # 選択済み年度のみにフィルタ
             fy_gp = {k: v for k, v in fy_gp_all.items() if k in selected_fy_ends}

@@ -593,8 +593,8 @@ class TestHalfYearDataService:
         service = self._make_service(tmp_path)
         with patch("blue_ticker.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
             fetcher = fetcher_cls.return_value
-            fetcher.build_xbrl_annual_records = AsyncMock(return_value=[])
-            fetcher.build_xbrl_half_year_records = AsyncMock(return_value=[])
+            fetcher.build_xbrl_annual_context = AsyncMock(return_value={"docs": [], "pre_parsed_map": {}, "records": []})
+            fetcher.build_xbrl_half_year_context = AsyncMock(return_value={"docs": [], "pre_parsed_map": {}, "records": []})
 
             result = await service.get_half_year_periods("72030", years=3, use_cache=False)
 
@@ -607,11 +607,15 @@ class TestHalfYearDataService:
         fy_record["CurFYEn"] = "2024-03-31"
         q2_record = self._q2_record()
         q2_record["CurFYEn"] = "2024-03-31"
+        annual_docs = [{"docID": "S100FY"}]
+        half_docs = [{"docID": "S100H1"}]
+        annual_pre_parsed_map = {"20240331": ("fy-path", {}, {})}
+        half_pre_parsed_map = {"20240331": ("h1-path", {}, {})}
 
         with patch("blue_ticker.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
             fetcher = fetcher_cls.return_value
-            fetcher.build_xbrl_annual_records = AsyncMock(return_value=[fy_record])
-            fetcher.build_xbrl_half_year_records = AsyncMock(return_value=[q2_record])
+            fetcher.build_xbrl_annual_context = AsyncMock(return_value={"docs": annual_docs, "pre_parsed_map": annual_pre_parsed_map, "records": [fy_record]})
+            fetcher.build_xbrl_half_year_context = AsyncMock(return_value={"docs": half_docs, "pre_parsed_map": half_pre_parsed_map, "records": [q2_record]})
             fetcher.extract_half_year_edinet_data = AsyncMock(return_value={})
             fetcher.extract_gross_profit_by_year = AsyncMock(return_value={})
             fetcher.extract_ibd_by_year = AsyncMock(return_value={})
@@ -623,8 +627,24 @@ class TestHalfYearDataService:
         assert result[0]["data"]["Sales"] == 45.0
         assert result[1]["data"]["Sales"] == 55.0
         # fetch_years = EDINET_DOC_DISCOVERY_LIMIT(10) + BUFFER(2) = 12
-        fetcher.build_xbrl_annual_records.assert_awaited_once_with("72030", 12)
-        fetcher.build_xbrl_half_year_records.assert_awaited_once_with("72030", 12)
+        fetcher.build_xbrl_annual_context.assert_awaited_once_with("72030", 12)
+        fetcher.build_xbrl_half_year_context.assert_awaited_once_with("72030", 12)
+        assert fetcher.extract_half_year_edinet_data.await_args is not None
+        _, half_kwargs = fetcher.extract_half_year_edinet_data.await_args
+        assert half_kwargs["docs"] == half_docs
+        assert half_kwargs["pre_parsed_map"] == half_pre_parsed_map
+        assert fetcher.extract_gross_profit_by_year.await_args is not None
+        _, gp_kwargs = fetcher.extract_gross_profit_by_year.await_args
+        assert gp_kwargs["docs"] == annual_docs
+        assert gp_kwargs["pre_parsed_map"] == annual_pre_parsed_map
+        assert fetcher.extract_ibd_by_year.await_args is not None
+        _, ibd_kwargs = fetcher.extract_ibd_by_year.await_args
+        assert ibd_kwargs["docs"] == annual_docs
+        assert ibd_kwargs["pre_parsed_map"] == annual_pre_parsed_map
+        assert fetcher.extract_operating_profit_by_year.await_args is not None
+        _, op_kwargs = fetcher.extract_operating_profit_by_year.await_args
+        assert op_kwargs["docs"] == annual_docs
+        assert op_kwargs["pre_parsed_map"] == annual_pre_parsed_map
 
     @pytest.mark.asyncio
     async def test_edinet_failure_returns_base_periods(self, tmp_path):
@@ -634,8 +654,8 @@ class TestHalfYearDataService:
 
         with patch("blue_ticker.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
             fetcher = fetcher_cls.return_value
-            fetcher.build_xbrl_annual_records = AsyncMock(return_value=[fy_record])
-            fetcher.build_xbrl_half_year_records = AsyncMock(return_value=[q2_record])
+            fetcher.build_xbrl_annual_context = AsyncMock(return_value={"docs": [], "pre_parsed_map": {}, "records": [fy_record]})
+            fetcher.build_xbrl_half_year_context = AsyncMock(return_value={"docs": [], "pre_parsed_map": {}, "records": [q2_record]})
             fetcher.extract_half_year_edinet_data = AsyncMock(side_effect=RuntimeError("edinet down"))
             fetcher.extract_gross_profit_by_year = AsyncMock(return_value={})
             fetcher.extract_ibd_by_year = AsyncMock(return_value={})
@@ -659,8 +679,8 @@ class TestHalfYearDataService:
 
         with patch("blue_ticker.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
             fetcher = fetcher_cls.return_value
-            fetcher.build_xbrl_annual_records = AsyncMock(return_value=[fy_record])
-            fetcher.build_xbrl_half_year_records = AsyncMock(return_value=[q2_record])
+            fetcher.build_xbrl_annual_context = AsyncMock(return_value={"docs": [], "pre_parsed_map": {}, "records": [fy_record]})
+            fetcher.build_xbrl_half_year_context = AsyncMock(return_value={"docs": [], "pre_parsed_map": {}, "records": [q2_record]})
             fetcher.extract_half_year_edinet_data = AsyncMock(side_effect=RuntimeError("edinet down"))
             fetcher.extract_gross_profit_by_year = AsyncMock(return_value={})
             fetcher.extract_ibd_by_year = AsyncMock(return_value={})
@@ -679,8 +699,8 @@ class TestHalfYearDataService:
 
         with patch("blue_ticker.services.half_year_data_service.EdinetFetcher") as fetcher_cls:
             fetcher = fetcher_cls.return_value
-            fetcher.build_xbrl_annual_records = AsyncMock(return_value=[fy_record])
-            fetcher.build_xbrl_half_year_records = AsyncMock(return_value=[q2_record])
+            fetcher.build_xbrl_annual_context = AsyncMock(return_value={"docs": [], "pre_parsed_map": {}, "records": [fy_record]})
+            fetcher.build_xbrl_half_year_context = AsyncMock(return_value={"docs": [], "pre_parsed_map": {}, "records": [q2_record]})
             fetcher.extract_half_year_edinet_data = AsyncMock(side_effect=RuntimeError("edinet down"))
             fetcher.extract_gross_profit_by_year = AsyncMock(return_value={})
             fetcher.extract_ibd_by_year = AsyncMock(return_value={})
