@@ -138,7 +138,7 @@ ticker filings 7203 --format json
 ticker filing <code> [--doc-id DOC_ID] [--sections business_risks|mda|management_policy] [--format table|json]
 ```
 
-- `--doc-id`: ④で取得したドキュメントID（省略時は最新）
+- `--doc-id`: ③で取得したドキュメントID（省略時は最新）
 - `--sections`: 抽出するセクション（複数指定可）
   - `business_risks`: 事業等のリスク
   - `mda`: 経営者による財政状態・経営成績の分析（MD&A）
@@ -152,7 +152,22 @@ ticker filing 7203 --doc-id S100XXXX --sections mda
 ticker filing 7203 --format json
 ```
 
-### ⑤ ウォッチリスト管理
+### ⑤ 業種検索
+
+東証33業種で銘柄を検索する。業種名を省略すると業種一覧を表示する。
+
+```bash
+ticker sector [業種名] [--format table|json]
+```
+
+例：
+```bash
+ticker sector
+ticker sector 輸送用機器
+ticker sector 情報・通信業 --format json
+```
+
+### ⑥ ウォッチリスト管理
 
 注目銘柄のウォッチリストを管理する。
 
@@ -170,7 +185,7 @@ ticker watch list --format json
 ticker watch remove 7203
 ```
 
-### ⑥ ポートフォリオ管理
+### ⑦ ポートフォリオ管理
 
 保有銘柄のポートフォリオを管理する。
 
@@ -186,6 +201,9 @@ ticker portfolio remove <code> [--broker 証券会社] [--account 特定|一般|
 
 # 一覧表示
 ticker portfolio list [--detail] [--format table|json]
+
+# セクター別配分
+ticker portfolio sector [--format table|json]
 ```
 
 例：
@@ -196,6 +214,35 @@ ticker portfolio list --detail
 ticker portfolio list --format json
 ticker portfolio sell 7203 50
 ticker portfolio remove 7203 --broker SBI --account 特定
+ticker portfolio sector
+```
+
+### ⑧ キャッシュ管理
+
+EDINET年次インデックスや分析キャッシュの状態確認・準備・更新・整理を行う。
+
+```bash
+ticker cache status [--years N] [--format table|json]
+ticker cache prepare [--years N] [--format table|json]
+ticker cache catchup [--years N] [--format table|json]
+ticker cache refresh [--years N] [--format table|json]
+ticker cache clean [--execute] [--edinet-search-days N] [--edinet-xbrl-days N] [--edinet-doc-index-years N] [--format table|json]
+```
+
+- `status`: キャッシュ状態と次の推奨アクションを表示する
+- `prepare`: EDINET年次インデックスを事前準備する
+- `catchup`: 不足分のEDINET年次インデックスを取得する
+- `refresh`: EDINET年次インデックスを更新する
+- `clean`: 不要なキャッシュを削除する。`--execute` 未指定時は dry-run
+
+例：
+```bash
+ticker cache status
+ticker cache prepare --years 3
+ticker cache catchup --years 3
+ticker cache refresh --years 3
+ticker cache clean --edinet-search-days 30
+ticker cache clean --execute --edinet-xbrl-days 30
 ```
 
 ## 典型ワークフロー
