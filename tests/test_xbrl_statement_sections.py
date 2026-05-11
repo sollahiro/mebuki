@@ -75,6 +75,37 @@ def test_filter_fact_index_uses_nonconsolidated_statement_as_explicit_fallback()
 
 def test_preparsed_for_statement_returns_statement_scoped_numeric_index() -> None:
     all_numeric: XbrlTagElements = {
+        "TotalAssets": {
+            "CurrentYearInstant": 1000.0,
+            "CurrentYearInstant_NonConsolidatedMember": 500.0,
+        }
+    }
+    facts: XbrlFactIndex = {
+        "TotalAssets": {
+            "CurrentYearInstant": _fact(
+                "TotalAssets",
+                "CurrentYearInstant",
+                1000.0,
+                "ConsolidatedBalanceSheet",
+                "consolidated",
+            ),
+            "CurrentYearInstant_NonConsolidatedMember": _fact(
+                "TotalAssets",
+                "CurrentYearInstant_NonConsolidatedMember",
+                500.0,
+                "BalanceSheet",
+                "non_consolidated",
+            ),
+        }
+    }
+
+    scoped = _preparsed_for_statement((Path("."), all_numeric, facts), "bs")
+
+    assert scoped == {"TotalAssets": {"CurrentYearInstant": 1000.0}}
+
+
+def test_preparsed_for_statement_returns_all_numeric_for_is_keys() -> None:
+    all_numeric: XbrlTagElements = {
         "NetSales": {
             "CurrentYearDuration": 100.0,
             "CurrentYearDuration_NonConsolidatedMember": 10.0,
@@ -101,7 +132,7 @@ def test_preparsed_for_statement_returns_statement_scoped_numeric_index() -> Non
 
     scoped = _preparsed_for_statement((Path("."), all_numeric, facts), "gp")
 
-    assert scoped == {"NetSales": {"CurrentYearDuration": 100.0}}
+    assert scoped is all_numeric
 
 
 def test_preparsed_for_statement_keeps_all_numeric_when_no_section_metadata() -> None:
