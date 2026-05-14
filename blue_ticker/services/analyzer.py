@@ -559,17 +559,21 @@ def _apply_order_book(
             )
 
 
-def _resolve_tax_rate(cd: CalculatedData) -> tuple[float, bool]:
+def _resolve_tax_rate(cd: CalculatedData) -> tuple[float | None, bool]:
     """EffectiveTaxRate から計算用の税率（小数）を返す。
 
-    0-50% の範囲内なら実績値を、範囲外または未取得なら NOPAT_FALLBACK_TAX_RATE を返す。
-    Returns: (rate_as_decimal, is_fallback)
+    - 0-50% 範囲内: 実績値（is_fallback=False）
+    - 範囲外（異常値）: NOPAT_FALLBACK_TAX_RATE（is_fallback=True）
+    - 未取得（None）: None（is_fallback=False）— 呼び出し元が判断する
+
+    Returns: (rate_as_decimal_or_None, is_fallback)
     """
     rate_pct = cd.get("EffectiveTaxRate")
-    if rate_pct is not None:
-        rate = rate_pct / PERCENT
-        if NOPAT_MIN_NORMAL_TAX_RATE <= rate <= NOPAT_MAX_NORMAL_TAX_RATE:
-            return rate, False
+    if rate_pct is None:
+        return None, False
+    rate = rate_pct / PERCENT
+    if NOPAT_MIN_NORMAL_TAX_RATE <= rate <= NOPAT_MAX_NORMAL_TAX_RATE:
+        return rate, False
     return NOPAT_FALLBACK_TAX_RATE, True
 
 
@@ -580,6 +584,8 @@ def _apply_nopat(years: list[YearEntry]) -> None:
         if op_m is None:
             continue
         tax_rate, is_fallback = _resolve_tax_rate(cd)
+        if tax_rate is None:
+            tax_rate, is_fallback = NOPAT_FALLBACK_TAX_RATE, True
         method = f"OP × (1 - {int(NOPAT_FALLBACK_TAX_RATE * PERCENT)}%_fallback)" if is_fallback else "OP × (1 - income_tax / pretax_income)"
         cd["NOPAT"] = op_m * (1 - tax_rate)
         _set_metric_source(cd, "NOPAT", source="derived", unit="million_yen", method=method)
@@ -605,11 +611,12 @@ def _apply_wacc(years: list[YearEntry], rf_rates: dict[str, float]) -> None:
         fy_end = year.get("fy_end") or ""
         rf, rf_source = resolve_rf_for_date(rf_rates, fy_end)
         tax_rate, _ = _resolve_tax_rate(cd)
+        tc_pct = tax_rate * PERCENT if tax_rate is not None else None
         wacc = calculate_wacc(
             eq=_year_metric_float(year, "NetAssets"),
             ibd=cd.get("InterestBearingDebt"),
             ie=cd.get("InterestExpense"),
-            tc_pct=tax_rate * PERCENT,
+            tc_pct=tc_pct,
             rf=rf,
         )
         cost_of_equity = wacc["CostOfEquity"]

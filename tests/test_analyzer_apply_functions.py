@@ -11,6 +11,7 @@ from typing import Any, cast
 from blue_ticker.services.analyzer import (
     _apply_ibd,
     _apply_interest_expense,
+    _apply_nopat,
     _apply_tax,
     _apply_gross_profit,
     _apply_operating_profit,
@@ -19,6 +20,7 @@ from blue_ticker.services.analyzer import (
     _apply_depreciation,
     _apply_order_book,
     _apply_wacc,
+    _resolve_tax_rate,
 )
 from blue_ticker.utils.metrics_types import YearEntry
 from blue_ticker.utils.metrics_access import metric_view
@@ -581,3 +583,95 @@ class TestApplyWacc:
         _apply_wacc(years, {})
         assert "CostOfEquity" in years[0]["CalculatedData"]
         assert "CostOfEquity" in years[1]["CalculatedData"]
+
+    def test_wacc_missing_input_when_tax_rate_absent(self):
+        """税率未取得（EffectiveTaxRate=None）かつ負債ありの場合は算出不可"""
+        years = [
+            _make_year(
+                "2024-03-31",
+                NetAssets=800.0,
+                InterestBearingDebt=200.0,
+                InterestExpense=5.0,
+            )
+        ]
+        _apply_wacc(years, {})
+        cd = years[0]["CalculatedData"]
+        assert cd["WACC"] is None
+        assert cd["WACCLabel"] == WACC_LABEL_MISSING_INPUT
+
+
+# ──────────────────────────────────────────────────────────────
+# _resolve_tax_rate / _apply_nopat
+# ──────────────────────────────────────────────────────────────
+
+class TestResolveTaxRate:
+    def test_normal_rate_returned_as_is(self):
+        cd = {"EffectiveTaxRate": 25.0}
+        rate, is_fallback = _resolve_tax_rate(cd)
+        assert rate == pytest.approx(0.25)
+        assert not is_fallback
+
+    def test_abnormal_rate_above_50_uses_fallback(self):
+        cd = {"EffectiveTaxRate": 895.0}
+        rate, is_fallback = _resolve_tax_rate(cd)
+        assert rate == NOPAT_FALLBACK_TAX_RATE
+        assert is_fallback
+
+    def test_negative_rate_uses_fallback(self):
+        cd = {"EffectiveTaxRate": -317.0}
+        rate, is_fallback = _resolve_tax_rate(cd)
+        assert rate == NOPAT_FALLBACK_TAX_RATE
+        assert is_fallback
+
+    def test_missing_rate_returns_none(self):
+        cd = {}
+        rate, is_fallback = _resolve_tax_rate(cd)
+        assert rate is None
+        assert not is_fallback
+
+    def test_boundary_50_percent_is_normal(self):
+        cd = {"EffectiveTaxRate": 50.0}
+        rate, is_fallback = _resolve_tax_rate(cd)
+        assert rate == pytest.approx(0.50)
+        assert not is_fallback
+
+
+class TestApplyNopat:
+    def _make_op_year(self, fy_end: str, op_yen: float, **cd_fields: Any) -> YearEntry:
+        year = _make_year(fy_end, **cd_fields)
+        year["RawData"]["OP"] = op_yen
+        return year
+
+    def test_normal_tax_rate(self):
+        """正常税率: NOPAT = OP × (1 - 実績税率)"""
+        op = 113_968 * MILLION_YEN
+        years = [self._make_op_year("2024-03-31", op, EffectiveTaxRate=25.437)]
+        _apply_nopat(years)
+        cd = years[0]["CalculatedData"]
+        expected = 113_968 * (1 - 0.25437)
+        assert cd["NOPAT"] == pytest.approx(expected, rel=1e-4)
+        assert "OP × (1 - income_tax" in cd["MetricSources"]["NOPAT"]["method"]
+
+    def test_abnormal_tax_rate_uses_fallback(self):
+        """異常税率: NOPAT = OP × (1 - 35%)"""
+        op = 14_382 * MILLION_YEN
+        years = [self._make_op_year("2024-03-31", op, EffectiveTaxRate=-317.0)]
+        _apply_nopat(years)
+        cd = years[0]["CalculatedData"]
+        assert cd["NOPAT"] == pytest.approx(14_382 * (1 - NOPAT_FALLBACK_TAX_RATE))
+        assert "fallback" in cd["MetricSources"]["NOPAT"]["method"]
+
+    def test_missing_tax_rate_uses_fallback(self):
+        """税率未取得: NOPAT = OP × (1 - 35%)"""
+        op = 50_000 * MILLION_YEN
+        years = [self._make_op_year("2024-03-31", op)]
+        _apply_nopat(years)
+        cd = years[0]["CalculatedData"]
+        assert cd["NOPAT"] == pytest.approx(50_000 * (1 - NOPAT_FALLBACK_TAX_RATE))
+        assert "fallback" in cd["MetricSources"]["NOPAT"]["method"]
+
+    def test_missing_op_skips(self):
+        """OP 未取得: NOPAT をセットしない"""
+        years = [_make_year("2024-03-31", EffectiveTaxRate=25.0)]
+        _apply_nopat(years)
+        assert "NOPAT" not in years[0]["CalculatedData"]
