@@ -700,3 +700,11 @@ class TestApplyRoic:
         years = [_make_year("2024-03-31", NOPAT=80.0, NetAssets=0.0, InterestBearingDebt=0.0)]
         _apply_roic(years)
         assert "ROIC" not in years[0]["CalculatedData"]
+
+    def test_uses_calculated_data_not_raw_data(self):
+        year = _make_year("2024-03-31", NOPAT=80.0, NetAssets=800.0, InterestBearingDebt=200.0)
+        year["RawData"]["NetAssets"] = 500_000_000_000  # 別APIソース（500B円=500,000百万円）
+        _apply_roic([year])
+        cd = year["CalculatedData"]
+        expected = 80.0 / (800.0 + 200.0) * PERCENT  # CalculatedData の 800M を使う
+        assert cd["ROIC"] == pytest.approx(expected)

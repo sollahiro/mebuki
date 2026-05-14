@@ -710,3 +710,63 @@ class TestHalfYearDataService:
 
         assert "MetricSources" in result[0]["data"]
         assert result[0]["data"]["MetricSources"]["CFC"]["method"] == "CFO + CFI"
+
+
+# ──────────────────────────────────────────────────────────────
+# _has_incomplete_edinet_metrics
+# ──────────────────────────────────────────────────────────────
+
+class TestHasIncompleteEdinetMetrics:
+    def _fn(self):
+        from blue_ticker.services.data_service import _has_incomplete_edinet_metrics
+        return _has_incomplete_edinet_metrics
+
+    def _make_cached(self, **cd_fields) -> dict:
+        return {
+            "metrics": {
+                "years": [{"CalculatedData": {"DocID": "S100XXXX", **cd_fields}}]
+            }
+        }
+
+    def _complete_cd(self) -> dict:
+        return {
+            "DocID": "S100XXXX",
+            "InterestBearingDebt": 200.0,
+            "NOPAT": 80.0,
+            "ROIC": 8.0,
+            "CurrentAssets": 500.0,
+            "NonCurrentAssets": 800.0,
+            "CurrentLiabilities": 300.0,
+            "NonCurrentLiabilities": 200.0,
+            "NetAssets": 600.0,
+        }
+
+    def test_complete_cache_returns_false(self):
+        fn = self._fn()
+        assert fn({"metrics": {"years": [{"CalculatedData": self._complete_cd()}]}}) is False
+
+    def test_missing_ibd_returns_true(self):
+        fn = self._fn()
+        cd = self._complete_cd()
+        del cd["InterestBearingDebt"]
+        assert fn({"metrics": {"years": [{"CalculatedData": cd}]}}) is True
+
+    def test_nopat_present_roic_missing_returns_true(self):
+        """NOPAT が揃っているのに ROIC が None → 不完全"""
+        fn = self._fn()
+        cd = self._complete_cd()
+        cd["ROIC"] = None
+        assert fn({"metrics": {"years": [{"CalculatedData": cd}]}}) is True
+
+    def test_nopat_missing_roic_missing_returns_false(self):
+        """OP 欠損で NOPAT も ROIC も None → ROIC 計算不可なので不完全扱いしない"""
+        fn = self._fn()
+        cd = self._complete_cd()
+        del cd["NOPAT"]
+        cd["ROIC"] = None
+        assert fn({"metrics": {"years": [{"CalculatedData": cd}]}}) is False
+
+    def test_no_doc_id_skips_year(self):
+        fn = self._fn()
+        cd = {"InterestBearingDebt": None, "ROIC": None}  # DocID なし
+        assert fn({"metrics": {"years": [{"CalculatedData": cd}]}}) is False

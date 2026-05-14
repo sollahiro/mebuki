@@ -80,7 +80,7 @@ def _has_incomplete_edinet_metrics(cached: dict[str, Any]) -> bool:
             continue
         if calculated.get("DocID") and (
             calculated.get("InterestBearingDebt") is None
-            or calculated.get("ROIC") is None
+            or (calculated.get("NOPAT") is not None and calculated.get("ROIC") is None)
             or "CurrentAssets" not in calculated
             or "NonCurrentAssets" not in calculated
             or "CurrentLiabilities" not in calculated

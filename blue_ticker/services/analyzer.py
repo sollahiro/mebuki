@@ -589,9 +589,9 @@ def _apply_nopat(years: list[YearEntry]) -> None:
 def _apply_roic(years: list[YearEntry]) -> None:
     for year in years:
         cd = year["CalculatedData"]
-        nopat = _year_metric_float(year, "NOPAT")
-        net_assets = _year_metric_float(year, "NetAssets")
-        ibd = _year_metric_float(year, "InterestBearingDebt")
+        nopat = cd.get("NOPAT")
+        net_assets = cd.get("NetAssets")
+        ibd = cd.get("InterestBearingDebt")
         if nopat is None or net_assets is None or ibd is None:
             continue
         invested_capital = net_assets + ibd
