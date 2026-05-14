@@ -12,6 +12,7 @@ from blue_ticker.services.analyzer import (
     _apply_ibd,
     _apply_interest_expense,
     _apply_nopat,
+    _apply_roic,
     _apply_tax,
     _apply_gross_profit,
     _apply_operating_profit,
@@ -100,17 +101,8 @@ class TestApplyIbd:
         assert cd["AmendmentDocID"] == "S100AMEND"
         assert cd["MetricSources"]["AmendmentDocID"]["docID"] == "S100AMEND"
 
-    def test_calculates_roic(self):
+    def test_roic_not_set_by_ibd(self):
         years = [_make_year("2024-03-31", NP=100.0, NetAssets=800.0)]
-        ibd_by_year = {"20240331": {"current": 200_000_000, "components": [], "accounting_standard": "J-GAAP"}}
-        _apply_ibd(years, ibd_by_year, {})
-        cd = years[0]["CalculatedData"]
-        ibd_m = 200_000_000 / MILLION_YEN
-        expected = 100.0 / (800.0 + ibd_m) * PERCENT
-        assert cd["ROIC"] == pytest.approx(expected)
-
-    def test_skips_roic_when_np_missing(self):
-        years = [_make_year("2024-03-31", NetAssets=800.0)]
         ibd_by_year = {"20240331": {"current": 200_000_000, "components": [], "accounting_standard": "J-GAAP"}}
         _apply_ibd(years, ibd_by_year, {})
         assert "ROIC" not in years[0]["CalculatedData"]
@@ -675,3 +667,36 @@ class TestApplyNopat:
         years = [_make_year("2024-03-31", EffectiveTaxRate=25.0)]
         _apply_nopat(years)
         assert "NOPAT" not in years[0]["CalculatedData"]
+
+
+class TestApplyRoic:
+    def test_calculates_roic_using_nopat(self):
+        nopat = 80.0
+        net_assets = 800.0
+        ibd = 200.0
+        years = [_make_year("2024-03-31", NOPAT=nopat, NetAssets=net_assets, InterestBearingDebt=ibd)]
+        _apply_roic(years)
+        cd = years[0]["CalculatedData"]
+        expected = nopat / (net_assets + ibd) * PERCENT
+        assert cd["ROIC"] == pytest.approx(expected)
+        assert cd["MetricSources"]["ROIC"]["method"] == "NOPAT / (NetAssets + InterestBearingDebt)"
+
+    def test_skips_when_nopat_missing(self):
+        years = [_make_year("2024-03-31", NetAssets=800.0, InterestBearingDebt=200.0)]
+        _apply_roic(years)
+        assert "ROIC" not in years[0]["CalculatedData"]
+
+    def test_skips_when_net_assets_missing(self):
+        years = [_make_year("2024-03-31", NOPAT=80.0, InterestBearingDebt=200.0)]
+        _apply_roic(years)
+        assert "ROIC" not in years[0]["CalculatedData"]
+
+    def test_skips_when_ibd_missing(self):
+        years = [_make_year("2024-03-31", NOPAT=80.0, NetAssets=800.0)]
+        _apply_roic(years)
+        assert "ROIC" not in years[0]["CalculatedData"]
+
+    def test_skips_when_invested_capital_is_zero(self):
+        years = [_make_year("2024-03-31", NOPAT=80.0, NetAssets=0.0, InterestBearingDebt=0.0)]
+        _apply_roic(years)
+        assert "ROIC" not in years[0]["CalculatedData"]

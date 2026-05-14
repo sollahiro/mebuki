@@ -279,11 +279,6 @@ def _apply_ibd(
             doc_id=doc_id,
             label=raw.get("ibd_accounting_standard"),
         )
-        np_ = _year_metric_float(year, "NP")
-        net_assets = _year_metric_float(year, "NetAssets")
-        if np_ is not None and net_assets is not None and (net_assets + ibd_m) != 0:
-            cd["ROIC"] = np_ / (net_assets + ibd_m) * PERCENT
-            _set_metric_source(cd, "ROIC", source="derived", unit="percent", method="NP / (NetAssets + InterestBearingDebt)")
 
 
 def _apply_balance_sheet(
@@ -591,6 +586,21 @@ def _apply_nopat(years: list[YearEntry]) -> None:
         _set_metric_source(cd, "NOPAT", source="derived", unit="million_yen", method=method)
 
 
+def _apply_roic(years: list[YearEntry]) -> None:
+    for year in years:
+        cd = year["CalculatedData"]
+        nopat = _year_metric_float(year, "NOPAT")
+        net_assets = _year_metric_float(year, "NetAssets")
+        ibd = _year_metric_float(year, "InterestBearingDebt")
+        if nopat is None or net_assets is None or ibd is None:
+            continue
+        invested_capital = net_assets + ibd
+        if invested_capital == 0:
+            continue
+        cd["ROIC"] = nopat / invested_capital * PERCENT
+        _set_metric_source(cd, "ROIC", source="derived", unit="percent", method="NOPAT / (NetAssets + InterestBearingDebt)")
+
+
 _METRIC_APPLIERS: list[Callable[[list[YearEntry], dict[str, RawXbrlExtraction]], None]] = [
     _apply_ibd,
     _apply_balance_sheet,
@@ -748,6 +758,7 @@ class IndividualAnalyzer:
         apply_operating_profit_change_from_xbrl(years, all_metrics.get("gp", {}), all_metrics.get("op", {}))
         apply_operating_profit_change_to_years(years)
         _apply_nopat(years)
+        _apply_roic(years)
         _apply_wacc(years, load_rf_rates(settings_store.cache_dir))
 
         return {
