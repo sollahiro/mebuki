@@ -43,16 +43,16 @@ ticker cache status
 `cache status` の `next_action` が `ticker cache prepare --years N` を示す場合は、調査コマンドの前に実行する。既に準備済みの場合はすぐ終わる：
 
 ```bash
-ticker cache prepare --years 3
+ticker cache prepare --years 5
 ```
 
 `cache status` の `next_action` が `ticker cache catchup --years N` を示す場合は、不足分だけ追いつかせる：
 
 ```bash
-ticker cache catchup --years 3
+ticker cache catchup --years 5
 ```
 
-`--years` はユーザーが求める分析・ファイリング探索年数に合わせる。指定がなければ通常調査では `3`、長期の財務分析を行う場合は分析年数に合わせて `6` を使う。
+`--years` はユーザーが求める分析・ファイリング探索年数に合わせる。指定がなければ通常調査では CLI デフォルトの `5`、長期の財務分析を行う場合は分析年数に合わせて `6` を使う。
 
 ## コマンドリファレンスと実行フロー
 
@@ -76,12 +76,13 @@ ticker search 7203 --format json
 銘柄の財務データを分析する。
 
 ```bash
-ticker analyze <code> [--years N] [--format table|json] [--half] [--no-cache]
+ticker analyze <code> [--years N] [--format table|json] [--half] [--no-cache] [--include-debug-fields]
 ```
 
 - `--years N`: 取得年数（デフォルト: 6、`--half` 時は 3）。**FY（通期）の件数**でカウントする
 - `--half`: 上半期(H1)・下半期(H2)の半期推移を表示する（seasonalityの確認に有用）
 - `--no-cache`: キャッシュを使用せず最新データを取得する
+- `--include-debug-fields`: `--format json` で `MetricSources`、`IBDComponents`、`GrossProfitMethod`、`IBDAccountingStandard` などの内部検証フィールドも出力する
 
 > **WACCとキャッシュ**: WACCのリスクフリーレートには財務省10年国債利回りCSVを使う。金利データ自体は1日TTLでキャッシュされるが、分析結果キャッシュに保存済みのWACCは再計算されない。最新の財務省金利を反映したWACCを確認する場合は、`ticker analyze <code> --no-cache` を使う。
 
@@ -111,6 +112,7 @@ ticker analyze 7203 --years 6
 ticker analyze 7203 --half                           # 上半期・下半期の推移を表示（デフォルト3年）
 ticker analyze 7203 --half --years 5                 # 5年分の半期推移
 ticker analyze 7203 --no-cache                       # キャッシュ無効化
+ticker analyze 7203 --format json --include-debug-fields
 ```
 
 ### ③ EDINETファイリング一覧
@@ -238,9 +240,9 @@ ticker cache clean [--execute] [--edinet-search-days N] [--edinet-xbrl-days N] [
 例：
 ```bash
 ticker cache status
-ticker cache prepare --years 3
-ticker cache catchup --years 3
-ticker cache refresh --years 3
+ticker cache prepare --years 5
+ticker cache catchup --years 5
+ticker cache refresh --years 5
 ticker cache clean --edinet-search-days 30
 ticker cache clean --execute --edinet-xbrl-days 30
 ```
@@ -251,7 +253,7 @@ ticker cache clean --execute --edinet-xbrl-days 30
 
 新規銘柄を調査する際の標準フロー：
 
-1. **キャッシュ確認**: `ticker cache status` を実行し、必要なら `ticker cache prepare --years 3` または `ticker cache catchup --years 3` を実行
+1. **キャッシュ確認**: `ticker cache status` を実行し、必要なら表示された `next action`（例: `ticker cache prepare --years 5` / `ticker cache catchup --years 5`）を実行
 2. **銘柄特定**: `ticker search <社名>` でコードを確認
 3. **財務分析**: `ticker analyze <code> --years 6` で財務推移を確認（ROIC・有利子負債を含む）
    - 半期推移も確認したい場合: `--half` を追加
@@ -273,7 +275,7 @@ ticker cache clean --execute --edinet-xbrl-days 30
 ```bash
 # 1. キャッシュ確認と不足分の準備
 ticker cache status
-ticker cache catchup --years 3  # statusが不足を示した場合のみ
+ticker cache catchup --years 5  # statusが不足を示した場合のみ
 
 # 2. 銘柄コード確認（社名で検索）
 ticker search <社名A>

@@ -15,7 +15,7 @@
 | CLI JSON出力 | 対応済み | 標準JSONからデバッグフィールドを除外し、必要時だけ明示出力する |
 | 指標の出所情報 | 対応済み | `MetricSources` に集約し、内部計算では保持する |
 | ローカルMCP | 廃止済み | `ticker mcp` とローカルMCPサーバーを削除し、CLI + Skills の運用に寄せた |
-| キャッシュ可視化/削除 | 対応済み | status/audit/clean をCLIで提供する |
+| キャッシュ可視化/削除 | 対応済み | status/clean をCLIで提供し、内部auditは削除対象の分類に使う |
 | リモートMCP移行ロードマップ | 設計中 | ローカルCLI/キャッシュは残し、将来のremote MCPとは分離する方針 |
 | 公開JSONスキーマ固定 | 対応済み | ゴールデンテストでpublicキー・debugキーを契約として固定 |
 | XBRL抽出結果の型 | 対応済み | 全抽出器の戻り値を `TypedDict` 化、pyright 0 errors |
@@ -138,7 +138,7 @@ EDINETの日別検索キャッシュとXBRL zip展開処理が `EdinetAPIClient`
 
 **現在の扱い**
 
-EDINET検索キャッシュ、年次インデックス、XBRL展開ディレクトリ、EDINET書類リスト、XBRL parse結果、分析結果キャッシュはstats/auditでカテゴリ別に確認できる。XBRL展開ディレクトリは保存時にも容量上限を確認し、自動整理する。
+EDINET検索キャッシュ、年次インデックス、XBRL展開ディレクトリ、EDINET書類リスト、XBRL parse結果、分析結果キャッシュは `cache status` と `cache clean` の dry-run でカテゴリ別に確認できる。内部の audit は削除対象分類に使い、CLIコマンドとしては公開していない。XBRL展開ディレクトリは保存時にも容量上限を確認し、自動整理する。
 
 ### 6. XBRL抽出器追加時の変更箇所が多かった
 

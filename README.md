@@ -1,74 +1,140 @@
-BLUE TICKER は、EDINET APIを最大限に活用した日本株分析 Python CLI ツールです。
+BLUE TICKER は、EDINET API と財務省CSVを活用した日本株分析 Python CLI ツールです。
 
 ---
 
-## ✨ 主要機能
+## 主な機能
 
-### 高度な財務・市場分析 (CLI)
-- **対話型モード**: `ticker` コマンドだけで、銘柄検索や財務概要の確認が可能です。
-- **定性情報の抽出**: 有価証券報告書の重要セクション（MD&A、事業リスク等）を即座に解析し、核心を抽出。
-- **ウォッチリスト管理**: 注目銘柄を登録・管理。`ticker watch` コマンドで操作可能。
-- **ポートフォリオ管理**: 保有銘柄のロット・口座別管理、総平均法による損益計算。`ticker portfolio` コマンドで操作可能。
+- **銘柄検索**: 社名・証券コードから日本株を検索
+- **財務分析**: EDINET XBRL/HTML から年次・半期の財務指標を取得
+- **有価証券報告書抽出**: MD&A、事業等のリスク、経営方針を抽出
+- **キャッシュ管理**: EDINET 年次インデックス、XBRL 展開、分析結果キャッシュを確認・準備・整理
+- **ウォッチリスト管理**: 注目銘柄を登録・削除・一覧表示
+- **ポートフォリオ管理**: 保有数量、取得単価、証券会社、口座種別を管理
 
----
+## インストール
 
-## 🚀 インストール & セットアップ
-
-### 1. インストール
-
-#### Homebrew
+### Homebrew
 
 ```bash
 brew tap sollahiro/blue-ticker
 brew install blue-ticker
 ```
 
-### 2. API キーの設定
-CLI の初期設定コマンドを実行し、EDINET APIキャッシュを準備します：
+短縮 alias として `blt` も利用できます。
+
+## 初期設定
+
+EDINET APIキーを設定し、直近5年分のEDINET年次インデックスを準備します。
 
 ```bash
 ticker config init
-ticker cache prepare --years 3
+ticker cache status
+ticker cache prepare --years 5
 ```
-以下のキーが必要です：
-- **EDINET APIキー**: [公式サイト](https://disclosure2.edinet-fsa.go.jp/)で取得
 
-## 📂 使い方 (CLI)
+EDINET APIキーは [EDINET公式サイト](https://disclosure2.edinet-fsa.go.jp/) で取得してください。
 
-代表的なコマンドは以下です。短縮 alias として `blt` も利用できます。
+## 使い方
+
+### 銘柄検索
 
 ```bash
-# 銘柄検索
 ticker search トヨタ
-
-# 財務分析
-ticker analyze 7203
-ticker analyze 7203 --years 6
-
-# キャッシュ確認
-ticker cache status
-ticker cache prepare --years 3
-ticker cache catchup --years 3
-ticker cache refresh --years 3
-ticker cache clean
-
-# ウォッチリスト
-ticker watch add 7203
-ticker watch list
-ticker watch remove 7203
-
-# ポートフォリオ
-ticker portfolio add 7203 100 2500 --broker SBI --account NISA
-ticker portfolio list
-ticker portfolio sell 7203 50
-
-# 短縮 alias
-blt analyze 7203
+ticker search 7203 --format json
 ```
 
-## ⚖️ 免責事項
+### 財務分析
+
+```bash
+ticker cache status
+ticker analyze 7203
+ticker analyze 7203 --years 6
+ticker analyze 7203 --half
+ticker analyze 7203 --no-cache
+```
+
+- `--years N`: 通期分析はデフォルト6年、半期分析はデフォルト3年
+- `--half`: 上半期(H1)・下半期(H2)の半期推移を表示
+- `--no-cache`: 分析結果キャッシュを使わず再計算。最新の財務省10年国債利回りをWACCへ反映したい場合にも使用
+- `--include-debug-fields`: `--format json` で `MetricSources` や `IBDComponents` などの内部検証フィールドも出力
+
+分析では ROE、ROIC、営業CF、投資CF、フリーCF、有利子負債、WACC、営業利益増減分解などを確認できます。
+
+### EDINET書類
+
+```bash
+ticker filings 7203
+ticker filings 7203 --years 6
+ticker filing 7203 --sections business_risks mda
+ticker filing 7203 --doc-id S100XXXX --sections management_policy
+```
+
+`ticker filing` の `--sections` には以下を指定できます。
+
+| section | 内容 |
+|---|---|
+| `business_risks` | 事業等のリスク |
+| `mda` | 経営者による財政状態・経営成績の分析 |
+| `management_policy` | 経営方針 |
+
+### キャッシュ管理
+
+```bash
+ticker cache status
+ticker cache prepare --years 5
+ticker cache catchup --years 5
+ticker cache refresh --years 5
+ticker cache clean
+ticker cache clean --execute --edinet-xbrl-days 30
+```
+
+- `status`: キャッシュ状態と次の推奨アクションを表示
+- `prepare`: EDINET年次インデックスを事前準備
+- `catchup`: 不足分だけ差分更新
+- `refresh`: EDINET年次インデックスを作り直して更新
+- `clean`: 不要なキャッシュを削除。`--execute` 未指定時は dry-run
+
+日本株の分析やEDINET書類抽出の前には、API負荷を抑えるため `ticker cache status` を確認し、表示された `next action` を先に実行してください。
+
+### セクター検索
+
+```bash
+ticker sector
+ticker sector 輸送用機器
+ticker sector 情報・通信業 --format json
+```
+
+### ウォッチリスト
+
+```bash
+ticker watch add 7203 --name "トヨタ自動車"
+ticker watch list
+ticker watch remove 7203
+```
+
+### ポートフォリオ
+
+```bash
+ticker portfolio add 7203 100 2500 --broker SBI --account NISA
+ticker portfolio list --detail
+ticker portfolio sell 7203 50
+ticker portfolio sector
+```
+
+## 開発
+
+```bash
+poetry install
+poetry run pytest
+poetry run pyright blue_ticker/
+```
+
+アーキテクチャ、キャッシュ、XBRL解析の詳細は `docs/architecture-review.md` と `docs/xbrl-parsing.md` を参照してください。
+
+## 免責事項
 
 本ソフトウェアおよび提供される情報は、投資判断の参考として提供されるものであり、投資の勧誘を目的としたものではありません。最終的な投資判断は、必ず利用者ご自身の責任において行ってください。
 
 ---
-Developed with ❤️ by [sollahiro](https://github.com/sollahiro)
+
+Developed by [sollahiro](https://github.com/sollahiro)
