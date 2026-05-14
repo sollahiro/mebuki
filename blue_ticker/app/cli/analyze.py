@@ -375,26 +375,7 @@ async def cmd_filing(args):
             doc_id=doc_id or None,
             sections=sections or None,
         )
-        if args.format == "json":
-            print(json.dumps(result, indent=2, ensure_ascii=False))
-        else:
-            if result.get("doc_id"):
-                print(f"doc_id:      {result['doc_id']}", file=sys.stderr)
-            if result.get("fiscal_year"):
-                print(f"fiscal_year: {result['fiscal_year']}", file=sys.stderr)
-            if result.get("period_type"):
-                print(f"period_type: {result['period_type']}", file=sys.stderr)
-            if result.get("edinet_fy_end"):
-                print(f"fy_end:      {result['edinet_fy_end']}", file=sys.stderr)
-            secs = result.get("sections", {})
-            if not secs:
-                print("セクションデータが見つかりませんでした。", file=sys.stderr)
-                return
-            for sec_name, sec_text in secs.items():
-                print(f"\n[{sec_name}]", file=sys.stderr)
-                print("-" * 60, file=sys.stderr)
-                text = sec_text if isinstance(sec_text, str) else json.dumps(sec_text, ensure_ascii=False)
-                print(text[:2000] + ("..." if len(text) > 2000 else ""), file=sys.stderr)
+        print(json.dumps(result, indent=2, ensure_ascii=False))
     except ValueError as e:
         print(f"エラー: {e}", file=sys.stderr)
     except aiohttp.ClientError as e:

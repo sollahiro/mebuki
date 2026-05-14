@@ -70,25 +70,42 @@ class FilingService:
                 raise ValueError(f"No Securities Report found for {code}")
             doc = docs[0]
             selected_doc_id = doc["docID"]
+            raw_fy_end: str = doc.get("edinet_fy_end") or ""
             meta = {
-                "fiscal_year": doc.get("fiscal_year"),
-                "period_type": doc.get("period_type"),
-                "edinet_fy_end": doc.get("edinet_fy_end"),
+                "fy_end": raw_fy_end[:7] if raw_fy_end else None,
             }
 
         xbrl_dir = await self.edinet_client.download_document(selected_doc_id, 1)
         if not xbrl_dir:
             raise ValueError("Document not found or download failed")
 
-        parser = XBRLParser()
-        all_sections = parser.extract_sections_by_type(xbrl_dir)
-
         base = {"doc_id": selected_doc_id, **meta}
-        if "all" in requested_sections:
-            return {**base, "sections": all_sections}
+        extract_all = "all" in requested_sections
+        want_segments = "segments" in requested_sections or extract_all
+        want_geography = "geography" in requested_sections or extract_all
 
-        result = {}
-        for section in requested_sections:
-            if section in all_sections:
-                result[section] = all_sections[section]
+        result: dict[str, Any] = {}
+
+        if want_segments or want_geography:
+            from blue_ticker.analysis.segment_extractor import (
+                extract_segment_info,
+                extract_geography_info,
+            )
+            if want_segments:
+                result["segments"] = extract_segment_info(xbrl_dir)
+            if want_geography:
+                result["geography"] = extract_geography_info(xbrl_dir)
+
+        _AI_SECTIONS = {"segments", "geography", "all"}
+        non_ai = [s for s in requested_sections if s not in _AI_SECTIONS]
+        if extract_all or non_ai:
+            parser = XBRLParser()
+            all_sections = parser.extract_sections_by_type(xbrl_dir)
+            if extract_all:
+                result.update(all_sections)
+            else:
+                for s in non_ai:
+                    if s in all_sections:
+                        result[s] = all_sections[s]
+
         return {**base, "sections": result}
