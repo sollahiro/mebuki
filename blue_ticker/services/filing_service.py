@@ -55,8 +55,6 @@ class FilingService:
         sections: list[str] | None = None,
     ) -> dict[str, Any]:
         """EDINET書類からセクションを抽出"""
-        requested_sections = sections or ["all"]
-
         meta: dict[str, Any] = {}
         selected_doc_id = doc_id
         if not selected_doc_id:
@@ -80,9 +78,9 @@ class FilingService:
             raise ValueError("Document not found or download failed")
 
         base = {"doc_id": selected_doc_id, **meta}
-        extract_all = "all" in requested_sections
-        want_segments = "segments" in requested_sections or extract_all
-        want_geography = "geography" in requested_sections or extract_all
+        extract_all = sections is None
+        want_segments = sections is None or "segments" in sections
+        want_geography = sections is None or "geography" in sections
 
         result: dict[str, Any] = {}
 
@@ -96,15 +94,15 @@ class FilingService:
             if want_geography:
                 result["geography"] = extract_geography_info(xbrl_dir)
 
-        _AI_SECTIONS = {"segments", "geography", "all"}
-        non_ai = [s for s in requested_sections if s not in _AI_SECTIONS]
-        if extract_all or non_ai:
+        _SPECIAL_SECTIONS = {"segments", "geography"}
+        xbrl_sections = [s for s in (sections or []) if s not in _SPECIAL_SECTIONS]
+        if extract_all or xbrl_sections:
             parser = XBRLParser()
             all_sections = parser.extract_sections_by_type(xbrl_dir)
             if extract_all:
                 result.update(all_sections)
             else:
-                for s in non_ai:
+                for s in xbrl_sections:
                     if s in all_sections:
                         result[s] = all_sections[s]
 
