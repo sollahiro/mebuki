@@ -112,14 +112,14 @@ async def cmd_analyze(args):
                 ("売上高 (百万)",      lambda d: d.get("Sales")),
                 (gross_profit_label,   lambda d: d.get("GrossProfit")),
                 (gross_profit_margin_label, lambda d: d.get("GrossProfitMargin")),
+                ("販管費 (百万)",      lambda d: d.get("SellingGeneralAdministrativeExpenses")),
                 ("営業利益 (百万)",    lambda d: d.get("OP")),
                 ("営業利益率 (%)",     lambda d: d.get("OperatingMargin")),
-                ("販管費 (百万)",      lambda d: d.get("SellingGeneralAdministrativeExpenses")),
+                ("純利益 (百万)",      lambda d: d.get("NP")),
                 ("営業利益前年差",      lambda d: d.get("OperatingProfitChange")),
                 ("売上差影響",         lambda d: d.get("SalesChangeImpact")),
                 (gross_margin_change_label, lambda d: d.get("GrossMarginChangeImpact")),
                 ("販管費増影響",       lambda d: d.get("SGAChangeImpact")),
-                ("純利益 (百万)",      lambda d: d.get("NP")),
                 ("ROIC (%)",           lambda d: d.get("ROIC")),
                 ("営業CF (百万)",      lambda d: d.get("CFO")),
                 ("投資CF (百万)",      lambda d: d.get("CFI")),
@@ -213,6 +213,15 @@ async def cmd_analyze(args):
         def to_million(value):
             return value / MILLION_YEN if value is not None else None
 
+        def raw_value(period, key):
+            return (period.get("RawData") or {}).get(key)
+
+        def calculated_metric(getter):
+            return lambda period: getter(metric_view(period))
+
+        def raw_metric(key):
+            return lambda period: raw_value(period, key)
+
         # IFRS金融会社は純収益・事業利益ラベルを使う（最新年度のラベルで判定）
         latest_display_data = metric_view(periods[-1]) if periods else {}
         sales_label = latest_display_data.get("SalesLabel", "売上高") + " (百万)"
@@ -223,79 +232,54 @@ async def cmd_analyze(args):
         op_margin_label = latest_display_data.get("OPLabel", "営業利益") + "率 (%)"
 
         metrics_to_show = [
-            (sales_label,             lambda c: c.get("Sales")),
-            ("受注高 (百万)",          lambda c: c.get("OrderIntake")),
-            ("受注残高 (百万)",        lambda c: c.get("OrderBacklog")),
-            (gross_profit_label,       lambda c: c.get("GrossProfit")),
-            (gross_profit_margin_label, lambda c: c.get("GrossProfitMargin")),
-            (op_label,                lambda c: c.get("OP")),
-            (op_margin_label,         get_op_margin),
-            ("販管費 (百万)",          lambda c: c.get("SellingGeneralAdministrativeExpenses")),
-            ("営業利益前年差",          lambda c: c.get("OperatingProfitChange")),
-            ("売上差影響",             lambda c: c.get("SalesChangeImpact")),
-            (gross_margin_change_label, lambda c: c.get("GrossMarginChangeImpact")),
-            ("販管費増影響",           lambda c: c.get("SGAChangeImpact")),
-            ("純利益 (百万)",          lambda c: c.get("NP")),
-            ("ROE (%)",               lambda c: c.get("ROE")),
-            ("ROIC (%)",              lambda c: c.get("ROIC")),
-            ("総資産 (百万)",           lambda c: c.get("TotalAssets")),
-            ("流動資産 (百万)",         lambda c: c.get("CurrentAssets")),
-            ("固定資産 (百万)",         lambda c: c.get("NonCurrentAssets")),
-            ("流動負債 (百万)",         lambda c: c.get("CurrentLiabilities")),
-            ("固定負債 (百万)",         lambda c: c.get("NonCurrentLiabilities")),
-            ("純資産 (百万)",           lambda c: c.get("NetAssets")),
-            ("営業CF (百万)",          lambda c: c.get("CFO")),
-            ("投資CF (百万)",          lambda c: c.get("CFI")),
-            ("フリーCF (百万)",        lambda c: c.get("CFC")),
-            ("現金及び現金同等物 (百万)", lambda c: c.get("CashEq")),
-            ("減価償却費 (百万)",      lambda c: c.get("DepreciationAmortization")),
-            ("配当性向 (%)",           lambda c: c.get("PayoutRatio")),
-            # ── 税引前利益・実効税率 ──
-            ("実効税率 (%)",            lambda c: c.get("EffectiveTaxRate")),
-            # ── WACC（暫定: β=1.0, MRP=5.5%, Rf=10年国債利回り） ──
-            ("株主資本コスト (%)",      lambda c: c.get("CostOfEquity")),
-            ("負債コスト (%)",          lambda c: c.get("CostOfDebt")),
-            ("WACC (%)",               lambda c: c.get("WACC") if c.get("WACC") is not None else c.get("WACCLabel")),
-            # ── 有利子負債・支払利息 ──
-            ("有利子負債合計 (百万)",   lambda c: c.get("InterestBearingDebt")),
-            ("支払利息 (百万)",         lambda c: c.get("InterestExpense")),
-            ("投下資本 (百万)",         lambda c: (c.get("InterestBearingDebt") + c.get("NetAssets")) if c.get("InterestBearingDebt") is not None and c.get("NetAssets") is not None else None),
-            # ── 従業員数 ──
-            ("従業員数 (人)",           lambda c: c.get("Employees"),   "int"),
-            ("DocID",                  lambda c: c.get("DocID")),
+            (sales_label,             calculated_metric(lambda c: c.get("Sales"))),
+            ("受注高 (百万)",          calculated_metric(lambda c: c.get("OrderIntake"))),
+            ("受注残高 (百万)",        calculated_metric(lambda c: c.get("OrderBacklog"))),
+            (gross_profit_label,       calculated_metric(lambda c: c.get("GrossProfit"))),
+            (gross_profit_margin_label, calculated_metric(lambda c: c.get("GrossProfitMargin"))),
+            ("販管費 (百万)",          calculated_metric(lambda c: c.get("SellingGeneralAdministrativeExpenses"))),
+            (op_label,                calculated_metric(lambda c: c.get("OP"))),
+            (op_margin_label,         calculated_metric(get_op_margin)),
+            ("純利益 (百万)",          calculated_metric(lambda c: c.get("NP"))),
+            ("実効税率 (%)",            calculated_metric(lambda c: c.get("EffectiveTaxRate"))),
+            ("営業利益前年差",          calculated_metric(lambda c: c.get("OperatingProfitChange"))),
+            ("売上差影響",             calculated_metric(lambda c: c.get("SalesChangeImpact"))),
+            (gross_margin_change_label, calculated_metric(lambda c: c.get("GrossMarginChangeImpact"))),
+            ("販管費増影響",           calculated_metric(lambda c: c.get("SGAChangeImpact"))),
+            ("ROE (%)",               calculated_metric(lambda c: c.get("ROE"))),
+            ("ROIC (%)",              calculated_metric(lambda c: c.get("ROIC"))),
+            ("株主資本コスト (%)",      calculated_metric(lambda c: c.get("CostOfEquity"))),
+            ("負債コスト (%)",          calculated_metric(lambda c: c.get("CostOfDebt"))),
+            ("WACC (%)",               calculated_metric(lambda c: c.get("WACC") if c.get("WACC") is not None else c.get("WACCLabel"))),
+            ("投下資本 (百万)",         calculated_metric(lambda c: (c.get("InterestBearingDebt") + c.get("NetAssets")) if c.get("InterestBearingDebt") is not None and c.get("NetAssets") is not None else None)),
+            ("有利子負債合計 (百万)",   calculated_metric(lambda c: c.get("InterestBearingDebt"))),
+            ("支払利息 (百万)",         calculated_metric(lambda c: c.get("InterestExpense"))),
+            ("総資産 (百万)",           calculated_metric(lambda c: c.get("TotalAssets"))),
+            ("流動資産 (百万)",         calculated_metric(lambda c: c.get("CurrentAssets"))),
+            ("固定資産 (百万)",         calculated_metric(lambda c: c.get("NonCurrentAssets"))),
+            ("流動負債 (百万)",         calculated_metric(lambda c: c.get("CurrentLiabilities"))),
+            ("固定負債 (百万)",         calculated_metric(lambda c: c.get("NonCurrentLiabilities"))),
+            ("純資産 (百万)",           calculated_metric(lambda c: c.get("NetAssets"))),
+            ("現金及び現金同等物 (百万)", calculated_metric(lambda c: c.get("CashEq"))),
+            ("営業CF (百万)",          calculated_metric(lambda c: c.get("CFO"))),
+            ("投資CF (百万)",          calculated_metric(lambda c: c.get("CFI"))),
+            ("フリーCF (百万)",        calculated_metric(lambda c: c.get("CFC"))),
+            ("減価償却費 (百万)",      calculated_metric(lambda c: c.get("DepreciationAmortization"))),
+            ("EPS (円)",              raw_metric("EPS")),
+            ("BPS (円)",              raw_metric("BPS")),
+            ("年間配当 (円)",         raw_metric("DivAnn")),
+            ("中間配当 (円)",         raw_metric("Div2Q")),
+            ("年間配当総額 (百万)",   lambda p: to_million(raw_value(p, "DivTotalAnn"))),
+            ("配当性向 (%)",           calculated_metric(lambda c: c.get("PayoutRatio"))),
+            ("期末発行済株式数 (株)", raw_metric("ShOutFY"), "int"),
+            ("従業員数 (人)",           calculated_metric(lambda c: c.get("Employees")), "int"),
+            ("DocID",                  calculated_metric(lambda c: c.get("DocID"))),
         ]
 
         for metric_def in metrics_to_show:
             label, func = metric_def[0], metric_def[1]
             fmt_hint = metric_def[2] if len(metric_def) > 2 else None
-            values = [func(metric_view(p)) for p in periods]
-            if all(v is None for v in values):
-                continue
-            row = [label]
-            for val in values:
-                if val is None:
-                    row.append(f"{'-':>10}")
-                elif isinstance(val, str):
-                    row.append(f"{val:>10}")
-                elif fmt_hint == "int":
-                    row.append(f"{int(val):>10,}")
-                else:
-                    row.append(f"{val:>10.2f}")
-            print(row_format.format(*row), file=sys.stderr)
-
-        raw_metrics_to_show = [
-            ("EPS (円)",              lambda r: r.get("EPS")),
-            ("BPS (円)",              lambda r: r.get("BPS")),
-            ("期末発行済株式数 (株)", lambda r: r.get("ShOutFY"), "int"),
-            ("年間配当総額 (百万)",   lambda r: to_million(r.get("DivTotalAnn"))),
-            ("年間配当 (円)",         lambda r: r.get("DivAnn")),
-            ("中間配当 (円)",         lambda r: r.get("Div2Q")),
-        ]
-
-        for metric_def in raw_metrics_to_show:
-            label, func = metric_def[0], metric_def[1]
-            fmt_hint = metric_def[2] if len(metric_def) > 2 else None
-            values = [func(p.get("RawData", {})) for p in periods]
+            values = [func(p) for p in periods]
             if all(v is None for v in values):
                 continue
             row = [label]
