@@ -50,27 +50,15 @@ class TestXBRLParserRefactor(unittest.TestCase):
         # 旧ID 'D' が存在しないことを確認
         self.assertNotIn('D', sections)
 
-    def test_extract_mda_method(self):
-        """extract_mda メソッドが内部で 'mda' IDを使用しているかテスト"""
-        mda_text = self.parser.extract_mda(self.xbrl_path)
-        self.assertIsNotNone(mda_text)
-        self.assertIn('当連結会計年度の経営成績', mda_text)
-
     def test_section_order(self):
-        """定義順（business_risks -> mda -> capex...）でテキストが結合されるかテスト"""
-        full_text = self.parser.extract_text_from_xbrl(self.xbrl_path)
-        
-        # XBRL_SECTIONS の定義順
-        # business_risks
-        # mda
-        # capex_overview
-        # major_facilities
-        # facility_plans
-        
-        pos_risks = full_text.find("事業等のリスク")
-        pos_mda = full_text.find("経営者による財政状態")
-        pos_capex = full_text.find("設備投資等の概要")
-        
+        """定義順（business_risks -> mda -> capex...）でセクションが返されるかテスト"""
+        sections = self.parser.extract_sections_by_type(self.xbrl_path)
+        keys = [k for k, v in sections.items() if v]
+
+        pos_risks = keys.index("business_risks")
+        pos_mda = keys.index("mda")
+        pos_capex = keys.index("capex_overview")
+
         self.assertTrue(pos_risks < pos_mda < pos_capex, f"Order is wrong: risks({pos_risks}), mda({pos_mda}), capex({pos_capex})")
     
     def test_all_sections_presence(self):

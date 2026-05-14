@@ -2,15 +2,22 @@
 EDINET 書類検索・本文抽出サービス
 """
 
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from blue_ticker.api.edinet_client import EdinetAPIClient
+from blue_ticker.analysis.segment_extractor import extract_segment_info, extract_geography_info
 from blue_ticker.analysis.xbrl_parser import XBRLParser
 from blue_ticker.constants.xbrl import XBRL_SECTIONS
 
 from .edinet_fetcher import EdinetFetcher
 
-_SPECIAL_SECTIONS: frozenset[str] = frozenset({"segments", "geography"})
+_SECTION_EXTRACTORS: dict[str, Callable[[Path], Any]] = {
+    "segments": extract_segment_info,
+    "geography": extract_geography_info,
+}
+_SPECIAL_SECTIONS: frozenset[str] = frozenset(_SECTION_EXTRACTORS.keys())
 _VALID_SECTIONS: frozenset[str] = frozenset(XBRL_SECTIONS.keys()) | _SPECIAL_SECTIONS
 
 
@@ -88,20 +95,12 @@ class FilingService:
 
         base = {"doc_id": selected_doc_id, **meta}
         extract_all = sections is None
-        want_segments = sections is None or "segments" in sections
-        want_geography = sections is None or "geography" in sections
 
         result: dict[str, Any] = {}
 
-        if want_segments or want_geography:
-            from blue_ticker.analysis.segment_extractor import (
-                extract_segment_info,
-                extract_geography_info,
-            )
-            if want_segments:
-                result["segments"] = extract_segment_info(xbrl_dir)
-            if want_geography:
-                result["geography"] = extract_geography_info(xbrl_dir)
+        for section_id, extractor in _SECTION_EXTRACTORS.items():
+            if extract_all or section_id in sections:  # type: ignore[operator]
+                result[section_id] = extractor(xbrl_dir)
 
         xbrl_sections = [s for s in (sections or []) if s not in _SPECIAL_SECTIONS]
         if extract_all or xbrl_sections:

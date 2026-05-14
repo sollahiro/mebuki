@@ -31,11 +31,7 @@ logger = logging.getLogger(__name__)
 
 class XBRLParser:
     """XBRL解析クラス"""
-    
-    # セクション定義はconfig.pyのXBRL_SECTIONSを使用
-    # 後方互換性のためにクラス属性としてもエイリアスを定義
-    COMMON_SECTIONS = XBRL_SECTIONS
-    
+
     def __init__(self) -> None:
         """初期化"""
         if not BS4_AVAILABLE:
@@ -171,20 +167,6 @@ class XBRLParser:
         logger.warning(f"全HTMLファイルを探索しましたが、セクションが見つかりませんでした: {section_name}")
         return None
     
-    def extract_mda(self, xbrl_dir: Path) -> str | None:
-        """
-        経営者による財政状態、経営成績及びキャッシュ・フローの状況の分析（MD&A）を抽出
-
-        Args:
-            xbrl_dir: XBRL展開ディレクトリのパス
-
-        Returns:
-            MD&Aテキスト
-        """
-        sections = self.extract_sections_by_type(xbrl_dir)
-        return sections.get('mda')
-    
-    
     def _detect_report_type(self, xbrl_dir: Path) -> str:
         """
         報告書タイプを判定
@@ -273,8 +255,7 @@ class XBRLParser:
         if is_interim:
             logger.info(f"半期報告書として処理します。一部セクションがない場合があります: {xbrl_dir}")
         
-        # 共通セクション定義を使用
-        sections = self.COMMON_SECTIONS
+        sections = XBRL_SECTIONS
         logger.info(f"抽出対象セクション数: {len(sections)}")
         
         # XBRLインスタンス文書を検索
@@ -441,7 +422,7 @@ class XBRLParser:
                         adjusted_text = section_title + (' ' if adjusted_text else '') + adjusted_text
                     elif adjusted_text.startswith(section_title):
                         # 項目名の直後にスペースがない場合は追加
-                        if len(adjusted_text) > len(section_title) and adjusted_text[len(section_title)] not in [' ', '　', '】', '】']:
+                        if len(adjusted_text) > len(section_title) and adjusted_text[len(section_title)] not in [' ', '　', '】']:
                             adjusted_text = section_title + ' ' + adjusted_text[len(section_title):].lstrip()
             
             return adjusted_text.strip()
@@ -486,32 +467,5 @@ class XBRLParser:
         combined_text = combined_text.strip()
         
         return combined_text
-    
-    def extract_text_from_xbrl(self, xbrl_dir: Path, exclude_tables: bool = False) -> str:
-        """
-        XBRLディレクトリからテキストブロックを抽出（後方互換性のためのメソッド）
-        
-        注意: このメソッドは後方互換性のために残されています。
-        新しいコードでは extract_sections_by_type を使用してください。
-        
-        Args:
-            xbrl_dir: XBRLが展開されたディレクトリ
-            exclude_tables: 表を除外するかどうか（現在は無視されます）
-            
-        Returns:
-            抽出されたテキスト（全セクションを結合）
-        """
-        # 新しいメソッドを使用してセクションを抽出
-        sections = self.extract_sections_by_type(xbrl_dir)
-        
-        # セクションを定義順（XBRL_SECTIONS）で結合
-        section_order = list(sections.keys())
-        combined_texts = []
-        for section_id in section_order:
-            text = sections[section_id]
-            if text:
-                combined_texts.append(text)
-        
-        return '\n\n'.join(combined_texts)
     
 
