@@ -124,6 +124,8 @@ class CalculatedData(TypedDict, total=False):
     PretaxIncome: float | None
     IncomeTax: float | None
     EffectiveTaxRate: float | None
+    # ── analyzer.py: _apply_nopat ──
+    NOPAT: float | None
     # ── analyzer.py: _apply_operating_profit / _apply_net_revenue ──
     OperatingMargin: float | None
     OPLabel: str

@@ -18,7 +18,6 @@ from blue_ticker.constants.financial import (
     WACC_DEFAULT_BETA,
     WACC_LABEL_COST_OF_DEBT_OUT_OF_RANGE,
     WACC_LABEL_MISSING_INPUT,
-    WACC_LABEL_TAX_RATE_OUT_OF_RANGE,
     WACC_MARKET_RISK_PREMIUM,
     WACC_RF_FALLBACK,
 )
@@ -172,9 +171,6 @@ def calculate_wacc(
             return result
         if tc_pct is None:
             result["WACCLabel"] = WACC_LABEL_MISSING_INPUT
-            return result
-        if not (0 <= tc_pct <= 100):
-            result["WACCLabel"] = WACC_LABEL_TAX_RATE_OUT_OF_RANGE
             return result
         tc = tc_pct / PERCENT
         result["WACC"] = ((eq / v) * re_ + (d / v) * rd * (1 - tc)) * PERCENT

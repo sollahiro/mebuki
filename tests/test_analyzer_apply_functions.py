@@ -24,10 +24,10 @@ from blue_ticker.utils.metrics_types import YearEntry
 from blue_ticker.utils.metrics_access import metric_view
 from blue_ticker.constants.financial import (
     MILLION_YEN,
+    NOPAT_FALLBACK_TAX_RATE,
     PERCENT,
     WACC_DEFAULT_BETA,
     WACC_LABEL_MISSING_INPUT,
-    WACC_LABEL_TAX_RATE_OUT_OF_RANGE,
     WACC_MARKET_RISK_PREMIUM,
     WACC_RF_FALLBACK,
 )
@@ -553,8 +553,8 @@ class TestApplyWacc:
         assert cd["WACCLabel"] == WACC_LABEL_MISSING_INPUT
         assert cd["CostOfEquity"] == pytest.approx(self._RE)
 
-    def test_cost_of_debt_is_set_when_tax_rate_is_out_of_range(self):
-        """異常税率では WACC は出さないが、負債コストは IE / IBD で出す"""
+    def test_wacc_uses_fallback_tax_rate_when_out_of_range(self):
+        """異常税率（50%超）ではフォールバック税率（35%）でWACCを計算する"""
         years = [
             _make_year(
                 "2024-03-31",
@@ -566,9 +566,15 @@ class TestApplyWacc:
         ]
         _apply_wacc(years, {})
         cd = years[0]["CalculatedData"]
+        rf = WACC_RF_FALLBACK
+        re_ = rf + WACC_DEFAULT_BETA * WACC_MARKET_RISK_PREMIUM
+        rd = 5.0 / 200.0
+        tc = NOPAT_FALLBACK_TAX_RATE
+        v = 800.0 + 200.0
+        expected_wacc = ((800.0 / v) * re_ + (200.0 / v) * rd * (1 - tc)) * PERCENT
         assert cd["CostOfDebt"] == pytest.approx(2.5)
-        assert cd["WACC"] is None
-        assert cd["WACCLabel"] == WACC_LABEL_TAX_RATE_OUT_OF_RANGE
+        assert cd["WACC"] == pytest.approx(expected_wacc)
+        assert cd["WACCLabel"] is None
 
     def test_applies_to_multiple_years(self):
         years = [_make_year("2024-03-31", NetAssets=800.0), _make_year("2023-03-31", NetAssets=700.0)]

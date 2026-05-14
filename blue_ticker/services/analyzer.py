@@ -12,7 +12,7 @@ from collections.abc import Callable
 
 from blue_ticker.api.edinet_client import EdinetAPIClient
 from blue_ticker.infrastructure.settings import settings_store
-from blue_ticker.constants.financial import PERCENT, MILLION_YEN
+from blue_ticker.constants.financial import PERCENT, MILLION_YEN, NOPAT_FALLBACK_TAX_RATE, NOPAT_MIN_NORMAL_TAX_RATE, NOPAT_MAX_NORMAL_TAX_RATE
 from blue_ticker.analysis.calculator import calculate_metrics_flexible
 from blue_ticker.utils.cache import CacheManager
 from blue_ticker.utils.cache_paths import edinet_cache_dir
@@ -559,6 +559,32 @@ def _apply_order_book(
             )
 
 
+def _resolve_tax_rate(cd: CalculatedData) -> tuple[float, bool]:
+    """EffectiveTaxRate から計算用の税率（小数）を返す。
+
+    0-50% の範囲内なら実績値を、範囲外または未取得なら NOPAT_FALLBACK_TAX_RATE を返す。
+    Returns: (rate_as_decimal, is_fallback)
+    """
+    rate_pct = cd.get("EffectiveTaxRate")
+    if rate_pct is not None:
+        rate = rate_pct / PERCENT
+        if NOPAT_MIN_NORMAL_TAX_RATE <= rate <= NOPAT_MAX_NORMAL_TAX_RATE:
+            return rate, False
+    return NOPAT_FALLBACK_TAX_RATE, True
+
+
+def _apply_nopat(years: list[YearEntry]) -> None:
+    for year in years:
+        cd = year["CalculatedData"]
+        op_m = _year_metric_float(year, "OP")
+        if op_m is None:
+            continue
+        tax_rate, is_fallback = _resolve_tax_rate(cd)
+        method = f"OP × (1 - {int(NOPAT_FALLBACK_TAX_RATE * PERCENT)}%_fallback)" if is_fallback else "OP × (1 - income_tax / pretax_income)"
+        cd["NOPAT"] = op_m * (1 - tax_rate)
+        _set_metric_source(cd, "NOPAT", source="derived", unit="million_yen", method=method)
+
+
 _METRIC_APPLIERS: list[Callable[[list[YearEntry], dict[str, RawXbrlExtraction]], None]] = [
     _apply_ibd,
     _apply_balance_sheet,
@@ -578,11 +604,12 @@ def _apply_wacc(years: list[YearEntry], rf_rates: dict[str, float]) -> None:
         cd = year["CalculatedData"]
         fy_end = year.get("fy_end") or ""
         rf, rf_source = resolve_rf_for_date(rf_rates, fy_end)
+        tax_rate, _ = _resolve_tax_rate(cd)
         wacc = calculate_wacc(
             eq=_year_metric_float(year, "NetAssets"),
             ibd=cd.get("InterestBearingDebt"),
             ie=cd.get("InterestExpense"),
-            tc_pct=cd.get("EffectiveTaxRate"),
+            tc_pct=tax_rate * PERCENT,
             rf=rf,
         )
         cost_of_equity = wacc["CostOfEquity"]
@@ -713,6 +740,7 @@ class IndividualAnalyzer:
 
         apply_operating_profit_change_from_xbrl(years, all_metrics.get("gp", {}), all_metrics.get("op", {}))
         apply_operating_profit_change_to_years(years)
+        _apply_nopat(years)
         _apply_wacc(years, load_rf_rates(settings_store.cache_dir))
 
         return {

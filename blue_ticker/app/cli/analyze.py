@@ -242,6 +242,7 @@ async def cmd_analyze(args):
             (op_margin_label,         calculated_metric(get_op_margin)),
             ("純利益 (百万)",          calculated_metric(lambda c: c.get("NP"))),
             ("実効税率 (%)",            calculated_metric(lambda c: c.get("EffectiveTaxRate"))),
+            ("NOPAT (百万)",           calculated_metric(lambda c: c.get("NOPAT"))),
             ("営業利益前年差",          calculated_metric(lambda c: c.get("OperatingProfitChange"))),
             ("売上差影響",             calculated_metric(lambda c: c.get("SalesChangeImpact"))),
             (gross_margin_change_label, calculated_metric(lambda c: c.get("GrossMarginChangeImpact"))),
