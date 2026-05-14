@@ -136,7 +136,11 @@ XBRL_SECTIONS: dict[str, _XBRLSection] = {
     'facility_plans': {
         'title': '設備の新設、除却等の計画',
         'xbrl_elements': ['PlannedAdditionsRetirementsEtcOfFacilitiesTextBlock']
-    }
+    },
+    'research_and_development': {
+        'title': '研究開発活動',
+        'xbrl_elements': ['ResearchAndDevelopmentActivitiesTextBlock']
+    },
 }
 
 # 貸借対照表（BS）タグ定義

@@ -6,8 +6,12 @@ from typing import Any
 
 from blue_ticker.api.edinet_client import EdinetAPIClient
 from blue_ticker.analysis.xbrl_parser import XBRLParser
+from blue_ticker.constants.xbrl import XBRL_SECTIONS
 
 from .edinet_fetcher import EdinetFetcher
+
+_SPECIAL_SECTIONS: frozenset[str] = frozenset({"segments", "geography"})
+_VALID_SECTIONS: frozenset[str] = frozenset(XBRL_SECTIONS.keys()) | _SPECIAL_SECTIONS
 
 
 class FilingService:
@@ -55,6 +59,11 @@ class FilingService:
         sections: list[str] | None = None,
     ) -> dict[str, Any]:
         """EDINET書類からセクションを抽出"""
+        if sections is not None:
+            unknown = [s for s in sections if s not in _VALID_SECTIONS]
+            if unknown:
+                raise ValueError(f"Unknown section(s): {unknown}. Valid: {sorted(_VALID_SECTIONS)}")
+
         meta: dict[str, Any] = {}
         selected_doc_id = doc_id
         if not selected_doc_id:
@@ -94,16 +103,15 @@ class FilingService:
             if want_geography:
                 result["geography"] = extract_geography_info(xbrl_dir)
 
-        _SPECIAL_SECTIONS = {"segments", "geography"}
         xbrl_sections = [s for s in (sections or []) if s not in _SPECIAL_SECTIONS]
         if extract_all or xbrl_sections:
             parser = XBRLParser()
             all_sections = parser.extract_sections_by_type(xbrl_dir)
             if extract_all:
-                result.update(all_sections)
+                result.update({k: v for k, v in all_sections.items() if v})
             else:
                 for s in xbrl_sections:
-                    if s in all_sections:
+                    if all_sections.get(s):
                         result[s] = all_sections[s]
 
         return {**base, "sections": result}
