@@ -49,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     filing_parser.add_argument("code", help="銘柄コード")
     filing_parser.add_argument("--doc-id", dest="doc_id", help="書類ID (省略時は最新の有価証券報告書)")
     filing_parser.add_argument("--sections", nargs="+", help="抽出するセクション名 (複数指定可)")
+    filing_parser.add_argument("--format", choices=["json"], default="json", help="出力形式")
 
     # config
     config_parser = subparsers.add_parser("config", help="設定の表示・変更")
