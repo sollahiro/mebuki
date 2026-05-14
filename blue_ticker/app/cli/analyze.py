@@ -4,11 +4,10 @@ import logging
 from collections.abc import Mapping
 import aiohttp
 from blue_ticker.infrastructure.helpers import validate_stock_code
-from blue_ticker.infrastructure.settings import settings_store
 from blue_ticker.services.master_data import master_data_manager
 from blue_ticker.utils.converters import extract_year_month
 from blue_ticker.utils.metrics_access import metric_view
-from blue_ticker.constants.api import EDINET_FILINGS_DEFAULT_YEARS
+from blue_ticker.constants.api import ANALYZE_DEFAULT_YEARS, EDINET_FILINGS_DEFAULT_YEARS
 from blue_ticker.constants.financial import MILLION_YEN
 
 logger = logging.getLogger(__name__)
@@ -157,7 +156,7 @@ async def cmd_analyze(args):
             return
 
         # 分析年数の決定
-        years_to_analyze = requested_years or settings_store.analysis_years
+        years_to_analyze = requested_years or ANALYZE_DEFAULT_YEARS
 
         print(f"\n分析中: {code} {info['name']} ({info['market_name']}) ...", file=sys.stderr)
         years_label = f"直近 {years_to_analyze} 年分" if years_to_analyze else "全期間"

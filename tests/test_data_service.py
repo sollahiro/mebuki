@@ -27,7 +27,6 @@ def svc(tmp_path):
         mock_settings.edinet_api_key = ""
         mock_settings.cache_dir = str(tmp_path)
         mock_settings.cache_enabled = True
-        mock_settings.analysis_years = 5
 
         from blue_ticker.services.data_service import DataService
         ds = DataService()

@@ -15,10 +15,6 @@ from blue_ticker.app.cli import cmd_analyze
 
 
 def test_cmd_analyze_multi_year():
-    # Mock settings
-    mock_settings = MagicMock()
-    mock_settings.analysis_years = 5
-
     # Mock args
     class MockArgs:
         code = "7203"
@@ -63,7 +59,6 @@ def test_cmd_analyze_multi_year():
     with (
         patch("blue_ticker.services.data_service.data_service.fetch_stock_basic_info") as mock_info,
         patch("blue_ticker.services.data_service.data_service.get_raw_analysis_data") as mock_get_data,
-        patch("blue_ticker.app.cli.analyze.settings_store", mock_settings),
     ):
         mock_info.return_value = {"name": "トヨタ自動車", "market_name": "プライム"}
         mock_get_data.return_value = mock_result
@@ -72,9 +67,6 @@ def test_cmd_analyze_multi_year():
 
 
 def test_cmd_analyze_table_shows_net_profit_and_cash_equivalents(capsys):
-    mock_settings = MagicMock()
-    mock_settings.analysis_years = 5
-
     class MockArgs:
         code = "7203"
         years = 1
@@ -142,7 +134,6 @@ def test_cmd_analyze_table_shows_net_profit_and_cash_equivalents(capsys):
         patch("blue_ticker.services.data_service.data_service.fetch_stock_basic_info") as mock_info,
         patch("blue_ticker.services.data_service.data_service.get_raw_analysis_data") as mock_get_data,
         patch("blue_ticker.services.data_service.data_service.close", new_callable=AsyncMock),
-        patch("blue_ticker.app.cli.analyze.settings_store", mock_settings),
     ):
         mock_info.return_value = {"name": "トヨタ自動車", "market_name": "プライム"}
         mock_get_data.return_value = mock_result

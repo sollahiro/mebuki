@@ -38,22 +38,15 @@ def cmd_config(args, parser):
         key_map = {
             "edinetApiKey": "edinetApiKey",
             "edinet-key": "edinetApiKey",
-            "years": "analysisYears",
-            "analysisYears": "analysisYears",
         }
 
         raw_key: str = args.key or ""
-        target_key: str = key_map.get(raw_key, raw_key)
+        if raw_key not in key_map:
+            allowed = ", ".join(sorted(set(key_map.values())))
+            print(f"エラー: 不明な設定キー '{raw_key}'。使用可能なキー: {allowed}", file=sys.stderr)
+            return
+        target_key: str = key_map[raw_key]
         target_value = args.value
-
-        if target_key == "analysisYears":
-            try:
-                target_value = int(target_value)
-                if target_value <= 0:
-                    raise ValueError
-            except ValueError:
-                print("エラー: years には正の整数を指定してください。", file=sys.stderr)
-                return
 
         settings_store.update({target_key: target_value}, save=True)
         print(f"設定を更新しました: {target_key}", file=sys.stderr)

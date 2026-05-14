@@ -36,7 +36,6 @@ class SettingsStore:
 
         self._settings: dict[str, Any] = {
             "edinetApiKey": "",
-            "analysisYears": 6,
             "cacheDir": str(cache_dir),
             "cacheEnabled": True,
         }
@@ -64,13 +63,6 @@ class SettingsStore:
             for key in ["edinetApiKey"]:
                 if key in config_data:
                     self._settings[key] = config_data[key]
-
-            if "analysisYears" in config_data:
-                val = config_data["analysisYears"]
-                if isinstance(val, int) and val > 0:
-                    self._settings["analysisYears"] = val
-                else:
-                    logger.warning(f"analysisYears の値が不正です ({val!r})。デフォルト値 {self._settings['analysisYears']} を使用します。")
 
             if "cacheEnabled" in config_data:
                 val = config_data["cacheEnabled"]
@@ -207,15 +199,6 @@ class SettingsStore:
 
         return None
     
-    @property
-    def analysis_years(self) -> int | None:
-        """分析年数を取得"""
-        val = self._settings.get("analysisYears")
-        try:
-            return int(val) if val is not None else None
-        except (ValueError, TypeError):
-            return None
-
     @property
     def cache_dir(self) -> str:
         return self._settings.get("cacheDir", "cache")

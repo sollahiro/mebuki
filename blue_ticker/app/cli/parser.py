@@ -1,6 +1,6 @@
 import argparse
 from blue_ticker import __version__
-from blue_ticker.constants.api import EDINET_FILINGS_DEFAULT_YEARS, EDINET_PREPARE_DEFAULT_YEARS
+from blue_ticker.constants.api import ANALYZE_DEFAULT_YEARS, EDINET_FILINGS_DEFAULT_YEARS, EDINET_PREPARE_DEFAULT_YEARS
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -17,7 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
     # analyze
     analyze_parser = subparsers.add_parser("analyze", help="銘柄を分析")
     analyze_parser.add_argument("code", help="銘柄コード")
-    analyze_parser.add_argument("--years", type=int, help="分析年数（未指定時は設定値、初期値: 6）")
+    analyze_parser.add_argument("--years", type=int, help=f"分析年数（デフォルト: {ANALYZE_DEFAULT_YEARS}）")
     analyze_parser.add_argument("--format", choices=["table", "json"], default="json", help="出力形式")
     analyze_parser.add_argument(
         "--no-cache",
@@ -56,7 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
     config_sub = config_parser.add_subparsers(dest="config_subcommand", help="設定サブコマンド")
     config_sub.add_parser("show", help="設定を表示")
     set_parser = config_sub.add_parser("set", help="値を設定")
-    set_parser.add_argument("key", help="設定キー (edinet-key, years 等)")
+    set_parser.add_argument("key", help="設定キー (edinet-key 等)")
     set_parser.add_argument("value", help="設定値")
     config_sub.add_parser("init", help="対話形式で初期設定")
     config_sub.add_parser("check", help="API設定の確認")
