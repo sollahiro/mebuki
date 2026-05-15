@@ -1,0 +1,71 @@
+"""
+有形固定資産（PPE）XBRL抽出モジュール
+
+BalanceSheetSection（FieldSet を内包）から帳簿価額を抽出する。
+
+抽出項目:
+  建物及び構築物 / 土地 / 機械装置及び運搬具 / 工具器具及び備品 / 建設仮勘定 / 合計
+  その他 = 合計 − 抽出5項目の合計
+
+会計基準別タグ優先順:
+  IFRS  : *IFRS サフィックス付きタグ（帳簿価額）
+  J-GAAP: *Net サフィックス付きタグ（帳簿価額）。土地・建設仮勘定は Net なし
+  US-GAAP: 合計のみ（個別内訳はタグ不足のため None）
+"""
+
+from blue_ticker.analysis.sections import BalanceSheetSection
+from blue_ticker.constants.xbrl import (
+    PPE_BUILDINGS_TAGS,
+    PPE_CONSTRUCTION_TAGS,
+    PPE_LAND_TAGS,
+    PPE_MACHINERY_TAGS,
+    PPE_TOOLS_TAGS,
+    PPE_TOTAL_TAGS,
+)
+from blue_ticker.utils.xbrl_result_types import TangibleFixedAssetsResult
+
+
+def extract_tangible_fixed_assets(section: BalanceSheetSection) -> TangibleFixedAssetsResult:
+    """貸借対照表セクションから有形固定資産の帳簿価額を抽出する。"""
+    accounting_standard = section.accounting_standard
+
+    total_item = section.resolve(PPE_TOTAL_TAGS)
+    if total_item["tag"] is None:
+        return {
+            "buildings": None,
+            "land": None,
+            "machinery": None,
+            "tools": None,
+            "construction_in_progress": None,
+            "others": None,
+            "total": None,
+            "method": "not_found",
+            "accounting_standard": accounting_standard,
+            "reason": "有形固定資産タグが見つからない",
+        }
+
+    total = total_item["current"]
+
+    buildings = section.resolve(PPE_BUILDINGS_TAGS)["current"]
+    land = section.resolve(PPE_LAND_TAGS)["current"]
+    machinery = section.resolve(PPE_MACHINERY_TAGS)["current"]
+    tools = section.resolve(PPE_TOOLS_TAGS)["current"]
+    construction = section.resolve(PPE_CONSTRUCTION_TAGS)["current"]
+
+    if total is not None:
+        known_sum = sum(v for v in (buildings, land, machinery, tools, construction) if v is not None)
+        others: float | None = total - known_sum
+    else:
+        others = None
+
+    return {
+        "buildings": buildings,
+        "land": land,
+        "machinery": machinery,
+        "tools": tools,
+        "construction_in_progress": construction,
+        "others": others,
+        "total": total,
+        "method": "field_parser",
+        "accounting_standard": accounting_standard,
+    }

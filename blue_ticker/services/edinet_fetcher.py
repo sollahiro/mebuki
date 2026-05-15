@@ -33,6 +33,7 @@ from blue_ticker.analysis.interest_expense import extract_interest_expense
 from blue_ticker.analysis.net_revenue import extract_net_revenue
 from blue_ticker.analysis.operating_profit import extract_operating_profit
 from blue_ticker.analysis.order_book import extract_order_book
+from blue_ticker.analysis.tangible_fixed_assets import extract_tangible_fixed_assets
 from blue_ticker.analysis.sections import (
     BalanceSheetSection,
     CashFlowSection,
@@ -180,6 +181,7 @@ _extract_cf_compat = _make_section_wrapper(CashFlowSection, extract_cash_flow)
 _extract_da_compat = _make_section_wrapper(CashFlowSection, extract_depreciation)
 _extract_bs_compat = _make_section_wrapper(BalanceSheetSection, extract_balance_sheet)
 _extract_ibd_compat = _make_section_wrapper(BalanceSheetSection, extract_interest_bearing_debt)
+_extract_ppe_compat = _make_section_wrapper(BalanceSheetSection, extract_tangible_fixed_assets)
 
 
 _SHAREHOLDER_CALCULATION_FIELDS: tuple[str, ...] = (
@@ -539,6 +541,12 @@ class ExtractorSpec:
 
 _EXTRACTOR_SPECS: list[ExtractorSpec] = [
     ExtractorSpec("ibd", "IBD", _extract_ibd_compat),
+    ExtractorSpec(
+        "ppe",
+        "PPE",
+        _extract_ppe_compat,
+        result_check=lambda r: r.get("total") is not None,
+    ),
     ExtractorSpec(
         "bs",
         "BS",

@@ -795,3 +795,38 @@ IBD_IFRS_NCL_TAGS: list[str] = [
     "BondsAndBorrowingsNCLIFRS",
     "BondsBorrowingsAndLeaseLiabilitiesNCLIFRS",
 ]
+
+# 有形固定資産（PPE）タグ定義
+# analysis/tangible_fixed_assets.py で使用
+
+PPE_TOTAL_TAGS: list[str] = [
+    "PropertyPlantAndEquipmentIFRS",   # IFRS（連結）
+    "PropertyPlantAndEquipment",        # J-GAAP（連結・帳簿価額合計）
+    "PropertyPlantAndEquipmentNetUSGAAP",  # US-GAAP
+    "PropertyPlantAndEquipmentUSGAAP",     # US-GAAP 代替
+]
+
+PPE_BUILDINGS_TAGS: list[str] = [
+    "BuildingsAndStructuresIFRS",   # IFRS（帳簿価額）
+    "BuildingsAndStructuresNet",     # J-GAAP（帳簿価額）
+]
+
+PPE_LAND_TAGS: list[str] = [
+    "LandIFRS",    # IFRS（帳簿価額）
+    "Land",        # J-GAAP（減価償却なし。取得原価＝帳簿価額）
+]
+
+PPE_MACHINERY_TAGS: list[str] = [
+    "MachineryAndVehiclesIFRS",       # IFRS（帳簿価額）
+    "MachineryEquipmentAndVehiclesNet",  # J-GAAP（帳簿価額）
+]
+
+PPE_TOOLS_TAGS: list[str] = [
+    "ToolsFurnitureAndFixturesIFRS",  # IFRS（帳簿価額）
+    "ToolsFurnitureAndFixturesNet",    # J-GAAP（帳簿価額）
+]
+
+PPE_CONSTRUCTION_TAGS: list[str] = [
+    "ConstructionInProgressIFRS",  # IFRS（帳簿価額）
+    "ConstructionInProgress",       # J-GAAP（建設仮勘定は減価償却なし）
+]

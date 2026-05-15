@@ -62,6 +62,12 @@ from blue_ticker.constants.xbrl import (
     OPERATING_REVENUE_TAGS,
     ORDINARY_INCOME_TAGS,
     ORDINARY_REVENUE_TAGS,
+    PPE_BUILDINGS_TAGS,
+    PPE_CONSTRUCTION_TAGS,
+    PPE_LAND_TAGS,
+    PPE_MACHINERY_TAGS,
+    PPE_TOOLS_TAGS,
+    PPE_TOTAL_TAGS,
     PRETAX_INCOME_IFRS_TAGS,
     PRETAX_INCOME_JGAAP_TAGS,
     SGA_DIRECT_TAGS,
@@ -224,6 +230,12 @@ def _bs_all_tags() -> frozenset[str]:
     tags += USGAAP_MARKER_TAGS
     for group in USGAAP_XBRL_NCA_COMPONENTS:
         tags.extend(group)
+    tags += PPE_TOTAL_TAGS
+    tags += PPE_BUILDINGS_TAGS
+    tags += PPE_LAND_TAGS
+    tags += PPE_MACHINERY_TAGS
+    tags += PPE_TOOLS_TAGS
+    tags += PPE_CONSTRUCTION_TAGS
     return frozenset(tags)
 
 

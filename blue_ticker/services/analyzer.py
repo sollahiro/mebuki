@@ -208,6 +208,20 @@ def _raw_by_year(all_metrics: dict[str, dict[str, Any]]) -> dict[str, RawXbrlExt
         raw["order_backlog"] = ob.get("order_backlog")
         raw["order_book_method"] = str(ob.get("method", "unknown"))
 
+    for fy_end_key, ppe in all_metrics.get("ppe", {}).items():
+        raw = raw_for(fy_end_key)
+        if (doc_id := _metric_doc_id(ppe)) is not None and "doc_id" not in raw:
+            raw["doc_id"] = doc_id
+        raw["ppe_buildings"] = ppe.get("buildings")
+        raw["ppe_land"] = ppe.get("land")
+        raw["ppe_machinery"] = ppe.get("machinery")
+        raw["ppe_tools"] = ppe.get("tools")
+        raw["ppe_construction_in_progress"] = ppe.get("construction_in_progress")
+        raw["ppe_others"] = ppe.get("others")
+        raw["ppe_total"] = ppe.get("total")
+        raw["ppe_method"] = str(ppe.get("method", "unknown"))
+        raw["ppe_accounting_standard"] = str(ppe.get("accounting_standard", "unknown"))
+
     return by_year
 
 
@@ -324,6 +338,33 @@ def _apply_balance_sheet(
             for c in raw.get("balance_sheet_components", [])
         ]
         cd["BalanceSheetAccountingStandard"] = raw.get("balance_sheet_accounting_standard", "unknown")
+
+
+def _apply_ppe(
+    years: list[YearEntry],
+    raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
+) -> None:
+    raw_by_year = _ensure_raw_by_year("ppe", raw_by_year)
+    for year in years:
+        fy_end_key = _fy_end_key(year)
+        raw = raw_by_year.get(fy_end_key, {})
+        ppe_total = raw.get("ppe_total")
+        if ppe_total is None:
+            continue
+        cd = year["CalculatedData"]
+        cd["PPETotal"] = ppe_total / MILLION_YEN
+        cd["PPEAccountingStandard"] = raw.get("ppe_accounting_standard", "unknown")
+        _set_metric_source(cd, "PPETotal", source="edinet", unit="million_yen", method=raw.get("ppe_method"), doc_id=raw.get("doc_id"))
+        for raw_key, cd_key in (
+            ("ppe_buildings", "PPEBuildings"),
+            ("ppe_land", "PPELand"),
+            ("ppe_machinery", "PPEMachinery"),
+            ("ppe_tools", "PPETools"),
+            ("ppe_construction_in_progress", "PPEConstructionInProgress"),
+            ("ppe_others", "PPEOthers"),
+        ):
+            v = raw.get(raw_key)
+            cd[cd_key] = v / MILLION_YEN if v is not None else None
 
 
 def _apply_interest_expense(
@@ -604,6 +645,7 @@ def _apply_roic(years: list[YearEntry]) -> None:
 _METRIC_APPLIERS: list[Callable[[list[YearEntry], dict[str, RawXbrlExtraction]], None]] = [
     _apply_ibd,
     _apply_balance_sheet,
+    _apply_ppe,
     _apply_interest_expense,
     _apply_tax,
     _apply_gross_profit,
