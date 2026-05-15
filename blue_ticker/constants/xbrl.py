@@ -827,6 +827,12 @@ PPE_MACHINERY_JGAAP_DIRECT: list[str] = ["MachineryEquipmentAndVehiclesNet"]
 PPE_TOOLS_JGAAP_DIRECT: list[str] = ["ToolsFurnitureAndFixturesNet"]
 PPE_CONSTRUCTION_JGAAP_DIRECT: list[str] = ["ConstructionInProgress"]
 
+# US-GAAP 専用合計タグ（内訳は未サポート）
+PPE_TAGS_USGAAP_TOTAL: list[str] = [
+    "PropertyPlantAndEquipmentNetUSGAAP",
+    "PropertyPlantAndEquipmentUSGAAP",
+]
+
 # 取得原価 - 累計減価償却・減損 による帳簿価額差引計算用（IFRS 直接タグが存在しない場合のフォールバック）
 PPE_TOTAL_COST_TAGS: list[str] = ["PropertyPlantAndEquipmentAcquisitionCostIFRS"]
 PPE_TOTAL_DEP_TAGS: list[str] = ["PropertyPlantAndEquipmentAccumulatedDepreciationAndImpairmentLossesIFRS"]
