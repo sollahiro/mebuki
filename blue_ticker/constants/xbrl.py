@@ -828,7 +828,9 @@ PPE_TOOLS_JGAAP_DIRECT: list[str] = ["ToolsFurnitureAndFixturesNet"]
 PPE_CONSTRUCTION_JGAAP_DIRECT: list[str] = ["ConstructionInProgress"]
 
 # US-GAAP 専用合計タグ（内訳は未サポート）
+# USGAAP_HTML_PPENet は parse_usgaap_html_bs_fields が HTML 連結貸借対照表から生成する仮想タグ
 PPE_TAGS_USGAAP_TOTAL: list[str] = [
+    "USGAAP_HTML_PPENet",
     "PropertyPlantAndEquipmentNetUSGAAP",
     "PropertyPlantAndEquipmentUSGAAP",
 ]

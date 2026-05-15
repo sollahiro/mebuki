@@ -419,10 +419,16 @@ def parse_usgaap_html_bs_fields(xbrl_dir: Path) -> FieldSet:
 
 
 def _find_html_by_prefix(xbrl_dir: Path, prefix: str) -> Path | None:
-    for ext in ("*.htm", "*.html"):
-        files = [f for f in xbrl_dir.glob(ext) if f.name.startswith(prefix)]
-        if files:
-            return files[0]
+    # xbrl_dir が PublicDoc 相当のディレクトリの場合と、
+    # そのルート（S100XXXX_xbrl）が渡される場合の両方に対応する
+    candidates = [xbrl_dir, xbrl_dir / "XBRL" / "PublicDoc"]
+    for search_dir in candidates:
+        if not search_dir.is_dir():
+            continue
+        for ext in ("*.htm", "*.html"):
+            files = [f for f in search_dir.glob(ext) if f.name.startswith(prefix)]
+            if files:
+                return files[0]
     return None
 
 
