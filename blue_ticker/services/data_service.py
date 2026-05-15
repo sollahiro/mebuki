@@ -172,7 +172,7 @@ class DataService:
             enabled=settings_store.cache_enabled,
         )
         self.company_info_service = CompanyInfoService()
-        self.filing_service = FilingService(self.edinet_client)
+        self.filing_service = FilingService(self.edinet_client, self.cache_manager)
         self.half_year_data_service = HalfYearDataService(
             self.edinet_client,
             self.cache_manager,
@@ -181,6 +181,7 @@ class DataService:
     def _sync_child_services(self) -> None:
         """テストや再初期化で差し替えられた共有依存を委譲先にも反映する。"""
         self.filing_service.edinet_client = self.edinet_client
+        self.filing_service.cache_manager = self.cache_manager
         self.half_year_data_service.edinet_client = self.edinet_client
         self.half_year_data_service.cache_manager = self.cache_manager
 
@@ -196,7 +197,7 @@ class DataService:
 
         self.cache_manager.set_cache_dir(settings_store.cache_dir)
         self.cache_manager.enabled = settings_store.cache_enabled
-        self.filing_service = FilingService(self.edinet_client)
+        self.filing_service = FilingService(self.edinet_client, self.cache_manager)
         self.half_year_data_service = HalfYearDataService(
             self.edinet_client,
             self.cache_manager,

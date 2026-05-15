@@ -75,6 +75,8 @@ class CacheManager:
             return self.data_dir / "document_discovery"
         if key.startswith("xbrl_parsed_"):
             return self.data_dir / "xbrl_numeric_index"
+        if key.startswith("xbrl_sections_"):
+            return self.data_dir / "xbrl_sections"
         if key.startswith("mof_"):
             return self.data_dir / "mof"
         return self.data_dir / "misc"

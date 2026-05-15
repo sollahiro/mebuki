@@ -2,16 +2,22 @@
 EDINET 書類検索・本文抽出サービス
 """
 
+import asyncio
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from blue_ticker import __version__
 from blue_ticker.api.edinet_client import EdinetAPIClient
 from blue_ticker.analysis.segment_extractor import extract_segment_info, extract_geography_info
 from blue_ticker.analysis.xbrl_parser import XBRLParser
 from blue_ticker.constants.xbrl import XBRL_SECTIONS
+from blue_ticker.utils.cache import CacheManager
 
 from .edinet_fetcher import EdinetFetcher
+
+_CACHE_VERSION = __version__
+_XBRL_SECTIONS_CACHE_PREFIX = "xbrl_sections_"
 
 _SECTION_EXTRACTORS: dict[str, Callable[[Path], Any]] = {
     "segments": extract_segment_info,
@@ -24,8 +30,9 @@ _VALID_SECTIONS: frozenset[str] = frozenset(XBRL_SECTIONS.keys()) | _SPECIAL_SEC
 class FilingService:
     """EDINET filing の検索と XBRL セクション抽出を担当するサービス"""
 
-    def __init__(self, edinet_client: EdinetAPIClient) -> None:
+    def __init__(self, edinet_client: EdinetAPIClient, cache_manager: CacheManager | None = None) -> None:
         self.edinet_client = edinet_client
+        self.cache_manager = cache_manager
 
     async def search_filings(
         self,
@@ -37,12 +44,20 @@ class FilingService:
         """EDINET書類を検索"""
         edinet_fetcher = EdinetFetcher(self.edinet_client)
         requested = set(doc_types or [])
-        docs: list[dict[str, Any]] = []
 
-        if not requested or requested.intersection({"120", "130"}):
-            docs.extend(await edinet_fetcher._search_edinet_annual_docs(code, max_years))
-        if not requested or requested.intersection({"140", "160"}):
-            docs.extend(await edinet_fetcher._search_edinet_half_docs(code, max_years))
+        fetch_annual = not requested or bool(requested.intersection({"120", "130"}))
+        fetch_half = not requested or bool(requested.intersection({"140", "160"}))
+
+        tasks: list[Any] = []
+        if fetch_annual:
+            tasks.append(edinet_fetcher._search_edinet_annual_docs(code, max_years))
+        if fetch_half:
+            tasks.append(edinet_fetcher._search_edinet_half_docs(code, max_years))
+
+        results = await asyncio.gather(*tasks)
+        docs: list[dict[str, Any]] = []
+        for batch in results:
+            docs.extend(batch)
 
         if requested:
             docs = [doc for doc in docs if doc.get("docTypeCode") in requested]
@@ -58,6 +73,23 @@ class FilingService:
             if len(unique_docs) >= max_documents:
                 break
         return unique_docs
+
+    def _load_xbrl_sections_cache(self, doc_id: str) -> dict[str, str] | None:
+        if self.cache_manager is None:
+            return None
+        cached = self.cache_manager.get(f"{_XBRL_SECTIONS_CACHE_PREFIX}{doc_id}")
+        if not isinstance(cached, dict) or cached.get("_cache_version") != _CACHE_VERSION:
+            return None
+        data = cached.get("sections")
+        return data if isinstance(data, dict) else None
+
+    def _save_xbrl_sections_cache(self, doc_id: str, sections: dict[str, str]) -> None:
+        if self.cache_manager is None:
+            return
+        self.cache_manager.set(
+            f"{_XBRL_SECTIONS_CACHE_PREFIX}{doc_id}",
+            {"_cache_version": _CACHE_VERSION, "sections": sections},
+        )
 
     async def extract_filing_content(
         self,
@@ -89,28 +121,39 @@ class FilingService:
                 "fy_end": raw_fy_end[:7] if raw_fy_end else None,
             }
 
-        xbrl_dir = await self.edinet_client.download_document(selected_doc_id, 1)
-        if not xbrl_dir:
-            raise ValueError("Document not found or download failed")
-
         base = {"doc_id": selected_doc_id, **meta}
         extract_all = sections is None
+        need_special = extract_all or any(s in _SPECIAL_SECTIONS for s in (sections or []))
+        xbrl_sections = [s for s in (sections or []) if s not in _SPECIAL_SECTIONS]
+        need_xbrl = extract_all or bool(xbrl_sections)
+
+        all_xbrl: dict[str, str] | None = None
+        if need_xbrl:
+            all_xbrl = self._load_xbrl_sections_cache(selected_doc_id)
+
+        xbrl_dir = None
+        if need_special or (need_xbrl and all_xbrl is None):
+            xbrl_dir = await self.edinet_client.download_document(selected_doc_id, 1)
+            if not xbrl_dir:
+                raise ValueError("Document not found or download failed")
 
         result: dict[str, Any] = {}
 
-        for section_id, extractor in _SECTION_EXTRACTORS.items():
-            if extract_all or section_id in sections:  # type: ignore[operator]
-                result[section_id] = extractor(xbrl_dir)
+        if need_special:
+            for section_id, extractor in _SECTION_EXTRACTORS.items():
+                if extract_all or section_id in sections:  # type: ignore[operator]
+                    result[section_id] = extractor(xbrl_dir)  # type: ignore[arg-type]
 
-        xbrl_sections = [s for s in (sections or []) if s not in _SPECIAL_SECTIONS]
-        if extract_all or xbrl_sections:
-            parser = XBRLParser()
-            all_sections = parser.extract_sections_by_type(xbrl_dir)
+        if need_xbrl:
+            if all_xbrl is None:
+                parser = XBRLParser()
+                all_xbrl = parser.extract_sections_by_type(xbrl_dir)  # type: ignore[arg-type]
+                self._save_xbrl_sections_cache(selected_doc_id, all_xbrl)
             if extract_all:
-                result.update({k: v for k, v in all_sections.items() if v})
+                result.update({k: v for k, v in all_xbrl.items() if v})
             else:
                 for s in xbrl_sections:
-                    if all_sections.get(s):
-                        result[s] = all_sections[s]
+                    if all_xbrl.get(s):
+                        result[s] = all_xbrl[s]
 
         return {**base, "sections": result}
