@@ -71,6 +71,8 @@ from blue_ticker.constants.xbrl import (
     PPE_LAND_COST_TAGS,
     PPE_LAND_DEP_TAGS,
     PPE_LAND_TAGS,
+    PPE_LEASED_VEHICLES_COST_TAGS,
+    PPE_LEASED_VEHICLES_DEP_TAGS,
     PPE_MACHINERY_COST_TAGS,
     PPE_MACHINERY_DEP_TAGS,
     PPE_MACHINERY_TAGS,
@@ -181,7 +183,7 @@ class IncomeStatementSection(Section):
         accounting_standard: str,
         xbrl_dir: Path | None = None,
     ) -> "IncomeStatementSection":
-        field_set = field_set_from_pre_parsed_duration(tag_elements)
+        field_set = field_set_from_pre_parsed_duration(tag_elements, financial_tags=_ALL_FINANCIAL_TAGS)
         return cls(field_set, accounting_standard, xbrl_dir)
 
 
@@ -219,7 +221,7 @@ class CashFlowSection(Section):
         accounting_standard: str,
         xbrl_dir: Path | None = None,
     ) -> "CashFlowSection":
-        field_set = field_set_from_pre_parsed_duration(tag_elements)
+        field_set = field_set_from_pre_parsed_duration(tag_elements, financial_tags=_ALL_FINANCIAL_TAGS)
         return cls(field_set, accounting_standard, xbrl_dir)
 
 
@@ -256,6 +258,8 @@ def _bs_all_tags() -> frozenset[str]:
     tags += PPE_CONSTRUCTION_TAGS
     tags += PPE_CONSTRUCTION_COST_TAGS
     tags += PPE_CONSTRUCTION_DEP_TAGS
+    tags += PPE_LEASED_VEHICLES_COST_TAGS
+    tags += PPE_LEASED_VEHICLES_DEP_TAGS
     return frozenset(tags)
 
 
@@ -286,7 +290,7 @@ class BalanceSheetSection(Section):
         accounting_standard: str,
         xbrl_dir: Path | None = None,
     ) -> "BalanceSheetSection":
-        field_set = field_set_from_pre_parsed(tag_elements)
+        field_set = field_set_from_pre_parsed(tag_elements, financial_tags=_ALL_FINANCIAL_TAGS)
         if accounting_standard == "US-GAAP" and xbrl_dir is not None:
             field_set.update(parse_usgaap_html_bs_fields(xbrl_dir))
         return cls(field_set, accounting_standard, xbrl_dir)
@@ -320,7 +324,7 @@ class EquityStatementSection(Section):
     def from_pre_parsed(
         cls, tag_elements: XbrlTagElements, accounting_standard: str
     ) -> "EquityStatementSection":
-        field_set = field_set_from_pre_parsed_duration(tag_elements)
+        field_set = field_set_from_pre_parsed_duration(tag_elements, financial_tags=_ALL_FINANCIAL_TAGS)
         return cls(field_set, accounting_standard)
 
 
@@ -362,7 +366,7 @@ class NotesSection(Section):
     def from_pre_parsed(
         cls, tag_elements: XbrlTagElements, accounting_standard: str
     ) -> "NotesSection":
-        field_set = field_set_from_pre_parsed(tag_elements)
+        field_set = field_set_from_pre_parsed(tag_elements, financial_tags=_ALL_FINANCIAL_TAGS)
         return cls(field_set, accounting_standard)
 
 
@@ -405,7 +409,7 @@ class SummarySection(Section):
     def from_pre_parsed(
         cls, tag_elements: XbrlTagElements, accounting_standard: str
     ) -> "SummarySection":
-        field_set = field_set_from_pre_parsed_duration(tag_elements)
+        field_set = field_set_from_pre_parsed_duration(tag_elements, financial_tags=_ALL_FINANCIAL_TAGS)
         return cls(field_set, accounting_standard)
 
 
@@ -415,6 +419,12 @@ _EMPLOYEE_TAGS_SET: frozenset[str] = frozenset([
     "NumberOfEmployees",
     "NumberOfGroupEmployees",
 ])
+
+# 財務タグ全体（連結判定の精度向上のため from_pre_parsed に渡す）
+# DEI タグ等の非財務タグを除外し、IS タグのシグナルを全 Section で共有するために使う。
+_ALL_FINANCIAL_TAGS: frozenset[str] = (
+    _IS_TAGS | _CF_TAGS | _BS_TAGS | _EQUITY_TAGS | _NOTES_TAGS | _SUMMARY_TAGS | _EMPLOYEE_TAGS_SET
+)
 
 
 class EmployeeSection(Section):
@@ -456,5 +466,5 @@ class EmployeeSection(Section):
     def from_pre_parsed(
         cls, tag_elements: XbrlTagElements, accounting_standard: str
     ) -> "EmployeeSection":
-        field_set = field_set_from_pre_parsed(tag_elements)
+        field_set = field_set_from_pre_parsed(tag_elements, financial_tags=_ALL_FINANCIAL_TAGS)
         return cls(field_set, accounting_standard, tag_elements)

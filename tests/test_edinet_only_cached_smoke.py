@@ -231,7 +231,9 @@ def test_edinet_only_smoke_from_cached_search_and_xbrl(company: SmokeCompany) ->
 
     expected_consolidated_contexts = _expected_has_consolidated_contexts(company, str(doc["edinet_fy_end"]))
     if expected_consolidated_contexts is not None:
-        assert has_nonconsolidated_contexts(pre_parsed) is expected_consolidated_contexts
+        from blue_ticker.analysis.sections import _ALL_FINANCIAL_TAGS
+        fin_filtered = {t: v for t, v in pre_parsed.items() if t in _ALL_FINANCIAL_TAGS}
+        assert has_nonconsolidated_contexts(fin_filtered) is expected_consolidated_contexts
 
     _std = detect_accounting_standard(pre_parsed)
     income = extract_income_statement(

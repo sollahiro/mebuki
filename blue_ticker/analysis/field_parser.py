@@ -54,14 +54,22 @@ class ResolvedItem(TypedDict):
     prior: float | None
 
 
-def field_set_from_pre_parsed(tag_elements: XbrlTagElements) -> FieldSet:
+def field_set_from_pre_parsed(
+    tag_elements: XbrlTagElements,
+    *,
+    financial_tags: frozenset[str] | None = None,
+) -> FieldSet:
     """XbrlTagElements（生パース済みデータ）から FieldSet を生成する。
 
     parse_instant_fields のファイルI/Oをスキップしたい場合のヘルパー。
     コンテキスト正規化・nonconsolidated フォールバックは parse_instant_fields と同一。
+
+    financial_tags を渡すと、連結判定（has_nonconsolidated_contexts）をそのタグセットに
+    絞って行う。DEI タグ等の非財務タグが判定を歪めるのを防ぐために使う。
     """
     field_set = _normalize_instant(tag_elements)
-    if not has_nonconsolidated_contexts(tag_elements):
+    check = {t: v for t, v in tag_elements.items() if t in financial_tags} if financial_tags else tag_elements
+    if not has_nonconsolidated_contexts(check):
         nc_set = _normalize_instant_nonconsolidated(tag_elements)
         for tag, fv in nc_set.items():
             if tag not in field_set:
@@ -100,14 +108,22 @@ def parse_instant_fields(
     return field_set
 
 
-def field_set_from_pre_parsed_duration(tag_elements: XbrlTagElements) -> FieldSet:
+def field_set_from_pre_parsed_duration(
+    tag_elements: XbrlTagElements,
+    *,
+    financial_tags: frozenset[str] | None = None,
+) -> FieldSet:
     """XbrlTagElements（生パース済みデータ）から Duration FieldSet を生成する。
 
     parse_duration_fields のファイルI/Oをスキップしたい場合のヘルパー。
     コンテキスト正規化・nonconsolidated フォールバックは parse_duration_fields と同一。
+
+    financial_tags を渡すと、連結判定（has_nonconsolidated_contexts）をそのタグセットに
+    絞って行う。DEI タグ等の非財務タグが判定を歪めるのを防ぐために使う。
     """
     field_set = _normalize_duration(tag_elements)
-    if not has_nonconsolidated_contexts(tag_elements):
+    check = {t: v for t, v in tag_elements.items() if t in financial_tags} if financial_tags else tag_elements
+    if not has_nonconsolidated_contexts(check):
         nc_set = _normalize_duration_nonconsolidated(tag_elements)
         for tag, fv in nc_set.items():
             if tag not in field_set:
