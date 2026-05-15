@@ -533,6 +533,36 @@ class TestExtractFilingContent:
 # HalfYearDataService
 # ──────────────────────────────────────────────────────────────
 
+class TestHalfYearRoic:
+    def test_roic_uses_nopat_with_fallback_tax_rate(self):
+        from blue_ticker.constants.financial import NOPAT_FALLBACK_TAX_RATE, PERCENT
+        from blue_ticker.services.half_year_data_service import _apply_nopat_and_roic
+
+        data = {"OP": 100.0, "NP": 999.0}
+
+        _apply_nopat_and_roic(data, net_assets_m=800.0, ibd_m=200.0)
+
+        expected_nopat = 100.0 * (1 - NOPAT_FALLBACK_TAX_RATE)
+        assert data["NOPAT"] == pytest.approx(expected_nopat)
+        invested_capital = 800.0 + 200.0
+        assert data["ROIC"] == pytest.approx(expected_nopat / invested_capital * PERCENT)
+        assert data["MetricSources"]["ROIC"]["method"] == "NOPAT / (NetAssets + InterestBearingDebt)"
+
+    def test_roic_uses_nopat_with_effective_tax_rate(self):
+        from blue_ticker.constants.financial import PERCENT
+        from blue_ticker.services.half_year_data_service import _apply_nopat_and_roic
+
+        data = {"OP": 100.0, "EffectiveTaxRate": 30.0}
+
+        _apply_nopat_and_roic(data, net_assets_m=800.0, ibd_m=200.0)
+
+        expected_nopat = 70.0
+        assert data["NOPAT"] == pytest.approx(expected_nopat)
+        invested_capital = 800.0 + 200.0
+        assert data["ROIC"] == pytest.approx(expected_nopat / invested_capital * PERCENT)
+        assert data["MetricSources"]["NOPAT"]["method"] == "OP × (1 - income_tax / pretax_income)"
+
+
 class TestHalfYearDataService:
     def _make_service(self, tmp_path):
         from blue_ticker.services.half_year_data_service import HalfYearDataService

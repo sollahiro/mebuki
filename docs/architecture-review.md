@@ -82,7 +82,7 @@ flowchart TD
 | `PretaxIncome`, `IncomeTax`, `EffectiveTaxRate` | EDINET XBRL/HTML | 百万円/% | WACCの税効果に利用 |
 | `Employees` | EDINET XBRL | 人 | 連結優先、個別フォールバック |
 | `ROE` | EDINET由来計算 | % | `NP / Eq` |
-| `ROIC` | EDINET由来計算 | % | `NP / (Eq + InterestBearingDebt)`。IBD補完後に再計算 |
+| `ROIC` | EDINET由来計算 | % | `NOPAT / (Eq + InterestBearingDebt)`。IBD補完後に再計算 |
 | `CostOfEquity` | 財務省CSV + 定数 | % | `Rf + beta * MRP` |
 | `CostOfDebt` | EDINET IE/IBD | % | `InterestExpense / InterestBearingDebt` |
 | `WACC` | 上記統合 | % | Eq、IBD、IE、実効税率、Rfから計算 |
@@ -121,7 +121,7 @@ flowchart TD
   },
   "ROIC": {
     "source": "derived",
-    "method": "NP / (Eq + InterestBearingDebt)",
+    "method": "NOPAT / (Eq + InterestBearingDebt)",
     "unit": "percent"
   }
 }

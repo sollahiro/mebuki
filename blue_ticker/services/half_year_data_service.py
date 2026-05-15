@@ -10,7 +10,13 @@ from typing import Any
 from blue_ticker import __version__
 from blue_ticker.api.edinet_client import EdinetAPIClient
 from blue_ticker.constants.api import EDINET_DOC_DISCOVERY_BUFFER, EDINET_DOC_DISCOVERY_LIMIT
-from blue_ticker.constants.financial import MILLION_YEN
+from blue_ticker.constants.financial import (
+    MILLION_YEN,
+    NOPAT_FALLBACK_TAX_RATE,
+    NOPAT_MAX_NORMAL_TAX_RATE,
+    NOPAT_MIN_NORMAL_TAX_RATE,
+    PERCENT,
+)
 from blue_ticker.utils.cache import CacheManager
 from blue_ticker.utils.converters import to_float
 from blue_ticker.utils.financial_data import build_half_year_periods
@@ -79,6 +85,42 @@ def _to_gross_profit_result(value: dict[str, Any] | None) -> GrossProfitResult |
     return result
 
 
+def _resolve_tax_rate(data: dict[str, Any]) -> tuple[float, bool]:
+    rate_pct = to_float(data.get("EffectiveTaxRate"))
+    if rate_pct is None:
+        return NOPAT_FALLBACK_TAX_RATE, True
+    rate = rate_pct / PERCENT
+    if NOPAT_MIN_NORMAL_TAX_RATE <= rate <= NOPAT_MAX_NORMAL_TAX_RATE:
+        return rate, False
+    return NOPAT_FALLBACK_TAX_RATE, True
+
+
+def _apply_nopat_and_roic(
+    data: dict[str, Any],
+    net_assets_m: float | None,
+    ibd_m: float | None,
+) -> None:
+    op_m = to_float(data.get("OP"))
+    if op_m is not None:
+        tax_rate, is_fallback = _resolve_tax_rate(data)
+        method = (
+            f"OP × (1 - {int(NOPAT_FALLBACK_TAX_RATE * PERCENT)}%_fallback)"
+            if is_fallback
+            else "OP × (1 - income_tax / pretax_income)"
+        )
+        data["NOPAT"] = op_m * (1 - tax_rate)
+        _set_metric_source(data, "NOPAT", source="derived", unit="million_yen", method=method)
+
+    nopat = to_float(data.get("NOPAT"))
+    if nopat is None or net_assets_m is None or ibd_m is None:
+        return
+    invested_capital = net_assets_m + ibd_m
+    if invested_capital == 0:
+        return
+    data["ROIC"] = nopat / invested_capital * PERCENT
+    _set_metric_source(data, "ROIC", source="derived", unit="percent", method="NOPAT / (NetAssets + InterestBearingDebt)")
+
+
 def _apply_h1_edinet_data(
     data: dict[str, Any],
     edinet_q2: HalfYearEdinetEntry,
@@ -122,10 +164,7 @@ def _apply_h1_edinet_data(
     h1_ibd_m = ibd_current / MILLION_YEN if ibd_current is not None else None
     q2_net_assets_raw = to_float(q2_rec.get("NetAssets"))
     q2_net_assets_m = q2_net_assets_raw / MILLION_YEN if q2_net_assets_raw is not None else None
-    np_h1 = data.get("NP")
-    if np_h1 is not None and q2_net_assets_m is not None and h1_ibd_m is not None and (q2_net_assets_m + h1_ibd_m) != 0:
-        data["ROIC"] = np_h1 / (q2_net_assets_m + h1_ibd_m) * 100
-        _set_metric_source(data, "ROIC", source="derived", unit="percent", method="NP / (NetAssets + InterestBearingDebt)")
+    _apply_nopat_and_roic(data, q2_net_assets_m, h1_ibd_m)
 
     return h1_gp_m, h1_cfo_m, h1_cfi_m
 
@@ -178,10 +217,7 @@ def _apply_h2_edinet_data(
     h2_ibd_m = h2_ibd["current"] / MILLION_YEN if h2_ibd and h2_ibd.get("current") is not None else None
     h2_net_assets_raw = to_float(fy_rec.get("NetAssets"))
     h2_net_assets_m = h2_net_assets_raw / MILLION_YEN if h2_net_assets_raw is not None else None
-    np_h2 = data.get("NP")
-    if np_h2 is not None and h2_net_assets_m is not None and h2_ibd_m is not None and (h2_net_assets_m + h2_ibd_m) != 0:
-        data["ROIC"] = np_h2 / (h2_net_assets_m + h2_ibd_m) * 100
-        _set_metric_source(data, "ROIC", source="derived", unit="percent", method="NP / (NetAssets + InterestBearingDebt)")
+    _apply_nopat_and_roic(data, h2_net_assets_m, h2_ibd_m)
 
 
 def _apply_fy_only_edinet_data(
@@ -205,10 +241,7 @@ def _apply_fy_only_edinet_data(
     fy_ibd_m = fy_ibd["current"] / MILLION_YEN if fy_ibd and fy_ibd.get("current") is not None else None
     fy_net_assets_raw = to_float(fy_rec.get("NetAssets"))
     fy_net_assets_m = fy_net_assets_raw / MILLION_YEN if fy_net_assets_raw is not None else None
-    np_fy = data.get("NP")
-    if np_fy is not None and fy_net_assets_m is not None and fy_ibd_m is not None and (fy_net_assets_m + fy_ibd_m) != 0:
-        data["ROIC"] = np_fy / (fy_net_assets_m + fy_ibd_m) * 100
-        _set_metric_source(data, "ROIC", source="derived", unit="percent", method="NP / (NetAssets + InterestBearingDebt)")
+    _apply_nopat_and_roic(data, fy_net_assets_m, fy_ibd_m)
 
 
 def _trim_half_year_periods(

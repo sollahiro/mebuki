@@ -115,6 +115,7 @@ async def cmd_analyze(args):
                 ("営業利益 (百万)",    lambda d: d.get("OP")),
                 ("営業利益率 (%)",     lambda d: d.get("OperatingMargin")),
                 ("純利益 (百万)",      lambda d: d.get("NP")),
+                ("NOPAT (百万)",       lambda d: d.get("NOPAT")),
                 ("営業利益前年差",      lambda d: d.get("OperatingProfitChange")),
                 ("売上差影響",         lambda d: d.get("SalesChangeImpact")),
                 (gross_margin_change_label, lambda d: d.get("GrossMarginChangeImpact")),
