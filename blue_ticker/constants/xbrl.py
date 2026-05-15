@@ -830,3 +830,15 @@ PPE_CONSTRUCTION_TAGS: list[str] = [
     "ConstructionInProgressIFRS",  # IFRS（帳簿価額）
     "ConstructionInProgress",       # J-GAAP（建設仮勘定は減価償却なし）
 ]
+
+# 取得原価 - 累計減価償却・減損 による帳簿価額差引計算用（直接タグが存在しない場合のフォールバック）
+PPE_TOTAL_COST_TAGS: list[str] = ["PropertyPlantAndEquipmentAcquisitionCostIFRS"]
+PPE_TOTAL_DEP_TAGS: list[str] = ["PropertyPlantAndEquipmentAccumulatedDepreciationAndImpairmentLossesIFRS"]
+PPE_BUILDINGS_COST_TAGS: list[str] = ["BuildingsAcquisitionCostIFRS"]
+PPE_BUILDINGS_DEP_TAGS: list[str] = ["BuildingsAccumulatedDepreciationAndImpairmentLossesIFRS"]
+PPE_LAND_COST_TAGS: list[str] = ["LandAcquisitionCostIFRS"]
+PPE_LAND_DEP_TAGS: list[str] = ["LandAccumulatedImpairmentLossesIFRS"]
+PPE_MACHINERY_COST_TAGS: list[str] = ["MachineryAndEquipmentAcquisitionCostIFRS"]
+PPE_MACHINERY_DEP_TAGS: list[str] = ["MachineryAndEquipmentAccumulatedDepreciationAndImpairmentLossesIFRS"]
+PPE_CONSTRUCTION_COST_TAGS: list[str] = ["ConstructionInProgressAcquisitionCostIFRS"]
+PPE_CONSTRUCTION_DEP_TAGS: list[str] = ["ConstructionInProgressAccumulatedImpairmentLossesIFRS"]

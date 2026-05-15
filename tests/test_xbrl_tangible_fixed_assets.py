@@ -155,6 +155,55 @@ class TestJGAAPExtraction:
         assert result["buildings"] == pytest.approx(150_000 * MN)
 
 
+class TestCostMinusDepreciation:
+    """取得原価 - 累計減価償却による差引計算フォールバックのテスト（トヨタ相当）"""
+
+    def test_toyota_values(self):
+        """トヨタ自動車（E02144, 2025-03期）の実値を検証する。直接帳簿価額タグなし、差引計算で取得。"""
+        result = _extract("""
+            <jpigp_cor:PropertyPlantAndEquipmentIFRS contextRef="CurrentYearInstant" decimals="-6" unitRef="JPY">15333693000000</jpigp_cor:PropertyPlantAndEquipmentIFRS>
+            <jpigp_cor:BuildingsAcquisitionCostIFRS contextRef="CurrentYearInstant" decimals="-6" unitRef="JPY">6170063000000</jpigp_cor:BuildingsAcquisitionCostIFRS>
+            <jpigp_cor:BuildingsAccumulatedDepreciationAndImpairmentLossesIFRS contextRef="CurrentYearInstant" decimals="-6" unitRef="JPY">-3867037000000</jpigp_cor:BuildingsAccumulatedDepreciationAndImpairmentLossesIFRS>
+            <jpigp_cor:LandAcquisitionCostIFRS contextRef="CurrentYearInstant" decimals="-6" unitRef="JPY">1428122000000</jpigp_cor:LandAcquisitionCostIFRS>
+            <jpigp_cor:LandAccumulatedImpairmentLossesIFRS contextRef="CurrentYearInstant" decimals="-6" unitRef="JPY">-6927000000</jpigp_cor:LandAccumulatedImpairmentLossesIFRS>
+            <jpigp_cor:MachineryAndEquipmentAcquisitionCostIFRS contextRef="CurrentYearInstant" decimals="-6" unitRef="JPY">16621243000000</jpigp_cor:MachineryAndEquipmentAcquisitionCostIFRS>
+            <jpigp_cor:MachineryAndEquipmentAccumulatedDepreciationAndImpairmentLossesIFRS contextRef="CurrentYearInstant" decimals="-6" unitRef="JPY">-13157598000000</jpigp_cor:MachineryAndEquipmentAccumulatedDepreciationAndImpairmentLossesIFRS>
+            <jpigp_cor:ConstructionInProgressAcquisitionCostIFRS contextRef="CurrentYearInstant" decimals="-6" unitRef="JPY">1596145000000</jpigp_cor:ConstructionInProgressAcquisitionCostIFRS>
+            <jpigp_cor:ConstructionInProgressAccumulatedImpairmentLossesIFRS contextRef="CurrentYearInstant" decimals="-6" unitRef="JPY">-3678000000</jpigp_cor:ConstructionInProgressAccumulatedImpairmentLossesIFRS>
+        """)
+
+        assert result["accounting_standard"] == "IFRS"
+        assert result["method"] == "field_parser"
+        assert result["total"] == pytest.approx(15_333_693 * MN)
+        assert result["buildings"] == pytest.approx((6_170_063 - 3_867_037) * MN)   # 2,303,026
+        assert result["land"] == pytest.approx((1_428_122 - 6_927) * MN)             # 1,421,195
+        assert result["machinery"] == pytest.approx((16_621_243 - 13_157_598) * MN)  # 3,463,645
+        assert result["tools"] is None
+        assert result["construction_in_progress"] == pytest.approx((1_596_145 - 3_678) * MN)  # 1,592,467
+
+    def test_direct_tag_takes_priority_over_cost_calculation(self):
+        """直接帳簿価額タグがある場合は取得原価計算より優先されることを確認する。"""
+        result = _extract("""
+            <jpigp_cor:PropertyPlantAndEquipmentIFRS contextRef="CurrentYearInstant" decimals="-6" unitRef="JPY">500000000000</jpigp_cor:PropertyPlantAndEquipmentIFRS>
+            <jpigp_cor:BuildingsAndStructuresIFRS contextRef="CurrentYearInstant" decimals="-6" unitRef="JPY">100000000000</jpigp_cor:BuildingsAndStructuresIFRS>
+            <jpigp_cor:BuildingsAcquisitionCostIFRS contextRef="CurrentYearInstant" decimals="-6" unitRef="JPY">300000000000</jpigp_cor:BuildingsAcquisitionCostIFRS>
+            <jpigp_cor:BuildingsAccumulatedDepreciationAndImpairmentLossesIFRS contextRef="CurrentYearInstant" decimals="-6" unitRef="JPY">-150000000000</jpigp_cor:BuildingsAccumulatedDepreciationAndImpairmentLossesIFRS>
+        """)
+
+        # BuildingsAndStructuresIFRS（直接タグ）が採用されること
+        assert result["buildings"] == pytest.approx(100_000 * MN)
+
+    def test_total_fallback_to_cost_calculation(self):
+        """合計の直接タグがない場合も取得原価計算でフォールバックすることを確認する。"""
+        result = _extract("""
+            <jpigp_cor:PropertyPlantAndEquipmentAcquisitionCostIFRS contextRef="CurrentYearInstant" decimals="-6" unitRef="JPY">33867518000000</jpigp_cor:PropertyPlantAndEquipmentAcquisitionCostIFRS>
+            <jpigp_cor:PropertyPlantAndEquipmentAccumulatedDepreciationAndImpairmentLossesIFRS contextRef="CurrentYearInstant" decimals="-6" unitRef="JPY">-18533826000000</jpigp_cor:PropertyPlantAndEquipmentAccumulatedDepreciationAndImpairmentLossesIFRS>
+        """)
+
+        assert result["method"] == "field_parser"
+        assert result["total"] == pytest.approx((33_867_518 - 18_533_826) * MN)  # 15,333,692
+
+
 class TestNotFound:
     """タグが存在しない場合のフォールバック検証"""
 
