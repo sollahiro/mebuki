@@ -9,7 +9,7 @@ build_document_index_for_code() が主エントリーポイント。
   ② 各過去年度を3段階フォールバックで検索（前年提出日を活用）
      Tier 1: 前年の提出日 ± 2週間（高速）
      Tier 2: 期末+60日 前後1ヶ月（合計2ヶ月窓）
-     Tier 3: [期末日, 期末日+97日]（法定上限）
+     Tier 3: [期末日, 期末日+185日]（提出期限延長申請の法的上限 6ヶ月）
   ③ 直近スキャン範囲から訂正有価証券報告書（130）を parentDocID で突合して追加
 
 書類のフィールド付与:
@@ -39,7 +39,7 @@ _BATCH_SIZE = 10
 _TIER1_WINDOW_DAYS = 14
 _TIER2_OFFSET_DAYS = 60   # 期末からの期待提出オフセット
 _TIER2_MARGIN_DAYS = 30   # 期待提出日前後の余裕
-_TIER3_MAX_DAYS = 97      # 法定上限
+_TIER3_MAX_DAYS = 185     # 提出期限延長申請の法的上限（6ヶ月）に合わせた上限
 
 
 def _safe_fy_end_date(month: int, day: int, year: int) -> date:
