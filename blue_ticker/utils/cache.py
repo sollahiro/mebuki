@@ -123,27 +123,36 @@ class CacheManager:
         self._metadata_cache = {}
         return self._metadata_cache
 
-    def _save_metadata(self, metadata: dict[str, str]) -> None:
+    def _save_metadata(self, metadata: dict[str, str], *, replace: bool = False) -> None:
         """メタデータを atomic write で保存し、メモリキャッシュも更新。_meta_lock 保持下で呼ぶこと。
 
-        ロック取得後に他インスタンスが書き込んだ可能性があるため、ディスクから再読み込みして
-        マージしてから保存する。これにより同一 cache_dir を指す複数インスタンス間の lost update を防ぐ。
+        replace=False（デフォルト / set 用）:
+            ディスクから最新を再読み込みして metadata をマージしてから保存する。
+            同一 cache_dir を指す複数インスタンス間の lost update を防ぐ。
+
+        replace=True（clear 用）:
+            metadata をそのまま保存する。呼び出し元でディスク再読み込み済みであること。
+            キー削除には merge ではなく replace が必要（merge はキーを復活させてしまう）。
         """
         metadata_path = self._get_metadata_file_path()
         metadata_path.parent.mkdir(parents=True, exist_ok=True)
-        on_disk: dict[str, str] = {}
-        if metadata_path.exists():
-            try:
-                with open(metadata_path, "r", encoding="utf-8") as f:
-                    on_disk = json.load(f)
-            except (json.JSONDecodeError, IOError):
-                pass
-        on_disk.update(metadata)
+        if replace:
+            to_write = metadata
+        else:
+            on_disk: dict[str, str] = {}
+            if metadata_path.exists():
+                try:
+                    with open(metadata_path, "r", encoding="utf-8") as f:
+                        on_disk = json.load(f)
+                except (json.JSONDecodeError, IOError):
+                    pass
+            on_disk.update(metadata)
+            to_write = on_disk
         tmp = metadata_path.with_name(f".metadata.{uuid.uuid4().hex}.tmp")
         with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(on_disk, f, ensure_ascii=False, indent=2)
+            json.dump(to_write, f, ensure_ascii=False, indent=2)
         tmp.replace(metadata_path)
-        self._metadata_cache = on_disk
+        self._metadata_cache = to_write
     
     def get(self, key: str) -> Any | None:
         """
@@ -252,10 +261,18 @@ class CacheManager:
                 legacy_cache_file.unlink()
 
             with self._meta_lock:
-                metadata = self._load_metadata()
-                if key in metadata:
-                    del metadata[key]
-                    self._save_metadata(metadata)
+                # _load_metadata() は in-memory キャッシュが stale な場合があるため、
+                # ディスクから直接読み込んで削除し、replace=True で保存する。
+                metadata_path = self._get_metadata_file_path()
+                on_disk: dict[str, str] = {}
+                if metadata_path.exists():
+                    try:
+                        with open(metadata_path, "r", encoding="utf-8") as f:
+                            on_disk = json.load(f)
+                    except (json.JSONDecodeError, IOError):
+                        pass
+                on_disk.pop(key, None)
+                self._save_metadata(on_disk, replace=True)
         else:
             # 全キャッシュをクリア
             if self.data_dir.exists():
