@@ -136,6 +136,8 @@ class CalculatedData(TypedDict, total=False):
     OPLabel: str
     # ── operating_profit_change.py: 営業利益前年差分解 ──
     SellingGeneralAdministrativeExpenses: float | None
+    AdjustedOperatingProfit: float | None
+    AdjustedOperatingMargin: float | None
     OperatingProfitChange: float | None
     SalesChangeImpact: float | None
     GrossMarginChangeImpact: float | None

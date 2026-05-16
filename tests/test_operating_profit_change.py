@@ -2,6 +2,7 @@ from typing import Any, cast
 
 import pytest
 
+from blue_ticker.constants.financial import PERCENT
 from blue_ticker.utils.operating_profit_change import (
     apply_operating_profit_change_from_xbrl,
     apply_operating_profit_change_to_periods,
@@ -88,6 +89,25 @@ def test_apply_operating_profit_change_to_years_preserves_direct_sga() -> None:
     assert current["SellingGeneralAdministrativeExpenses"] == pytest.approx(320.0)
     assert current["MetricSources"]["SellingGeneralAdministrativeExpenses"]["source"] == "edinet"
     assert current["SGAChangeImpact"] == pytest.approx(-70.0)
+
+
+def test_apply_operating_profit_change_to_years_uses_adjusted_operating_profit() -> None:
+    years = [
+        _year("2025-03-31", 284_900.0, 154_364.0, 62_971.0),
+        _year("2024-03-31", 238_883.0, 140_531.0, 64_381.0),
+    ]
+    _cd(years[0])["SellingGeneralAdministrativeExpenses"] = 92_946.0
+    _cd(years[1])["SellingGeneralAdministrativeExpenses"] = 75_003.0
+
+    apply_operating_profit_change_to_years(years)
+
+    current = _cd(years[0])
+    assert current["AdjustedOperatingProfit"] == pytest.approx(61_418.0)
+    assert current["OperatingProfitChange"] == pytest.approx(-4_110.0)
+    assert current["SalesChangeImpact"] == pytest.approx(27_071.05581812017)
+    assert current["GrossMarginChangeImpact"] == pytest.approx(-13_238.055818120169)
+    assert current["SGAChangeImpact"] == pytest.approx(-17_943.0)
+    assert current["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0, abs=1e-6)
 
 
 def test_apply_operating_profit_change_to_years_preserves_xbrl_change() -> None:
@@ -342,6 +362,36 @@ def test_apply_operating_profit_change_from_xbrl_uses_direct_sga_values() -> Non
     assert cd["SellingGeneralAdministrativeExpenses"] == pytest.approx(320.0)
     assert cd["MetricSources"]["SellingGeneralAdministrativeExpenses"]["method"] == "SGA(XBRL)"
     assert cd["SGAChangeImpact"] == pytest.approx(-80.0)
+
+
+def test_apply_operating_profit_change_from_xbrl_uses_adjusted_operating_profit() -> None:
+    years = [_blank_year("2025-03-31")]
+    gp_by_year = {
+        "20250331": _gp_entry(
+            current=154_364.0,
+            prior=140_531.0,
+            current_sales=284_900.0,
+            prior_sales=238_883.0,
+        )
+    }
+    op_by_year = {
+        "20250331": {
+            **_op_entry(current=62_971.0, prior=64_381.0),
+            "current_sga": 92_946.0 * _M,
+            "prior_sga": 75_003.0 * _M,
+        },
+    }
+
+    apply_operating_profit_change_from_xbrl(years, gp_by_year, op_by_year)
+
+    cd = _cd(years[0])
+    assert cd["AdjustedOperatingProfit"] == pytest.approx(61_418.0)
+    assert cd["AdjustedOperatingMargin"] == pytest.approx(61_418.0 / 284_900.0 * PERCENT)
+    assert cd["OperatingProfitChange"] == pytest.approx(-4_110.0)
+    assert cd["SalesChangeImpact"] == pytest.approx(27_071.05581812017)
+    assert cd["GrossMarginChangeImpact"] == pytest.approx(-13_238.055818120169)
+    assert cd["SGAChangeImpact"] == pytest.approx(-17_943.0)
+    assert cd["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0, abs=1e-6)
 
 
 def test_apply_operating_profit_change_from_xbrl_uses_financial_filing_prior_values() -> None:
