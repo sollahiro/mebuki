@@ -111,6 +111,7 @@ _INCOME_STATEMENT_FALLBACK_SECTIONS: tuple[str, ...] = (
     "NotesStatementOfIncome",
 )
 _BALANCE_SHEET_SECTIONS: tuple[str, ...] = (
+    "BusinessResultsOfGroup",
     "ConsolidatedBalanceSheet",
     "NotesConsolidatedBalanceSheet",
     "ConsolidatedStatementOfFinancialPositionIFRS",  # IFRS 連結財政状態計算書

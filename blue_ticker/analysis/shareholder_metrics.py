@@ -10,7 +10,7 @@ from typing import cast
 from bs4 import BeautifulSoup
 
 from blue_ticker.analysis.xbrl_utils import collect_numeric_elements, find_xbrl_files
-from blue_ticker.constants.financial import BPS_PER_SHARE_MIN_VALUE, MILLION_YEN
+from blue_ticker.constants.financial import BPS_PER_SHARE_MIN_VALUE, BPS_SPLIT_ADJUSTMENT_REL_TOLERANCE, MILLION_YEN
 from blue_ticker.utils.metrics_types import StockSplitEvent
 from blue_ticker.utils.xbrl_result_types import XbrlTagElements
 
@@ -733,6 +733,34 @@ def _calculated_per_share(numerator: float | None, denominator: float | None) ->
     return numerator / denominator
 
 
+_BPS_METHOD_DEFAULT = "ParentEquity / SharesForBPS"
+_BPS_METHOD_SPLIT_ADJUSTED = "ParentEquity / (SharesForBPS * CumulativeStockSplitRatio)"
+
+
+def _adjust_bps_for_split(
+    calculated_bps: float | None,
+    bps: float | None,
+    parent_equity: float | None,
+    shares_for_bps: float | None,
+    split_ratio: float | None,
+) -> tuple[float | None, str]:
+    if (
+        calculated_bps is None
+        or bps is None
+        or bps <= 0
+        or parent_equity is None
+        or shares_for_bps is None
+        or shares_for_bps <= 0
+        or split_ratio is None
+        or split_ratio <= 1
+    ):
+        return calculated_bps, _BPS_METHOD_DEFAULT
+    adjusted = parent_equity / (shares_for_bps * split_ratio)
+    if abs(adjusted - bps) / bps <= BPS_SPLIT_ADJUSTMENT_REL_TOLERANCE:
+        return adjusted, _BPS_METHOD_SPLIT_ADJUSTED
+    return calculated_bps, _BPS_METHOD_DEFAULT
+
+
 def _metric_source(
     source: str,
     statement: str,
@@ -868,7 +896,13 @@ def extract_shareholder_metrics(
         payout_ratio_from_calculation = True
 
     calculated_eps = _calculated_per_share(net_profit, average_shares)
-    calculated_bps = _calculated_per_share(parent_equity, shares_for_bps)
+    calculated_bps, calculated_bps_method = _adjust_bps_for_split(
+        _calculated_per_share(parent_equity, shares_for_bps),
+        bps,
+        parent_equity,
+        shares_for_bps,
+        cumulative_stock_split_ratio,
+    )
     eps_direct_diff = (
         eps - calculated_eps if eps is not None and calculated_eps is not None else None
     )
@@ -997,7 +1031,7 @@ def extract_shareholder_metrics(
         "calculated",
         "consolidated",
         _CALCULATED_CONFIDENCE,
-        method="ParentEquity / SharesForBPS",
+        method=calculated_bps_method,
         unit="yen_per_share",
     )
     _add_source_if_present(

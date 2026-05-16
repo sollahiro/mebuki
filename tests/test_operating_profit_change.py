@@ -109,6 +109,8 @@ def test_apply_operating_profit_change_to_years_uses_financial_revenue_as_profit
     ]
     _cd(years[0])["OPLabel"] = "経常利益"
     _cd(years[1])["OPLabel"] = "経常利益"
+    _cd(years[0])["SalesLabel"] = "経常収益"
+    _cd(years[1])["SalesLabel"] = "経常収益"
 
     apply_operating_profit_change_to_years(years)
 
@@ -119,6 +121,26 @@ def test_apply_operating_profit_change_to_years_uses_financial_revenue_as_profit
     assert current["GrossMarginChangeImpact"] == pytest.approx(0.0)
     assert current["SGAChangeImpact"] == pytest.approx(-150.0)
     assert current["OperatingProfitChangeReconciliationDiff"] == pytest.approx(0.0)
+
+
+def test_apply_operating_profit_change_to_years_skips_ordinary_income_for_non_financial_sales() -> None:
+    years = [
+        _year("2024-03-31", 1_200.0, None, 150.0),
+        _year("2023-03-31", 1_000.0, None, 100.0),
+    ]
+    _cd(years[0])["OPLabel"] = "経常利益"
+    _cd(years[1])["OPLabel"] = "経常利益"
+    _cd(years[0])["SalesLabel"] = "売上高"
+    _cd(years[1])["SalesLabel"] = "売上高"
+
+    apply_operating_profit_change_to_years(years)
+
+    current = _cd(years[0])
+    assert "SellingGeneralAdministrativeExpenses" not in current
+    assert "OperatingProfitChange" not in current
+    assert "SalesChangeImpact" not in current
+    assert "GrossMarginChangeImpact" not in current
+    assert "SGAChangeImpact" not in current
 
 
 def test_apply_operating_profit_change_to_years_uses_business_gross_profit_margin() -> None:

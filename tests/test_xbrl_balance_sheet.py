@@ -99,6 +99,29 @@ class TestBalanceSheetExtraction:
         assert result["non_current_liabilities"] == pytest.approx(1_345_551 * MILLION_YEN)
         assert result["net_assets"] == pytest.approx(6_031_417 * MILLION_YEN)
 
+    def test_prefers_ifrs_summary_balance_sheet_values_over_jgaap_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            xbrl_dir = Path(tmp)
+            _write_xbrl(
+                xbrl_dir,
+                """
+                <jpcrp_cor:TotalAssetsIFRSSummaryOfBusinessResults
+                    contextRef="CurrentYearInstant" unitRef="JPY">1425859000000</jpcrp_cor:TotalAssetsIFRSSummaryOfBusinessResults>
+                <jpcrp_cor:TotalEquityIFRSSummaryOfBusinessResults
+                    contextRef="CurrentYearInstant" unitRef="JPY">720546000000</jpcrp_cor:TotalEquityIFRSSummaryOfBusinessResults>
+                <jppfs_cor:TotalAssetsSummaryOfBusinessResults
+                    contextRef="CurrentYearInstant" unitRef="JPY">988959000000</jppfs_cor:TotalAssetsSummaryOfBusinessResults>
+                <jppfs_cor:NetAssets
+                    contextRef="CurrentYearInstant" unitRef="JPY">365099000000</jppfs_cor:NetAssets>
+                """,
+            )
+
+            result = extract_balance_sheet(BalanceSheetSection.from_xbrl(xbrl_dir))
+
+        assert result["accounting_standard"] == "IFRS"
+        assert result["total_assets"] == pytest.approx(1_425_859 * MILLION_YEN)
+        assert result["net_assets"] == pytest.approx(720_546 * MILLION_YEN)
+
     def test_computes_usgaap_non_current_assets_from_components(self):
         with tempfile.TemporaryDirectory() as tmp:
             xbrl_dir = Path(tmp)

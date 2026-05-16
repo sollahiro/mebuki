@@ -20,6 +20,7 @@ _GM_IMPACT_KEY = "GrossMarginChangeImpact"
 _SGA_IMPACT_KEY = "SGAChangeImpact"
 _RECONCILIATION_DIFF_KEY = "OperatingProfitChangeReconciliationDiff"
 _FINANCIAL_OP_LABELS = frozenset(("経常利益", "事業利益"))
+_FINANCIAL_SALES_LABELS = frozenset(("経常収益",))
 _BUSINESS_GROSS_PROFIT_LABEL = "業務粗利益"
 _DERIVED_KEYS = (
     _SGA_KEY,
@@ -56,8 +57,13 @@ def _profit_base(data: dict[str, Any]) -> tuple[float | None, str | None]:
         return gross_profit, _BUSINESS_GROSS_PROFIT_LABEL if label == _BUSINESS_GROSS_PROFIT_LABEL else "GrossProfit"
 
     op_label = data.get("OPLabel")
+    sales_label = data.get("SalesLabel")
     sales = data.get("Sales")
-    if op_label in _FINANCIAL_OP_LABELS and sales is not None:
+    if (
+        op_label in _FINANCIAL_OP_LABELS
+        and sales_label in _FINANCIAL_SALES_LABELS
+        and sales is not None
+    ):
         return sales, "Sales"
 
     return None, None

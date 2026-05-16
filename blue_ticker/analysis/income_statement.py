@@ -28,7 +28,7 @@ from blue_ticker.utils.xbrl_result_types import IncomeStatementResult
 def _sales_label_for_tag(tag: str | None) -> str:
     if tag in OPERATING_REVENUE_TAGS:
         return "営業収益"
-    if tag in ("NetSalesIFRS", "RevenueIFRS", "Revenue"):
+    if tag in ("NetSalesIFRS", "RevenueIFRS", "RevenueIFRSSummaryOfBusinessResults", "Revenue"):
         return "売上収益"
     if tag in (
         "NetSalesOfCompletedConstructionContractsCNS",

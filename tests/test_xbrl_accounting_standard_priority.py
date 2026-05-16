@@ -49,7 +49,27 @@ def test_income_statement_prefers_consolidated_revenue_ifrs_over_nonconsolidated
     assert result["accounting_standard"] == "IFRS"
     assert result["sales"] == 9_783_370_000_000.0
     assert result["sales_prior"] == 9_728_716_000_000.0
-    assert result["sales_label"] == "売上収益"
+    assert result.get("sales_label") == "売上収益"
+
+
+def test_income_statement_reads_ifrs_revenue_summary_values() -> None:
+    result = extract_income_statement(_is_from_pp({
+        "RevenueIFRSSummaryOfBusinessResults": {
+            "Prior1YearDuration": 1_091_195_000_000.0,
+            "CurrentYearDuration": 1_150_209_000_000.0,
+        },
+        "BusinessProfitIFRSSummaryOfBusinessResults": {
+            "CurrentYearDuration": 97_322_000_000.0,
+        },
+        "ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults": {
+            "CurrentYearDuration": 60_741_000_000.0,
+        },
+    }))
+
+    assert result["accounting_standard"] == "IFRS"
+    assert result["sales"] == 1_150_209_000_000.0
+    assert result["sales_prior"] == 1_091_195_000_000.0
+    assert result.get("sales_label") == "売上収益"
 
 
 def test_cash_flow_prefers_ifrs_summary_over_jgaap_summary() -> None:
@@ -105,7 +125,7 @@ def test_income_statement_reads_jgaap_operating_revenue_summary() -> None:
     assert result["accounting_standard"] == "J-GAAP"
     assert result["sales"] == 27_840_000_000.0
     assert result["sales_prior"] == 26_512_000_000.0
-    assert result["sales_label"] == "営業収益"
+    assert result.get("sales_label") == "営業収益"
     assert result["operating_profit"] == 2_189_902_000.0
     assert result["net_profit"] == 1_588_000_000.0
 

@@ -104,6 +104,48 @@ def test_preparsed_for_statement_returns_statement_scoped_numeric_index() -> Non
     assert scoped == {"TotalAssets": {"CurrentYearInstant": 1000.0}}
 
 
+def test_preparsed_for_statement_keeps_ifrs_summary_business_results_for_bs() -> None:
+    all_numeric: XbrlTagElements = {
+        "TotalAssetsIFRSSummaryOfBusinessResults": {"CurrentYearInstant": 1425.0},
+        "TotalEquityIFRSSummaryOfBusinessResults": {"CurrentYearInstant": 720.0},
+        "NetAssets": {"CurrentYearInstant_NonConsolidatedMember": 365.0},
+    }
+    facts: XbrlFactIndex = {
+        "TotalAssetsIFRSSummaryOfBusinessResults": {
+            "CurrentYearInstant": _fact(
+                "TotalAssetsIFRSSummaryOfBusinessResults",
+                "CurrentYearInstant",
+                1425.0,
+                "BusinessResultsOfGroup",
+                "consolidated",
+            ),
+        },
+        "TotalEquityIFRSSummaryOfBusinessResults": {
+            "CurrentYearInstant": _fact(
+                "TotalEquityIFRSSummaryOfBusinessResults",
+                "CurrentYearInstant",
+                720.0,
+                "BusinessResultsOfGroup",
+                "consolidated",
+            ),
+        },
+        "NetAssets": {
+            "CurrentYearInstant_NonConsolidatedMember": _fact(
+                "NetAssets",
+                "CurrentYearInstant_NonConsolidatedMember",
+                365.0,
+                "BalanceSheet",
+                "non_consolidated",
+            ),
+        },
+    }
+
+    scoped = _preparsed_for_statement((Path("."), all_numeric, facts), "bs")
+
+    assert scoped["TotalAssetsIFRSSummaryOfBusinessResults"]["CurrentYearInstant"] == 1425.0
+    assert scoped["TotalEquityIFRSSummaryOfBusinessResults"]["CurrentYearInstant"] == 720.0
+
+
 def test_preparsed_for_statement_returns_all_numeric_for_is_keys() -> None:
     all_numeric: XbrlTagElements = {
         "NetSales": {

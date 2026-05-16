@@ -273,7 +273,7 @@ class _StandardBSItemDef(TypedDict):
 IFRS_BS_ITEM_DEFINITIONS: list[_IFRSBSItemDef] = [
     {
         "label": "資産合計",
-        "tags": ["AssetsIFRS", "TotalAssetsIFRS"],
+        "tags": ["AssetsIFRS", "TotalAssetsIFRS", "TotalAssetsIFRSSummaryOfBusinessResults"],
     },
     {
         "label": "流動資産",
@@ -305,7 +305,7 @@ IFRS_BS_ITEM_DEFINITIONS: list[_IFRSBSItemDef] = [
     },
     {
         "label": "資本合計",
-        "tags": ["EquityIFRS", "TotalEquityIFRS"],
+        "tags": ["EquityIFRS", "TotalEquityIFRS", "TotalEquityIFRSSummaryOfBusinessResults"],
     },
     {
         "label": "親会社所有者帰属持分",
@@ -617,6 +617,7 @@ AGGREGATE_IFRS_DEFINITIONS: list[_AggregateIFRSDef] = [
 NET_SALES_TAGS: list[str] = [
     "NetSalesIFRS",                             # IFRS連結
     "RevenueIFRS",                              # IFRS連結（日立等の売上収益）
+    "RevenueIFRSSummaryOfBusinessResults",      # IFRS 要約情報（味の素等）
     "Revenue",                                  # IFRS代替
     "OperatingRevenuesIFRSKeyFinancialData",    # IFRS 要約情報（スズキ等）
     "OperatingRevenuesIFRSSummaryOfBusinessResults", # IFRS 要約情報
@@ -672,6 +673,7 @@ ALL_STANDARD_BS_ITEMS: list[_StandardBSItemDef] = [
         "tags": [
             "TotalAssets", "Assets",
             "TotalAssetsIFRS", "AssetsIFRS",
+            "TotalAssetsIFRSSummaryOfBusinessResults",
             "TotalAssetsUSGAAP",
             "TotalAssetsSummaryOfBusinessResults",
             "TotalAssetsUSGAAPSummaryOfBusinessResults",
@@ -697,7 +699,8 @@ ALL_STANDARD_BS_ITEMS: list[_StandardBSItemDef] = [
         ],
         "derive": {
             "minuend_tags": [
-                "TotalAssets", "Assets", "TotalAssetsIFRS", "AssetsIFRS", "TotalAssetsUSGAAP",
+                "TotalAssets", "Assets", "TotalAssetsIFRS", "AssetsIFRS",
+                "TotalAssetsIFRSSummaryOfBusinessResults", "TotalAssetsUSGAAP",
                 "TotalAssetsUSGAAPSummaryOfBusinessResults",
             ],
             "subtrahend_tags": [
@@ -742,9 +745,10 @@ ALL_STANDARD_BS_ITEMS: list[_StandardBSItemDef] = [
         "field": "NetAssets",
         "label": "純資産/資本合計",
         "tags": [
-            "NetAssets",
             "EquityIFRS", "TotalEquityIFRS",
+            "TotalEquityIFRSSummaryOfBusinessResults",
             "EquityIncludingPortionAttributableToNonControllingInterestIFRSSummaryOfBusinessResults",
+            "NetAssets",
             "NetAssetsUSGAAP", "TotalEquityUSGAAP",
             "EquityIncludingPortionAttributableToNonControllingInterestUSGAAPSummaryOfBusinessResults",
             "USGAAP_HTML_NetAssets",

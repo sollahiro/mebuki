@@ -1,6 +1,11 @@
 from pathlib import Path
 
-from blue_ticker.analysis.shareholder_metrics import extract_shareholder_metrics
+from blue_ticker.analysis.shareholder_metrics import (
+    _BPS_METHOD_DEFAULT,
+    _BPS_METHOD_SPLIT_ADJUSTED,
+    _adjust_bps_for_split,
+    extract_shareholder_metrics,
+)
 
 
 def test_extract_shareholder_metrics_from_ifrs_summary() -> None:
@@ -396,3 +401,65 @@ def test_extract_shareholder_metrics_uses_basic_average_shares_textblock_table(
     assert isinstance(sources, dict)
     assert sources["AverageShares"]["source"] == "fallback"
     assert sources["AverageShares"]["statement"] == "notes"
+
+
+# --- _adjust_bps_for_split unit tests ---
+
+# 味の素 2025年3月期実値: BPSは2025年4月1日の1:2株式分割後を反映済み、
+# SharesForBPSは分割前株数のため CalculatedBPS が開示BPSの約2倍になっていた。
+_AJINOMOTO_PARENT_EQUITY = 746_804_000_000.0
+_AJINOMOTO_SHARES_FOR_BPS = 497_605_508.0
+_AJINOMOTO_BPS = 751.01
+_AJINOMOTO_SPLIT_RATIO = 2.0
+_AJINOMOTO_CALCULATED_BPS_PRE = _AJINOMOTO_PARENT_EQUITY / _AJINOMOTO_SHARES_FOR_BPS
+
+
+def test_adjust_bps_for_split_applies_correction_with_real_values() -> None:
+    result, method = _adjust_bps_for_split(
+        _AJINOMOTO_CALCULATED_BPS_PRE,
+        _AJINOMOTO_BPS,
+        _AJINOMOTO_PARENT_EQUITY,
+        _AJINOMOTO_SHARES_FOR_BPS,
+        _AJINOMOTO_SPLIT_RATIO,
+    )
+    expected = _AJINOMOTO_PARENT_EQUITY / (_AJINOMOTO_SHARES_FOR_BPS * _AJINOMOTO_SPLIT_RATIO)
+    assert result is not None
+    assert result == expected
+    assert abs(result - _AJINOMOTO_BPS) / _AJINOMOTO_BPS < 0.01
+    assert method == _BPS_METHOD_SPLIT_ADJUSTED
+
+
+def test_adjust_bps_for_split_no_correction_when_already_consistent() -> None:
+    # 通常時: CalculatedBPS ≈ BPS のとき split_ratio 倍のズレがないので補正されない
+    parent_equity = 500_000_000_000.0
+    shares = 1_000_000_000.0
+    calculated_bps = parent_equity / shares  # = 500.0
+    bps = 500.5  # ≒ calculated_bps、補正条件(補正後 ≈ 250.0)を満たさない
+    result, method = _adjust_bps_for_split(calculated_bps, bps, parent_equity, shares, 2.0)
+    assert result == calculated_bps
+    assert method == _BPS_METHOD_DEFAULT
+
+
+def test_adjust_bps_for_split_no_correction_when_outside_tolerance() -> None:
+    # 補正後BPSと開示BPSの乖離が1%を超えるケースは補正しない
+    parent_equity = 100_000_000_000.0
+    shares = 100_000_000.0
+    calculated_bps = parent_equity / shares  # = 1000.0
+    bps = 510.0  # 補正後 ≈ 500.0、乖離 ≈ 1.96% > 1%
+    result, method = _adjust_bps_for_split(calculated_bps, bps, parent_equity, shares, 2.0)
+    assert result == calculated_bps
+    assert method == _BPS_METHOD_DEFAULT
+
+
+def test_adjust_bps_for_split_no_correction_when_inputs_none_or_invalid() -> None:
+    pe = 100_000_000_000.0
+    sh = 100_000_000.0
+    cb = pe / sh
+    bps = 500.0
+    assert _adjust_bps_for_split(None, bps, pe, sh, 2.0) == (None, _BPS_METHOD_DEFAULT)
+    assert _adjust_bps_for_split(cb, None, pe, sh, 2.0) == (cb, _BPS_METHOD_DEFAULT)
+    assert _adjust_bps_for_split(cb, 0.0, pe, sh, 2.0) == (cb, _BPS_METHOD_DEFAULT)
+    assert _adjust_bps_for_split(cb, -100.0, pe, sh, 2.0) == (cb, _BPS_METHOD_DEFAULT)
+    assert _adjust_bps_for_split(cb, bps, pe, sh, None) == (cb, _BPS_METHOD_DEFAULT)
+    assert _adjust_bps_for_split(cb, bps, pe, sh, 1.0) == (cb, _BPS_METHOD_DEFAULT)
+    assert _adjust_bps_for_split(cb, bps, pe, sh, 0.5) == (cb, _BPS_METHOD_DEFAULT)

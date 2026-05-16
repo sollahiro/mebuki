@@ -113,6 +113,10 @@ def _complete_calculated_data():
         "CostOfEquity": 1.0,
         "CostOfDebt": 1.0,
         "WACC": 1.0,
+        "CalculatedEPS": 1.0,
+        "CalculatedBPS": 1.0,
+        "EPSDirectDiff": 0.0,
+        "BPSDirectDiff": 0.0,
         "MetricSources": {"Sales": {"source": "external"}},
         "IBDComponents": [{"label": "短期借入金", "current": 1.0}],
         "BalanceSheetComponents": [{"label": "流動資産", "current": 1.0}],
@@ -188,6 +192,10 @@ def test_serialize_metrics_result_excludes_debug_fields_by_default():
                     "NetAssets": 4_000.0,
                     "OP": 5_000.0,
                     "OPLabel": "営業利益",
+                    "CalculatedEPS": 10.0,
+                    "CalculatedBPS": 100.0,
+                    "EPSDirectDiff": 0.1,
+                    "BPSDirectDiff": -0.2,
                     "MetricSources": {"Sales": {"source": "external"}},
                     "IBDComponents": [{"label": "短期借入金", "current": 100.0}],
                     "GrossProfitMethod": "direct",
@@ -239,6 +247,30 @@ def test_serialize_metrics_result_includes_debug_fields_when_requested():
     }
 
     assert serialize_metrics_result(metrics, include_debug_fields=True) == metrics
+
+
+def test_serialize_metrics_result_excludes_raw_debug_fields_by_default():
+    metrics = {
+        "code": "7203",
+        "years": [
+            {
+                "fy_end": "2024-03-31",
+                "RawData": {
+                    "Sales": 45_000_000,
+                    "CalculatedEPS": 10.0,
+                    "CalculatedBPS": 100.0,
+                    "EPSDirectDiff": 0.1,
+                    "BPSDirectDiff": -0.2,
+                },
+                "CalculatedData": {},
+            }
+        ],
+    }
+
+    serialized = serialize_metrics_result(metrics)
+
+    assert serialized["years"][0]["RawData"] == {"Sales": 45_000_000}
+    assert "CalculatedEPS" in metrics["years"][0]["RawData"]
 
 
 def test_serialize_metrics_result_handles_missing_years_or_calculated_data():
@@ -399,4 +431,8 @@ def test_debug_fields_set_is_exactly():
         "BalanceSheetComponents",
         "BalanceSheetAccountingStandard",
         "OperatingProfitChangeReconciliationDiff",
+        "CalculatedEPS",
+        "CalculatedBPS",
+        "EPSDirectDiff",
+        "BPSDirectDiff",
     })

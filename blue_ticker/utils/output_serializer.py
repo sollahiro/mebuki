@@ -16,6 +16,10 @@ _DEBUG_FIELDS: frozenset[str] = frozenset({
     "BalanceSheetComponents",
     "BalanceSheetAccountingStandard",
     "OperatingProfitChangeReconciliationDiff",
+    "CalculatedEPS",
+    "CalculatedBPS",
+    "EPSDirectDiff",
+    "BPSDirectDiff",
 })
 
 def _strip_debug(cd: dict[str, Any]) -> dict[str, Any]:
@@ -41,10 +45,7 @@ def serialize_metrics_result(
     result["years"] = [
         {
             **entry,
-            "RawData": {
-                k: v
-                for k, v in (entry.get("RawData") or {}).items()
-            },
+            "RawData": _strip_debug(entry.get("RawData") or {}),
             "CalculatedData": _strip_debug(entry.get("CalculatedData") or {}),
         }
         for entry in years

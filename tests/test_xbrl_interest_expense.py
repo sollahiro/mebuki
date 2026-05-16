@@ -8,10 +8,16 @@
 
 import unittest
 import tempfile
+import warnings
 from pathlib import Path
 
 from blue_ticker.analysis.interest_expense import extract_interest_expense
 from blue_ticker.analysis.sections import IncomeStatementSection
+
+try:
+    from bs4 import XMLParsedAsHTMLWarning
+except ImportError:
+    XMLParsedAsHTMLWarning = None
 
 NS_XBRLI = "http://www.xbrl.org/2003/instance"
 NS_JPPFS = "http://disclosure.edinet-fsa.go.jp/taxonomy/jppfs/2022-11-01/jppfs_cor"
@@ -90,6 +96,12 @@ def _make_usgaap_html(rows: str) -> str:
 </html>"""
 
 
+def _assert_close(test_case: unittest.TestCase, actual: float | None, expected: float) -> None:
+    if actual is None:
+        test_case.fail("expected a numeric value")
+    test_case.assertAlmostEqual(float(actual), expected)
+
+
 class TestJGaap(unittest.TestCase):
 
     def setUp(self):
@@ -111,8 +123,8 @@ class TestJGaap(unittest.TestCase):
         result = extract_interest_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertEqual(result["accounting_standard"], "J-GAAP")
-        self.assertAlmostEqual(result["current"], 8_752_000_000)
-        self.assertAlmostEqual(result["prior"], 9_000_000_000)
+        _assert_close(self, result["current"], 8_752_000_000)
+        _assert_close(self, result["prior"], 9_000_000_000)
 
     def test_consolidated_over_nonconsolidated(self):
         """連結値が存在する場合は個別値より優先する。"""
@@ -124,7 +136,7 @@ class TestJGaap(unittest.TestCase):
         """)
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
         result = extract_interest_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
-        self.assertAlmostEqual(result["current"], 8_752_000_000)
+        _assert_close(self, result["current"], 8_752_000_000)
 
     def test_nonconsolidated_fallback(self):
         """連結値がなければ個別値にフォールバックする。"""
@@ -135,7 +147,7 @@ class TestJGaap(unittest.TestCase):
         (self.xbrl_dir / "instance.xml").write_text(xml, encoding="utf-8")
         result = extract_interest_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
-        self.assertAlmostEqual(result["current"], 1_000_000_000)
+        _assert_close(self, result["current"], 1_000_000_000)
 
 
 class TestIfrs(unittest.TestCase):
@@ -161,8 +173,8 @@ class TestIfrs(unittest.TestCase):
         result = extract_interest_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertEqual(result["accounting_standard"], "IFRS")
-        self.assertAlmostEqual(result["current"], 5_000_000_000)
-        self.assertAlmostEqual(result["prior"], 4_800_000_000)
+        _assert_close(self, result["current"], 5_000_000_000)
+        _assert_close(self, result["prior"], 4_800_000_000)
 
     def test_finance_costs_ifrs_fallback(self):
         """IFRS: InterestExpensesIFRS がない場合 FinanceCostsIFRS にフォールバックする。"""
@@ -176,7 +188,7 @@ class TestIfrs(unittest.TestCase):
         result = extract_interest_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "direct")
         self.assertEqual(result["accounting_standard"], "IFRS")
-        self.assertAlmostEqual(result["current"], 6_000_000_000)
+        _assert_close(self, result["current"], 6_000_000_000)
 
     def test_interest_expense_note_textblock_fallback(self):
         """IFRS: numeric タグがない場合、支払利息注記のテキストから取得する。"""
@@ -198,8 +210,30 @@ class TestIfrs(unittest.TestCase):
 
         self.assertEqual(result["method"], "ifrs_textblock")
         self.assertEqual(result["accounting_standard"], "IFRS")
-        self.assertAlmostEqual(result["prior"], 1_213_021_000_000)
-        self.assertAlmostEqual(result["current"], 1_654_702_000_000)
+        _assert_close(self, result["prior"], 1_213_021_000_000)
+        _assert_close(self, result["current"], 1_654_702_000_000)
+
+    def test_interest_expense_xbrl_textblock_does_not_emit_xml_warning(self):
+        """IFRS: XBRLファイル内のテキストブロック解析でXMLParsedAsHTMLWarningを出さない。"""
+        if XMLParsedAsHTMLWarning is None:
+            self.skipTest("BeautifulSoup is not installed")
+
+        xml = _make_xbrl("""
+            <jpifrs_cor:BorrowingsCLIFRS contextRef="CurrentYearDuration"
+                unitRef="JPY" decimals="-6">100000000000</jpifrs_cor:BorrowingsCLIFRS>
+            <jpcrp_cor:NotesFinancialInstrumentsIFRSTextBlock contextRef="CurrentYearDuration">
+                2024年３月31日および2025年３月31日に終了した各１年間における支払利息は、
+                それぞれ1,213,021百万円および1,654,702百万円です。
+            </jpcrp_cor:NotesFinancialInstrumentsIFRSTextBlock>
+        """)
+        (self.xbrl_dir / "instance.xbrl").write_text(xml, encoding="utf-8")
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = extract_interest_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
+
+        self.assertEqual(result["method"], "ifrs_textblock")
+        self.assertFalse(any(isinstance(w.message, XMLParsedAsHTMLWarning) for w in caught))
 
 
 class TestUsGaapHtml(unittest.TestCase):
@@ -229,8 +263,8 @@ class TestUsGaapHtml(unittest.TestCase):
         result = extract_interest_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "usgaap_html")
         self.assertEqual(result["accounting_standard"], "US-GAAP")
-        self.assertAlmostEqual(result["current"], 8_752_000_000)
-        self.assertAlmostEqual(result["prior"], 9_000_000_000)
+        _assert_close(self, result["current"], 8_752_000_000)
+        _assert_close(self, result["prior"], 9_000_000_000)
 
     def test_extracts_delta_notation(self):
         """US-GAAP HTML: △記法（負数）の支払利息も絶対値で返す。"""
@@ -241,8 +275,8 @@ class TestUsGaapHtml(unittest.TestCase):
         (self.xbrl_dir / "0105010_test_ixbrl.htm").write_text(html, encoding="utf-8")
         result = extract_interest_expense(IncomeStatementSection.from_xbrl(self.xbrl_dir))
         self.assertEqual(result["method"], "usgaap_html")
-        self.assertAlmostEqual(result["current"], 8_752_000_000)
-        self.assertAlmostEqual(result["prior"], 9_000_000_000)
+        _assert_close(self, result["current"], 8_752_000_000)
+        _assert_close(self, result["prior"], 9_000_000_000)
 
     def test_no_html_file_returns_not_found(self):
         """US-GAAP で 0105010 HTML が存在しない場合 not_found を返す。"""
