@@ -10,7 +10,7 @@ import logging
 import threading
 import uuid
 from datetime import datetime, date
-from typing import Any
+from typing import Any, ClassVar
 from pathlib import Path
 import shutil
 
@@ -33,10 +33,29 @@ class _NumpyEncoder(json.JSONEncoder):
 class CacheManager:
     """
     キャッシュ管理クラス
-    
+
     APIレスポンスをキャッシュし、日単位で有効期限を管理します。
     """
-    
+
+    # metadata.json パス単位のプロセス内共有ロック。
+    # 同一 cache_dir を指す複数インスタンスが並列 async_set しても lost update が起きないよう、
+    # パスをキーに同一 Lock オブジェクトを共有する。
+    _path_locks: ClassVar[dict[str, threading.Lock]] = {}
+    _path_locks_guard: ClassVar[threading.Lock] = threading.Lock()
+
+    @classmethod
+    def _get_path_lock(cls, path: Path) -> threading.Lock:
+        key = str(path.resolve())
+        with cls._path_locks_guard:
+            if key not in cls._path_locks:
+                cls._path_locks[key] = threading.Lock()
+            return cls._path_locks[key]
+
+    @property
+    def _meta_lock(self) -> threading.Lock:
+        """metadata.json パスに対応した共有 Lock を返す。"""
+        return CacheManager._get_path_lock(self._get_metadata_file_path())
+
     def __init__(self, cache_dir: str = "cache", enabled: bool = True, ttl_days: int = 7):
         """
         初期化
@@ -47,7 +66,6 @@ class CacheManager:
             ttl_days: キャッシュ有効期限（日数、デフォルト: 7）
         """
         self._metadata_cache: dict[str, str] | None = None
-        self._meta_lock = threading.RLock()
         self.ttl_days = ttl_days
         self.cache_dir = Path(cache_dir)
         self.data_dir = derived_cache_dir(self.cache_dir)
@@ -106,14 +124,26 @@ class CacheManager:
         return self._metadata_cache
 
     def _save_metadata(self, metadata: dict[str, str]) -> None:
-        """メタデータを atomic write で保存し、メモリキャッシュも更新。_meta_lock 保持下で呼ぶこと。"""
+        """メタデータを atomic write で保存し、メモリキャッシュも更新。_meta_lock 保持下で呼ぶこと。
+
+        ロック取得後に他インスタンスが書き込んだ可能性があるため、ディスクから再読み込みして
+        マージしてから保存する。これにより同一 cache_dir を指す複数インスタンス間の lost update を防ぐ。
+        """
         metadata_path = self._get_metadata_file_path()
         metadata_path.parent.mkdir(parents=True, exist_ok=True)
+        on_disk: dict[str, str] = {}
+        if metadata_path.exists():
+            try:
+                with open(metadata_path, "r", encoding="utf-8") as f:
+                    on_disk = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                pass
+        on_disk.update(metadata)
         tmp = metadata_path.with_name(f".metadata.{uuid.uuid4().hex}.tmp")
         with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(metadata, f, ensure_ascii=False, indent=2)
+            json.dump(on_disk, f, ensure_ascii=False, indent=2)
         tmp.replace(metadata_path)
-        self._metadata_cache = metadata
+        self._metadata_cache = on_disk
     
     def get(self, key: str) -> Any | None:
         """
