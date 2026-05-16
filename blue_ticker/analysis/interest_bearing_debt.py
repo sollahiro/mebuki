@@ -122,15 +122,8 @@ def extract_interest_bearing_debt(section: BalanceSheetSection) -> InterestBeari
             textblock_result = _extract_ifrs_ibd_from_textblock(section)
             if textblock_result is not None:
                 return textblock_result
-            return {
-                "current": None,
-                "prior": None,
-                "method": "not_found",
-                "accounting_standard": accounting_standard,
-                "components": [],
-                "reason": "IFRS連結財政状態計算書TextBlockで有利子負債を取得できない",
-            }
-        # J-GAAP / US-GAAP: XBRLファイルが大きければ無借金と判断する
+            # TextBlock失敗時は全会計基準共通のzero_debtフォールバックへ続行する
+        # 全会計基準共通: XBRLファイルが大きければ無借金と判断する
         if section.xbrl_dir is not None:
             xbrl_files = find_xbrl_files(section.xbrl_dir)
             if any(f.stat().st_size > 100_000 for f in xbrl_files):
