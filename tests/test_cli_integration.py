@@ -274,37 +274,3 @@ def test_main_cache_catchup_outputs_json(monkeypatch, capsys) -> None:
     captured = capsys.readouterr()
     assert json.loads(captured.out)["caught_up_years"] == 2
     catchup.assert_awaited_once_with("dummy", "/tmp/blue_ticker-cache", 2)
-
-
-
-def test_main_watch_add_outputs_json(monkeypatch, capsys) -> None:
-    result = {
-        "status": "added",
-        "item": {"ticker_code": "7203", "name": "トヨタ自動車"},
-    }
-    portfolio_service = Mock()
-    portfolio_service.add_watch.return_value = result
-
-    with patch("blue_ticker.services.portfolio_service.portfolio_service", portfolio_service):
-        _run_cli(monkeypatch, ["watch", "add", "7203", "--name", "トヨタ自動車", "--format", "json"])
-
-    captured = capsys.readouterr()
-    assert json.loads(captured.out) == result
-    assert captured.err == ""
-    portfolio_service.add_watch.assert_called_once_with("7203", name="トヨタ自動車")
-
-
-def test_main_portfolio_list_outputs_json(monkeypatch, capsys) -> None:
-    holdings = [
-        {"ticker_code": "7203", "name": "トヨタ自動車", "total_quantity": 100, "avg_cost_price": 2500.0},
-    ]
-    portfolio_service = Mock()
-    portfolio_service.get_consolidated.return_value = holdings
-
-    with patch("blue_ticker.services.portfolio_service.portfolio_service", portfolio_service):
-        _run_cli(monkeypatch, ["portfolio", "list", "--format", "json"])
-
-    captured = capsys.readouterr()
-    assert json.loads(captured.out) == holdings
-    assert captured.err == ""
-    portfolio_service.get_consolidated.assert_called_once_with()

@@ -70,9 +70,6 @@ data/
 # Local app state (when MEBUKI_USER_DATA_PATH points at the repo)
 /config.json
 /config.json.bak
-/portfolio.json
-/portfolio.json.bak
-/portfolio.json.lock
 
 # Application logs
 *.log

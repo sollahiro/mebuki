@@ -8,8 +8,6 @@ BLUE TICKER は、EDINET API と財務省CSVを活用した日本株分析 Pytho
 - **財務分析**: EDINET XBRL/HTML から年次・半期の財務指標を取得
 - **有価証券報告書抽出**: MD&A、事業等のリスク、経営方針を抽出
 - **キャッシュ管理**: EDINET 年次インデックス、XBRL 展開、分析結果キャッシュを確認・準備・整理
-- **ウォッチリスト管理**: 注目銘柄を登録・削除・一覧表示
-- **ポートフォリオ管理**: 保有数量、取得単価、証券会社、口座種別を管理
 
 ## インストール
 
@@ -102,23 +100,6 @@ ticker cache clean --execute --edinet-xbrl-days 30
 ticker sector
 ticker sector 輸送用機器
 ticker sector 情報・通信業 --format json
-```
-
-### ウォッチリスト
-
-```bash
-ticker watch add 7203 --name "トヨタ自動車"
-ticker watch list
-ticker watch remove 7203
-```
-
-### ポートフォリオ
-
-```bash
-ticker portfolio add 7203 100 2500 --broker SBI --account NISA
-ticker portfolio list --detail
-ticker portfolio sell 7203 50
-ticker portfolio sector
 ```
 
 ## 開発

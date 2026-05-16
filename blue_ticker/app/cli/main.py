@@ -46,14 +46,6 @@ def main() -> int:
             from .sector import cmd_sector
 
             cmd_sector(args)
-        elif args.command == "watch":
-            from .portfolio import cmd_watch
-
-            cmd_watch(args)
-        elif args.command == "portfolio":
-            from .portfolio import cmd_portfolio
-
-            cmd_portfolio(args)
         else:
             parser.print_help()
         return 0

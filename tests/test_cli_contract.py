@@ -15,8 +15,6 @@ def test_cli_contract_subcommands_exist():
         "filings",
         "filing",
         "sector",
-        "watch",
-        "portfolio",
     }.issubset(commands)
     assert "mcp" not in commands
 

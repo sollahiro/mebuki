@@ -6,7 +6,6 @@ if TYPE_CHECKING:
     from .parser import build_parser
     from .analyze import cmd_analyze, cmd_search, cmd_filings, cmd_filing
     from .config import cmd_config
-    from .portfolio import cmd_watch, cmd_portfolio
     from blue_ticker.infrastructure.settings import settings_store
 
 __all__ = [
@@ -17,8 +16,6 @@ __all__ = [
     "cmd_filings",
     "cmd_filing",
     "cmd_config",
-    "cmd_watch",
-    "cmd_portfolio",
 ]
 
 
@@ -39,10 +36,6 @@ def __getattr__(name: str) -> object:
         from .config import cmd_config
 
         return cmd_config
-    if name in {"cmd_watch", "cmd_portfolio"}:
-        from . import portfolio
-
-        return getattr(portfolio, name)
     if name == "settings_store":
         from blue_ticker.infrastructure.settings import settings_store
 

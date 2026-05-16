@@ -299,17 +299,6 @@ async def cmd_analyze(args):
 
         print("\n定性情報は ticker filing コマンドで抽出できます。", file=sys.stderr)
 
-        # ウォッチリスト追加の確認（対話端末のみ）
-        if args.format == "table" and sys.stdin.isatty():
-            from blue_ticker.services.portfolio_service import portfolio_service
-            from blue_ticker.infrastructure.portfolio_store import portfolio_store as _ps
-            all_entries = _ps.find_all_by_ticker(validate_stock_code(code))
-            if not any(e.get("status") in ("watch", "holding") for e in all_entries):
-                from blue_ticker.app.cli.ui import confirm
-                if confirm(f"{code} {info['name']} をウォッチリストに追加しますか？ (y/N): "):
-                    portfolio_service.add_watch(code, name=info.get("name", ""))
-                    print(f"ウォッチリストに追加しました: {code} {info['name']}", file=sys.stderr)
-
     except ValueError as e:
         print(f"エラー: {e}", file=sys.stderr)
     except aiohttp.ClientError as e:
