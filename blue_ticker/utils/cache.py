@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import threading
+import uuid
 from datetime import datetime, date
 from typing import Any
 from pathlib import Path
@@ -108,7 +109,7 @@ class CacheManager:
         """メタデータを atomic write で保存し、メモリキャッシュも更新。_meta_lock 保持下で呼ぶこと。"""
         metadata_path = self._get_metadata_file_path()
         metadata_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = metadata_path.with_suffix(".tmp")
+        tmp = metadata_path.with_name(f".metadata.{uuid.uuid4().hex}.tmp")
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(metadata, f, ensure_ascii=False, indent=2)
         tmp.replace(metadata_path)
@@ -187,7 +188,8 @@ class CacheManager:
 
     def keys(self) -> list[str]:
         """保存済みキャッシュキーの一覧を返す。"""
-        return sorted(self._load_metadata().keys())
+        with self._meta_lock:
+            return sorted(self._load_metadata().keys())
 
     def clear_prefix(self, prefix: str) -> int:
         """指定 prefix で始まるキャッシュを削除し、削除件数を返す。"""
@@ -218,22 +220,22 @@ class CacheManager:
             legacy_cache_file = self._get_legacy_cache_file_path(key)
             if legacy_cache_file.exists():
                 legacy_cache_file.unlink()
-            
-            # メタデータからも削除
-            metadata = self._load_metadata()
-            if key in metadata:
-                del metadata[key]
-                self._save_metadata(metadata)
+
+            with self._meta_lock:
+                metadata = self._load_metadata()
+                if key in metadata:
+                    del metadata[key]
+                    self._save_metadata(metadata)
         else:
             # 全キャッシュをクリア
             if self.data_dir.exists():
                 shutil.rmtree(self.data_dir)
 
-            # メタデータもクリア
-            metadata_path = self._get_metadata_file_path()
-            if metadata_path.exists():
-                metadata_path.unlink()
-            self._metadata_cache = None
+            with self._meta_lock:
+                metadata_path = self._get_metadata_file_path()
+                if metadata_path.exists():
+                    metadata_path.unlink()
+                self._metadata_cache = None
 
 
 
