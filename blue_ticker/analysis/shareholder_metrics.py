@@ -744,6 +744,10 @@ def _adjust_bps_for_split(
     shares_for_bps: float | None,
     split_ratio: float | None,
 ) -> tuple[float | None, str]:
+    # ROE/ROIC等の主指標計算には使われない。
+    # 期末後に株式分割が発生した場合、SharesForBPSが分割前株数のままになり
+    # CalculatedBPS（検証値）が開示BPSの split_ratio 倍になる問題を補正する。
+    # BPSDirectDiff が意味のある値になるよう、CalculatedBPS のみを正規化する。
     if (
         calculated_bps is None
         or bps is None

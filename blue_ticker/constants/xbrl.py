@@ -745,6 +745,9 @@ ALL_STANDARD_BS_ITEMS: list[_StandardBSItemDef] = [
         "field": "NetAssets",
         "label": "純資産/資本合計",
         "tags": [
+            # IFRSタグを先に置き、IFRS要約情報タグ（SummaryOfBusinessResults）も
+            # J-GAAP の NetAssets より優先する。IFRS企業で詳細連結BSタグが存在しない
+            # 場合に要約情報から取得できるようにするための順序。
             "EquityIFRS", "TotalEquityIFRS",
             "TotalEquityIFRSSummaryOfBusinessResults",
             "EquityIncludingPortionAttributableToNonControllingInterestIFRSSummaryOfBusinessResults",

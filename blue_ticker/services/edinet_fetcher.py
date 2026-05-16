@@ -111,6 +111,10 @@ _INCOME_STATEMENT_FALLBACK_SECTIONS: tuple[str, ...] = (
     "NotesStatementOfIncome",
 )
 _BALANCE_SHEET_SECTIONS: tuple[str, ...] = (
+    # タプル内の順序は探索順に影響しない（filter_fact_index_by_sections は集合として処理）。
+    # BusinessResultsOfGroup を preferred に含めることで、IFRS要約情報セクションのタグ
+    # （TotalAssetsIFRSSummaryOfBusinessResults 等）を連結BS相当として扱い、
+    # preferred が非空になれば非連結BSフォールバックを遮断する意図。
     "BusinessResultsOfGroup",
     "ConsolidatedBalanceSheet",
     "NotesConsolidatedBalanceSheet",
