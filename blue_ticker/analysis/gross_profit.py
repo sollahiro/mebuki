@@ -32,6 +32,7 @@ except ImportError:
 
 from blue_ticker.analysis.sections import IncomeStatementSection
 from blue_ticker.analysis.xbrl_utils import (
+    extract_ifrs_textblock_table,
     parse_html_int_attribute,
     parse_html_number,
 )
@@ -109,6 +110,56 @@ def _extract_business_gross_profit(section: IncomeStatementSection) -> GrossProf
         "accounting_standard": "J-GAAP",
         "components": comp_results,
     }
+    if sales_c is not None or sales_p is not None:
+        result["current_sales"] = sales_c
+        result["prior_sales"] = sales_p
+    return result
+
+
+_IFRS_PL_TEXTBLOCK_TAG = "ConsolidatedStatementOfIncomeIFRSTextBlock"
+_IFRS_GP_LABEL = "売上総利益"
+_IFRS_COGS_LABEL = "売上原価"
+
+
+def _extract_ifrs_gp_from_textblock(section: IncomeStatementSection) -> GrossProfitResult | None:
+    """IFRS連結損益計算書TextBlockから売上総利益を抽出する。"""
+    if section.xbrl_dir is None:
+        return None
+    table = extract_ifrs_textblock_table(section.xbrl_dir, _IFRS_PL_TEXTBLOCK_TAG)
+    if not table:
+        return None
+
+    gp = table.get(_IFRS_GP_LABEL)
+    if gp is None:
+        return None
+    c_m, p_m = gp
+    if c_m is None and p_m is None:
+        return None
+
+    cogs = table.get(_IFRS_COGS_LABEL)
+    c_yen = c_m * MILLION_YEN if c_m is not None else None
+    p_yen = p_m * MILLION_YEN if p_m is not None else None
+
+    components: list[MetricComponent] = [
+        {"label": "売上総利益", "tag": "IFRS_HTML_GrossProfit", "current": c_yen, "prior": p_yen},
+    ]
+    if cogs is not None:
+        cc_m, cp_m = cogs
+        components.insert(0, {
+            "label": "売上原価",
+            "tag": "IFRS_HTML_CostOfSales",
+            "current": cc_m * MILLION_YEN if cc_m is not None else None,
+            "prior": cp_m * MILLION_YEN if cp_m is not None else None,
+        })
+
+    result: GrossProfitResult = {
+        "current": c_yen,
+        "prior": p_yen,
+        "method": "ifrs_textblock",
+        "accounting_standard": "IFRS",
+        "components": components,
+    }
+    sales_c, sales_p = _extract_sales_for_yoy(section)
     if sales_c is not None or sales_p is not None:
         result["current_sales"] = sales_c
         result["prior_sales"] = sales_p
@@ -315,6 +366,14 @@ def extract_gross_profit(section: IncomeStatementSection) -> GrossProfitResult:
 
     sales = next((c for c in comp_results if c["label"] == "売上高"), None)
     cogs = next((c for c in comp_results if c["label"] == "売上原価"), None)
+
+    # IFRS Summary型: 売上原価タグが存在しない場合、TextBlockから粗利益を抽出する
+    if accounting_standard == "IFRS" and (
+        cogs is None or (cogs["current"] is None and cogs["prior"] is None)
+    ):
+        textblock_result = _extract_ifrs_gp_from_textblock(section)
+        if textblock_result is not None:
+            return textblock_result
 
     if sales is None or (sales["current"] is None and sales["prior"] is None):
         return {

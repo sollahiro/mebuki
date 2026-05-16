@@ -196,7 +196,16 @@ def extract_operating_profit(section: IncomeStatementSection) -> OperatingProfit
             result["prior_sga"] = sga_item["prior"]
         return result
 
-    # 経常利益フォールバック（金融機関向け）
+    # 経常利益フォールバック（J-GAAP 金融機関向け）
+    # IFRS企業では連結コンテキストに経常利益タグが残存しても使わない。
+    # _apply_net_revenue が BusinessProfitIFRSSummaryOfBusinessResults を使うため。
+    if accounting_standard == "IFRS":
+        return {
+            "current": None, "prior": None,
+            "method": "not_found", "label": "営業利益",
+            "accounting_standard": accounting_standard,
+            "reason": "IFRS企業では経常利益フォールバックを適用しない",
+        }
     oi_item = section.resolve(ORDINARY_INCOME_TAGS)
     if oi_item["tag"] is not None:
         ordinary_result: OperatingProfitResult = {
