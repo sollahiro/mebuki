@@ -560,6 +560,24 @@ def _apply_depreciation(
             )
 
 
+def _apply_cash_conversion_analysis(years: list[YearEntry]) -> None:
+    for year in years:
+        cd = year["CalculatedData"]
+        cfo = _year_metric_float(year, "CFO")
+        op = _year_metric_float(year, "OP")
+        depreciation = cd.get("DepreciationAmortization")
+        if cfo is None or op is None or depreciation is None:
+            continue
+        cd["OtherCashConversionGap"] = cfo - op - depreciation
+        _set_metric_source(
+            cd,
+            "OtherCashConversionGap",
+            source="derived",
+            unit="million_yen",
+            method="CFO - OP - DepreciationAmortization",
+        )
+
+
 def _apply_order_book(
     years: list[YearEntry],
     raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
@@ -796,6 +814,7 @@ class IndividualAnalyzer:
         raw_xbrl_by_year = _raw_by_year(all_metrics)
         for apply_fn in _METRIC_APPLIERS:
             apply_fn(years, raw_xbrl_by_year)
+        _apply_cash_conversion_analysis(years)
 
         apply_operating_profit_change_from_xbrl(years, all_metrics.get("gp", {}), all_metrics.get("op", {}))
         apply_operating_profit_change_to_years(years)

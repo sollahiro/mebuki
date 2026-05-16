@@ -145,6 +145,7 @@ class CalculatedData(TypedDict, total=False):
     Employees: int | None
     # ── analyzer.py: _apply_depreciation ──
     DepreciationAmortization: float | None
+    OtherCashConversionGap: float | None
     # ── analyzer.py: _apply_order_book ──
     OrderIntake: float | None
     OrderBacklog: float | None

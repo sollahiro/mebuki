@@ -19,6 +19,7 @@ from blue_ticker.services.analyzer import (
     _apply_net_revenue,
     _apply_employees,
     _apply_depreciation,
+    _apply_cash_conversion_analysis,
     _apply_order_book,
     _apply_wacc,
     _resolve_tax_rate,
@@ -170,6 +171,26 @@ class TestApplyDepreciation:
         years = [_make_year("2024-03-31")]
         _apply_depreciation(years, {"20240331": {"current": None}})
         assert "DepreciationAmortization" not in years[0]["CalculatedData"]
+
+
+class TestApplyCashConversionAnalysis:
+    def test_sets_other_cash_conversion_gap(self):
+        years = [_make_year(
+            "2024-03-31",
+            CFO=4_000.0,
+            OP=1_000.0,
+            DepreciationAmortization=500.0,
+        )]
+        _apply_cash_conversion_analysis(years)
+        cd = years[0]["CalculatedData"]
+        assert cd["OtherCashConversionGap"] == pytest.approx(2_500.0)
+        assert cd["MetricSources"]["OtherCashConversionGap"]["source"] == "derived"
+        assert cd["MetricSources"]["OtherCashConversionGap"]["method"] == "CFO - OP - DepreciationAmortization"
+
+    def test_skips_when_required_metric_is_missing(self):
+        years = [_make_year("2024-03-31", CFO=4_000.0, OP=1_000.0)]
+        _apply_cash_conversion_analysis(years)
+        assert "OtherCashConversionGap" not in years[0]["CalculatedData"]
 
 
 class TestApplyOrderBook:
