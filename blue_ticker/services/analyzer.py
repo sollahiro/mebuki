@@ -8,7 +8,7 @@ EdinetFetcher を中心に財務データとEDINET補完指標を組み立てま
 import logging
 import asyncio
 from typing import Any, cast
-from collections.abc import Callable
+from collections.abc import Callable, Iterator, Sequence
 
 from blue_ticker.api.edinet_client import EdinetAPIClient
 from blue_ticker.infrastructure.settings import settings_store
@@ -246,15 +246,24 @@ def _ensure_raw_by_year(
     return _raw_by_year(payload)
 
 
+def _iter_raw(
+    years: Sequence[YearEntry],
+    raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
+    spec_key: str,
+    doc_id_by_year: dict[str, str] | None = None,
+) -> Iterator[tuple[YearEntry, RawXbrlExtraction]]:
+    """各年度の YearEntry と正規化済み RawXbrlExtraction を順に yield する。"""
+    normalized = _ensure_raw_by_year(spec_key, raw_by_year, doc_id_by_year)
+    for year in years:
+        yield year, normalized.get(_fy_end_key(year), {})
+
+
 def _apply_ibd(
     years: list[YearEntry],
     raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
     doc_id_by_year: dict[str, str] | None = None,
 ) -> None:
-    raw_by_year = _ensure_raw_by_year("ibd", raw_by_year, doc_id_by_year)
-    for year in years:
-        fy_end_key = _fy_end_key(year)
-        raw = raw_by_year.get(fy_end_key, {})
+    for year, raw in _iter_raw(years, raw_by_year, "ibd", doc_id_by_year):
         doc_id = raw.get("doc_id")
         amendment_doc_id = raw.get("amendment_doc_id")
         cd = year["CalculatedData"]
@@ -299,7 +308,6 @@ def _apply_balance_sheet(
     years: list[YearEntry],
     raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
 ) -> None:
-    raw_by_year = _ensure_raw_by_year("bs", raw_by_year)
     field_map = {
         "total_assets": "TotalAssets",
         "current_assets": "CurrentAssets",
@@ -308,9 +316,7 @@ def _apply_balance_sheet(
         "non_current_liabilities": "NonCurrentLiabilities",
         "net_assets": "NetAssets",
     }
-    for year in years:
-        fy_end_key = _fy_end_key(year)
-        raw = raw_by_year.get(fy_end_key)
+    for year, raw in _iter_raw(years, raw_by_year, "bs"):
         if not raw:
             continue
         cd = year["CalculatedData"]
@@ -344,10 +350,7 @@ def _apply_ppe(
     years: list[YearEntry],
     raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
 ) -> None:
-    raw_by_year = _ensure_raw_by_year("ppe", raw_by_year)
-    for year in years:
-        fy_end_key = _fy_end_key(year)
-        raw = raw_by_year.get(fy_end_key, {})
+    for year, raw in _iter_raw(years, raw_by_year, "ppe"):
         ppe_total = raw.get("ppe_total")
         if ppe_total is None:
             continue
@@ -371,10 +374,7 @@ def _apply_interest_expense(
     years: list[YearEntry],
     raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
 ) -> None:
-    raw_by_year = _ensure_raw_by_year("ie", raw_by_year)
-    for year in years:
-        fy_end_key = _fy_end_key(year)
-        raw = raw_by_year.get(fy_end_key, {})
+    for year, raw in _iter_raw(years, raw_by_year, "ie"):
         interest_expense = raw.get("interest_expense")
         if interest_expense is not None:
             cd = year["CalculatedData"]
@@ -393,10 +393,7 @@ def _apply_tax(
     years: list[YearEntry],
     raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
 ) -> None:
-    raw_by_year = _ensure_raw_by_year("tax", raw_by_year)
-    for year in years:
-        fy_end_key = _fy_end_key(year)
-        raw = raw_by_year.get(fy_end_key)
+    for year, raw in _iter_raw(years, raw_by_year, "tax"):
         if not raw or "tax_method" not in raw:
             continue
         cd = year["CalculatedData"]
@@ -418,10 +415,7 @@ def _apply_gross_profit(
     years: list[YearEntry],
     raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
 ) -> None:
-    raw_by_year = _ensure_raw_by_year("gp", raw_by_year)
-    for year in years:
-        fy_end_key = _fy_end_key(year)
-        raw = raw_by_year.get(fy_end_key, {})
+    for year, raw in _iter_raw(years, raw_by_year, "gp"):
         gross_profit = raw.get("gross_profit")
         if gross_profit is None:
             continue
@@ -451,10 +445,7 @@ def _apply_operating_profit(
     years: list[YearEntry],
     raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
 ) -> None:
-    raw_by_year = _ensure_raw_by_year("op", raw_by_year)
-    for year in years:
-        fy_end_key = _fy_end_key(year)
-        raw = raw_by_year.get(fy_end_key, {})
+    for year, raw in _iter_raw(years, raw_by_year, "op"):
         operating_profit = raw.get("operating_profit")
         if operating_profit is None:
             continue
@@ -493,10 +484,7 @@ def _apply_net_revenue(
     years: list[YearEntry],
     raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
 ) -> None:
-    raw_by_year = _ensure_raw_by_year("nr", raw_by_year)
-    for year in years:
-        fy_end_key = _fy_end_key(year)
-        raw = raw_by_year.get(fy_end_key)
+    for year, raw in _iter_raw(years, raw_by_year, "nr"):
         if not raw:
             continue
         cd = year["CalculatedData"]
@@ -528,10 +516,7 @@ def _apply_employees(
     years: list[YearEntry],
     raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
 ) -> None:
-    raw_by_year = _ensure_raw_by_year("emp", raw_by_year)
-    for year in years:
-        fy_end_key = _fy_end_key(year)
-        raw = raw_by_year.get(fy_end_key, {})
+    for year, raw in _iter_raw(years, raw_by_year, "emp"):
         employees = raw.get("employees")
         if employees is not None:
             cd = year["CalculatedData"]
@@ -543,10 +528,7 @@ def _apply_depreciation(
     years: list[YearEntry],
     raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
 ) -> None:
-    raw_by_year = _ensure_raw_by_year("da", raw_by_year)
-    for year in years:
-        fy_end_key = _fy_end_key(year)
-        raw = raw_by_year.get(fy_end_key, {})
+    for year, raw in _iter_raw(years, raw_by_year, "da"):
         depreciation = raw.get("depreciation_amortization")
         if depreciation is not None:
             cd = year["CalculatedData"]
@@ -582,10 +564,7 @@ def _apply_order_book(
     years: list[YearEntry],
     raw_by_year: dict[str, dict[str, Any]] | dict[str, RawXbrlExtraction],
 ) -> None:
-    raw_by_year = _ensure_raw_by_year("ob", raw_by_year)
-    for year in years:
-        fy_end_key = _fy_end_key(year)
-        raw = raw_by_year.get(fy_end_key)
+    for year, raw in _iter_raw(years, raw_by_year, "ob"):
         if not raw:
             continue
         cd = year["CalculatedData"]

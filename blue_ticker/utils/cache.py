@@ -4,8 +4,10 @@
 APIレスポンスのキャッシュ保存・読み込み機能を提供します。
 """
 
+import asyncio
 import json
 import logging
+import threading
 from datetime import datetime, date
 from typing import Any
 from pathlib import Path
@@ -44,6 +46,7 @@ class CacheManager:
             ttl_days: キャッシュ有効期限（日数、デフォルト: 7）
         """
         self._metadata_cache: dict[str, str] | None = None
+        self._meta_lock = threading.RLock()
         self.ttl_days = ttl_days
         self.cache_dir = Path(cache_dir)
         self.data_dir = derived_cache_dir(self.cache_dir)
@@ -86,7 +89,7 @@ class CacheManager:
         return self.data_dir / "metadata.json"
     
     def _load_metadata(self) -> dict[str, str]:
-        """メタデータを読み込み（一度読んだらメモリキャッシュ）"""
+        """メタデータを読み込み（一度読んだらメモリキャッシュ）。_meta_lock 保持下で呼ぶこと。"""
         if self._metadata_cache is not None:
             return self._metadata_cache
         metadata_path = self._get_metadata_file_path()
@@ -102,11 +105,13 @@ class CacheManager:
         return self._metadata_cache
 
     def _save_metadata(self, metadata: dict[str, str]) -> None:
-        """メタデータを保存し、メモリキャッシュも更新"""
+        """メタデータを atomic write で保存し、メモリキャッシュも更新。_meta_lock 保持下で呼ぶこと。"""
         metadata_path = self._get_metadata_file_path()
         metadata_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(metadata_path, "w", encoding="utf-8") as f:
+        tmp = metadata_path.with_suffix(".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(metadata, f, ensure_ascii=False, indent=2)
+        tmp.replace(metadata_path)
         self._metadata_cache = metadata
     
     def get(self, key: str) -> Any | None:
@@ -129,8 +134,9 @@ class CacheManager:
                 return None
             cache_file = legacy_cache_file
 
-        metadata = self._load_metadata()
-        cache_date = metadata.get(key)
+        with self._meta_lock:
+            metadata = self._load_metadata()
+            cache_date = metadata.get(key)
 
         if cache_date:
             try:
@@ -172,11 +178,12 @@ class CacheManager:
             # キャッシュ保存に失敗しても処理は続行
             logger.warning(f"キャッシュの保存に失敗しました: {e}")
             return
-        
+
         # メタデータを更新
-        metadata = self._load_metadata()
-        metadata[key] = datetime.now().isoformat()
-        self._save_metadata(metadata)
+        with self._meta_lock:
+            metadata = self._load_metadata()
+            metadata[key] = datetime.now().isoformat()
+            self._save_metadata(metadata)
 
     def keys(self) -> list[str]:
         """保存済みキャッシュキーの一覧を返す。"""
@@ -189,6 +196,14 @@ class CacheManager:
             self.clear(key)
         return len(keys)
     
+    async def async_get(self, key: str) -> Any | None:
+        """非同期コンテキスト用の get ラッパー。ファイルI/O をスレッドプールに委譲する。"""
+        return await asyncio.to_thread(self.get, key)
+
+    async def async_set(self, key: str, value: Any) -> None:
+        """非同期コンテキスト用の set ラッパー。ファイルI/O をスレッドプールに委譲する。"""
+        await asyncio.to_thread(self.set, key, value)
+
     def clear(self, key: str | None = None) -> None:
         """
         キャッシュをクリア

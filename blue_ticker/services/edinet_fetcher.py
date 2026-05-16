@@ -629,7 +629,7 @@ class EdinetFetcher:
 
             # 永続キャッシュが十分な通常書類を持っていれば使う
             if self.cache_manager is not None:
-                cached = self.cache_manager.get(persistent_key)
+                cached = await self.cache_manager.async_get(persistent_key)
                 if (
                     isinstance(cached, dict)
                     and cached.get("_cache_version") == _EDINET_DOCS_CACHE_VERSION
@@ -653,7 +653,7 @@ class EdinetFetcher:
 
             self._doc_cache[lock_key] = docs
             if self.cache_manager is not None:
-                self.cache_manager.set(
+                await self.cache_manager.async_set(
                     persistent_key,
                     {"_cache_version": _EDINET_DOCS_CACHE_VERSION, "docs": docs},
                 )
@@ -752,7 +752,7 @@ class EdinetFetcher:
 
             # 永続キャッシュが十分な通常書類を持っていれば使う
             if self.cache_manager is not None:
-                cached = self.cache_manager.get(persistent_key)
+                cached = await self.cache_manager.async_get(persistent_key)
                 if (
                     isinstance(cached, dict)
                     and cached.get("_cache_version") == _EDINET_DOCS_CACHE_VERSION
@@ -777,7 +777,7 @@ class EdinetFetcher:
 
             self._doc_cache[lock_key] = docs
             if self.cache_manager is not None:
-                self.cache_manager.set(
+                await self.cache_manager.async_set(
                     persistent_key,
                     {"_cache_version": _EDINET_DOCS_CACHE_VERSION, "docs": docs},
                 )
@@ -864,7 +864,7 @@ class EdinetFetcher:
                 xbrl_path = Path(xbrl_dir)
                 if self.cache_manager is not None:
                     cache_read_start = time.perf_counter()
-                    cached = self.cache_manager.get(parse_cache_key)
+                    cached = await self.cache_manager.async_get(parse_cache_key)
                     cache_read_elapsed = time.perf_counter() - cache_read_start
                     cached_numeric = (
                         _numeric_elements_from_xbrl_parse_cache(cached.get("data"))
@@ -888,7 +888,7 @@ class EdinetFetcher:
                 pre_parsed = fact_index_to_numeric_elements(pre_parsed_facts)
                 if self.cache_manager is not None:
                     cache_write_start = time.perf_counter()
-                    self.cache_manager.set(parse_cache_key, {
+                    await self.cache_manager.async_set(parse_cache_key, {
                         "_cache_version": _XBRL_PARSE_CACHE_VERSION,
                         "data": pre_parsed_facts,
                     })
