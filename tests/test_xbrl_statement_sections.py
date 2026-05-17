@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from blue_ticker.analysis.xbrl_utils import filter_fact_index_by_sections
-from blue_ticker.services.edinet_fetcher import _preparsed_for_statement
+from blue_ticker.services._xbrl_parse_cache import _preparsed_for_statement
 from blue_ticker.utils.xbrl_result_types import XbrlFact, XbrlFactIndex, XbrlTagElements
 
 

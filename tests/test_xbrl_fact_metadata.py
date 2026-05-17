@@ -5,7 +5,7 @@ from blue_ticker.analysis.xbrl_utils import (
     collect_numeric_elements,
     fact_index_to_numeric_elements,
 )
-from blue_ticker.services.edinet_fetcher import _numeric_elements_from_xbrl_parse_cache
+from blue_ticker.services._xbrl_parse_cache import _numeric_elements_from_xbrl_parse_cache
 
 
 def _write_minimal_xbrl_files(tmp_path: Path) -> Path:
