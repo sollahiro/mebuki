@@ -112,7 +112,16 @@ class TestGetRawAnalysisData:
             "years": [
                 {
                     "fy_end": f"{2024 - idx}-03-31",
-                    "CalculatedData": {"Sales": float(100 - idx)},
+                    "CalculatedData": {
+                        "DocID": f"S100XXXX{idx:02d}",
+                        "Sales": float(100 - idx),
+                        "InterestBearingDebt": float(50 - idx),
+                        "CurrentAssets": float(200 - idx),
+                        "NonCurrentAssets": float(300 - idx),
+                        "CurrentLiabilities": float(50 - idx),
+                        "NonCurrentLiabilities": float(60 - idx),
+                        "NetAssets": float(390 - idx),
+                    },
                 }
                 for idx in range(count)
             ],
@@ -355,6 +364,13 @@ class TestGetRawAnalysisData:
                 {
                     "fy_end": "2024-03-31",
                     "CalculatedData": {
+                        "DocID": "S100XXXX00",
+                        "InterestBearingDebt": 100.0,
+                        "CurrentAssets": 200.0,
+                        "NonCurrentAssets": 300.0,
+                        "CurrentLiabilities": 50.0,
+                        "NonCurrentLiabilities": 60.0,
+                        "NetAssets": 390.0,
                         "CostOfEquity": 6.5,
                         "MetricSources": {
                             "CostOfEquity": {
@@ -386,6 +402,13 @@ class TestGetRawAnalysisData:
                 {
                     "fy_end": "2024-03-31",
                     "CalculatedData": {
+                        "DocID": "S100XXXX00",
+                        "InterestBearingDebt": 100.0,
+                        "CurrentAssets": 200.0,
+                        "NonCurrentAssets": 300.0,
+                        "CurrentLiabilities": 50.0,
+                        "NonCurrentLiabilities": 60.0,
+                        "NetAssets": 390.0,
                         "CostOfEquity": 6.25,
                         "MetricSources": {
                             "CostOfEquity": {
@@ -795,7 +818,7 @@ class TestHasIncompleteEdinetMetrics:
         cd["ROIC"] = None
         assert fn({"metrics": {"years": [{"CalculatedData": cd}]}}) is False
 
-    def test_no_doc_id_skips_year(self):
+    def test_no_doc_id_returns_incomplete(self):
         fn = self._fn()
-        cd = {"InterestBearingDebt": None, "ROIC": None}  # DocID なし
-        assert fn({"metrics": {"years": [{"CalculatedData": cd}]}}) is False
+        cd = {"InterestBearingDebt": None, "ROIC": None}  # DocID なし → 不完全
+        assert fn({"metrics": {"years": [{"CalculatedData": cd}]}}) is True

@@ -64,7 +64,7 @@ def _trim_analysis_years(result: dict[str, Any], analysis_years: int | None) -> 
 
 
 def _has_incomplete_edinet_metrics(cached: dict[str, Any]) -> bool:
-    """EDINET 書類が紐づいているのに新しいEDINET指標が欠けた古い分析キャッシュを検出する。"""
+    """EDINET 書類が紐づいていない、または新しいEDINET指標が欠けた古い分析キャッシュを検出する。"""
     metrics = cached.get("metrics")
     if not isinstance(metrics, dict):
         return False
@@ -78,7 +78,9 @@ def _has_incomplete_edinet_metrics(cached: dict[str, Any]) -> bool:
         calculated = year.get("CalculatedData")
         if not isinstance(calculated, dict):
             continue
-        if calculated.get("DocID") and (
+        if calculated.get("DocID") is None:
+            return True
+        if (
             calculated.get("InterestBearingDebt") is None
             or (calculated.get("NOPAT") is not None and calculated.get("ROIC") is None)
             or "CurrentAssets" not in calculated
