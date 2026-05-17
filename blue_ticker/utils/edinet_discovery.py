@@ -42,9 +42,15 @@ _TIER2_MARGIN_DAYS = 30   # 期待提出日前後の余裕
 _TIER3_MAX_DAYS = 185     # 提出期限延長申請の法的上限（6ヶ月）に合わせた上限
 
 
-def _safe_fy_end_date(month: int, day: int, year: int) -> date:
-    """月末日を安全に処理しつつ会計期末日を構築する。"""
+def _safe_fy_end_date(month: int, day: int, year: int, *, use_last_day: bool = False) -> date:
+    """月末日を安全に処理しつつ会計期末日を構築する。
+
+    use_last_day=True のとき、day を無視してその月の末日を返す。
+    最新期末が月末日（2月末など）の場合に過去年度でも月末を使うために用いる。
+    """
     last_day = calendar.monthrange(year, month)[1]
+    if use_last_day:
+        return date(year, month, last_day)
     return date(year, month, min(day, last_day))
 
 
@@ -368,6 +374,8 @@ async def build_document_index_for_code(
 
     fy_end_month = period_end_dt.month
     fy_end_day = period_end_dt.day
+    # 最新期末が月末日（2月末など）なら過去年度も月末日で検索する（うるう年対応）
+    fy_end_is_month_end = (fy_end_day == calendar.monthrange(period_end_dt.year, fy_end_month)[1])
 
     # fiscal_year は periodStart の年（期首年）
     period_start_dt = parse_date_string(recent.get("periodStart", ""))
@@ -387,7 +395,7 @@ async def build_document_index_for_code(
     # ② 過去年度を3段階フォールバックで検索
     for i in range(1, analysis_years + 1):
         target_year = period_end_dt.year - i
-        fy_end = _safe_fy_end_date(fy_end_month, fy_end_day, target_year)
+        fy_end = _safe_fy_end_date(fy_end_month, fy_end_day, target_year, use_last_day=fy_end_is_month_end)
         fy_end_str_i = fy_end.strftime("%Y-%m-%d")
 
         # 前年提出日を1年前にシフトして Tier1 の初期値とする
